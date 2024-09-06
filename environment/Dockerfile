@@ -13,6 +13,7 @@ RUN pip install -U --no-cache-dir \
     flake8 \
     imagej \
     matplotlib \
+    numpy==1.21.2 \
     opencv-python \
     scikit-image \
     s3fs \
