@@ -28,5 +28,3 @@ RUN pip install --no-cache-dir \
 RUN conda install -y \
         jupyterlab==4.0.11 \
     && conda clean -ya
-
-#RUN apt-get install -y python3-opencv
