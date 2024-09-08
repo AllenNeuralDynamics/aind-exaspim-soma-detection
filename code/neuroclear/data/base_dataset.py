@@ -185,7 +185,7 @@ def __randomcontrast(img_np, randomcontrast_val): # randomly change the contrast
 	return img_normed
 
 def __randomcrop(img_np, crop_size):
-
+    # UPDATE HERE
 	if len(img_np.shape) > 2: # 3D data
 		crop_z, crop_y, crop_x = crop_size
 		assert (img_np.shape[0] - crop_z >= 0)

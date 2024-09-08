@@ -15,6 +15,7 @@ RUN pip install -U --no-cache-dir \
     matplotlib \
     numpy==1.21.2 \
     opencv-python \
+    pillow==8.4.0 \
     scikit-image \
     s3fs \
     tensorboard \
