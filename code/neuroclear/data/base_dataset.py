@@ -109,7 +109,8 @@ def get_transform(opt, params = None):
 	if 'centercrop' in opt.preprocess:
 		transform_list += [transforms.Lambda(lambda img_np: __centercrop(img_np, opt.crop_portion))]
 
-	transform_list += [transforms.Lambda(lambda img_np: __normalize(img_np))]
+    #if 'normalize_intensity' in opt.preprocess:
+    # 	transform_list += [transforms.Lambda(lambda img_np: __normalize(img_np))]
 
 	if 'randomflip' in opt.preprocess:
 		if params is None:
@@ -185,59 +186,63 @@ def __randomcontrast(img_np, randomcontrast_val): # randomly change the contrast
 	return img_normed
 
 def __randomcrop(img_np, crop_size):
-    # UPDATE HERE
-	if len(img_np.shape) > 2: # 3D data
-		crop_z, crop_y, crop_x = crop_size
-		assert (img_np.shape[0] - crop_z >= 0)
-		assert (img_np.shape[1] - crop_y >= 0)
-		assert (img_np.shape[2] - crop_x >= 0)
+    if len(img_np.shape) > 2:  # 3D data
+        while True:
+            crop_z, crop_y, crop_x = crop_size
+            assert (img_np.shape[0] - crop_z >= 0)
+            assert (img_np.shape[1] - crop_y >= 0)
+            assert (img_np.shape[2] - crop_x >= 0)
+    
+            z = random.randint(0, img_np.shape[0] - crop_z)
+            y = random.randint(0, img_np.shape[1] - crop_y)
+            x = random.randint(0, img_np.shape[2] - crop_x)
+    
+            if crop_x == 0:
+                x_reach = None
+                x = 0
+            else:
+                x_reach = x + crop_x
+            if crop_y == 0:
+                y_reach = None
+                y = 0
+            else:
+                y_reach = y + crop_y
+    
+            if crop_z == 0:
+                z_reach = None
+                z = 0
+            else:
+                z_reach = z + crop_z
+    
+            img_cropped = img_np[z:z_reach, y:y_reach, x:x_reach]
+            if np.sum(img_cropped > 3000) > 200:
+                break
+            else:
+                print("try again")
 
-		z = random.randint(0, img_np.shape[0] - crop_z)
-		y = random.randint(0, img_np.shape[1] - crop_y)
-		x = random.randint(0, img_np.shape[2] - crop_x)
+    elif len(img_np.shape) == 2:  # 2D data
+        crop_y, crop_x = crop_size  # For 2D, crop_z will be ignored.
 
-		if crop_x == 0:
-			x_reach = None
-			x = 0
-		else:
-			x_reach = x + crop_x
-		if crop_y == 0:
-			y_reach = None
-			y = 0
-		else:
-			y_reach = y + crop_y
+        assert (img_np.shape[0] - crop_y >= 0)
+        assert (img_np.shape[1] - crop_x >= 0)
 
-		if crop_z == 0:
-			z_reach = None
-			z = 0
-		else:
-			z_reach = z + crop_z
+        y = random.randint(0, img_np.shape[0] - crop_y)
+        x = random.randint(0, img_np.shape[1] - crop_x)
 
-		img_cropped = img_np[z:z_reach, y:y_reach, x:x_reach]
+        if crop_y == 0:
+            y_reach = None
+            y = 0
+        else:
+            y_reach = y + crop_y
+        if crop_x == 0:
+            x_reach = None
+            x = 0
+        else:
+            x_reach = x + crop_x
 
-	elif len(img_np.shape) == 2: # 2D data
-		crop_y, crop_x = crop_size  # For 2D, crop_z will be ignored.
+        img_cropped = img_np[y:y_reach, x:x_reach]
 
-		assert (img_np.shape[0] - crop_y >= 0)
-		assert (img_np.shape[1] - crop_x >= 0)
-
-		y = random.randint(0, img_np.shape[0] - crop_y)
-		x = random.randint(0, img_np.shape[1] - crop_x)
-
-		if crop_y == 0:
-			y_reach = None
-			y = 0
-		else:
-			y_reach = y + crop_y
-		if crop_x == 0:
-			x_reach = None
-			x = 0
-		else:
-			x_reach = x + crop_x
-
-		img_cropped = img_np[y:y_reach, x:x_reach]
-
-	return img_cropped
+    return img_cropped
 
 def __reorderColorChannel (img_np):
 	# re-order the order so that y, x, c -> c, y, x

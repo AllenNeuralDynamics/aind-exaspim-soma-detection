@@ -34,24 +34,9 @@ def tensor2im(input_image, imtype=np.uint16):
             image_numpy = np.clip(image_numpy, 0, 2**16-1)
         if imtype == np.float:
             pass
-    else:  # if it is a numpy array, do nothing
+    else:
         image_numpy = input_image
     return image_numpy.astype(imtype)
-
-#
-# def normalize(img_np, is_tensor=False):
-#     if is_tensor:
-#         img_min = torch.min(img_np)
-#         img_max = torch.max(img_np)
-#     else:
-#         img_min = np.min(img_np)
-#         img_max = np.max(img_np)
-#
-#     new_min = 0
-#     new_max = 1
-#     img_normd = (img_np - img_min) * ((new_max - new_min) / (img_max - img_min)) + new_min
-#
-#     return img_normd
 
 
 def normalize(img_np, data_type = float):
@@ -71,6 +56,7 @@ def normalize(img_np, data_type = float):
 
     return img_normd
 
+
 def noisy(noise_typ, image, sigma=0.1, peak=0.1, is_tensor=False, is_normalize=True):
     if is_tensor:
         image = image.cpu().float().detach().numpy()
@@ -80,7 +66,6 @@ def noisy(noise_typ, image, sigma=0.1, peak=0.1, is_tensor=False, is_normalize=T
         mean = 0
         # sigma = gau_var**0.5
         gauss = np.random.normal(mean, sigma, (image.shape))
-        # gauss = gauss.reshape(image.shape)
         noisy = image + gauss
 
     elif noise_typ == "poisson":  # simulate a low-light noisy image.
@@ -98,9 +83,11 @@ def noisy(noise_typ, image, sigma=0.1, peak=0.1, is_tensor=False, is_normalize=T
 
     return noisy
 
+
 def get_mse(source, target):
     mse = np.mean((target - source)**2)
     return mse
+
 
 def get_snr(img_original, img_noised):
     mse = np.mean((img_original - img_noised) ** 2)  # Pw
@@ -108,8 +95,10 @@ def get_snr(img_original, img_noised):
     snr_linearscale = Ps / mse
     return 10 * math.log(snr_linearscale, 10)
 
+
 def standardize(img_np):
     return (img_np-np.mean(img_np))/np.std(img_np)
+
 
 def get_psnr(source, target, data_range):
     target = target.astype(float)
@@ -117,6 +106,7 @@ def get_psnr(source, target, data_range):
 
     mse = np.mean((target - source)**2)
     return 20*math.log(data_range,10)-10*math.log(mse,10)
+
 
 def diagnose_network(net, name='network'):
     """Calculate and print the mean of average absolute(gradients)
@@ -146,11 +136,6 @@ def save_image(image_numpy, image_path, aspect_ratio=1.0, save_all=False):
     """
     image_pil = Image.fromarray(image_numpy)
     h, w = image_numpy.shape
-    # if aspect_ratio > 1.0:
-    #     image_pil = image_pil.resize((h, int(w * aspect_ratio)), Image.BICUBIC)
-    # if aspect_ratio < 1.0:
-    #     image_pil = image_pil.resize((int(h / aspect_ratio), w), Image.BICUBIC)
-    # save_all is an option for saving a 3D image.
     image_pil.save(image_path, save_all=save_all)
 
 
@@ -211,7 +196,6 @@ def pad_for_dicing(image, roi_size, overlap=0):
     npad = ((0, z_pad), (0, y_pad), (0, x_pad))
     image_padded = np.pad(image, pad_width=npad)
     print("image volume is padded for equal dicing. crop sizes are: {}".format(npad))
-
     return image_padded
 
 
@@ -235,6 +219,3 @@ def crop_for_dicing(image, roi_size, overlap=0):
 
     print("image volume is cropped for equal dicing. crop sizes are: {}".format((z_crop, y_crop, x_crop)))
     return image_cropped
-
-
-

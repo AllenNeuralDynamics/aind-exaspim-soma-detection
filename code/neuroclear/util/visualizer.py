@@ -18,6 +18,7 @@ from matplotlib import cm
 from tifffile import imsave
 import torch
 
+
 def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
     """Save images to the disk,
 
@@ -56,6 +57,7 @@ def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
     # TODO: Fix it so that the webpage correctly displays both images.
     webpage.add_images(ims, txts, links, width=width)
 
+
 def save_test_metrics(save_dir, opt, ssims, psnrs):
     ssim_avg_input_gt = ssims[0]
     ssim_avg_output_gt = ssims[1]
@@ -82,8 +84,6 @@ def save_test_metrics(save_dir, opt, ssims, psnrs):
     with open(filename, "a") as metric_file:
         metric_file.write('%s\n' % message)  # save the message
 
-
-import numpy as np
 
 class Visualizer():
     def __init__(self, opt):
@@ -121,9 +121,6 @@ class Visualizer():
     def reset(self):
         """Reset the self.saved status."""
         self.saved = False
-
-    # def display_current_model(self, model):
-    #     self.tb_writer.add(graph)
 
     def display_current_results(self, visuals, epoch):
         """

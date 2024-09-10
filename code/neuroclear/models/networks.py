@@ -17,6 +17,7 @@ class Identity(nn.Module):
     def forward(self, x):
         return x
 
+
 def get_norm_layer(norm_type='instance', dimension =3):
     """Return a normalization layer
 
@@ -42,9 +43,6 @@ def get_norm_layer(norm_type='instance', dimension =3):
     else:
         raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
     return norm_layer
-
-
-
 
 
 def get_scheduler(optimizer, opt):
@@ -84,6 +82,7 @@ def get_scheduler(optimizer, opt):
         return NotImplementedError('learning rate policy [%s] is not implemented', opt.lr_policy)
 
     return scheduler
+
 
 def init_weights(net, init_type='normal', init_gain=0.02):
     """Initialize network weights.
@@ -196,6 +195,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
 
+
 def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal', init_gain=0.02, use_sigmoid=False,
              gpu_ids=[], dimension =3):
     """Create a discriminator
@@ -245,6 +245,7 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
     return init_net(net, init_type, init_gain, gpu_ids)
+
 
 ##############################################################################
 # Classes
@@ -317,6 +318,7 @@ class GANLoss(nn.Module):
             else:
                 loss = prediction.mean()
         return loss
+
 
 def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
     """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028

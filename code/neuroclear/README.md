@@ -129,12 +129,12 @@ python train_onecube.py \
 --netG unet_deconv --netG_B deep_linear_gen --netD basic --gan_mode lsgan \
 --init_type kaiming --norm instance --batch_size 1 \
 --lambda_A 5 --gpu_ids **[GPU ID]** --crop_size 108 108 108 --display_histogram  --lambda_plane 1 1 1 \
---save_by_iter --save_latest_freq 500 --server **[SERVER NAME]** --lr_policy constant --randomize_projection_depth --projection_depth 10
+--save_by_iter --save_latest_freq 1000 --server **[SERVER NAME]** --lr_policy constant --randomize_projection_depth --projection_depth 10
 ```
 
 ```bash
 python train_onecube.py \
---dataroot /data/exaspim_703070 \
+--dataroot /data/exaspim_685221 \
 --checkpoints_dir /results/checkpoints  --add_date \
 --name axial_to_lateral_gan_apollo --dataset_mode singlevolume \
 --print_freq 10 --display_freq 20 \
@@ -142,7 +142,7 @@ python train_onecube.py \
 --netG unet_deconv --netG_B deep_linear_gen --netD basic --gan_mode lsgan \
 --init_type kaiming --norm instance --batch_size 1 \
 --lambda_A 5 --crop_size 108 108 108 --display_histogram  --lambda_plane 1 1 1 \
---save_by_iter --save_latest_freq 500 --lr_policy constant --randomize_projection_depth --projection_depth 10
+--save_by_iter --save_latest_freq 1000 --lr_policy constant --randomize_projection_depth --projection_depth 10
 ```
 
 python train_onecube.py --dataroot /data/simulated/blurred --name maps_cyclegan --model axial_to_lateral_gan_athena
@@ -162,15 +162,17 @@ Expected output of train_onecube.py
 - You can test a trained model with a format like this. The flags are documented in **options** folder.
 
 ```bash
-python test_dice.py --dataroot /data/exaspim_715345 \
+python test_dice.py --dataroot /data/exaspim_703070  \
 --checkpoints_dir /results/checkpoints --results_dir /results/inference  \
---name 20240908-0510_axial_to_lateral_gan_apollo --serial_batches \
+--name 20240910-0045_axial_to_lateral_gan_apollo --serial_batches \
 --preprocess addColorChannel --dataset_mode diceImage \
---netG unet_deconv --data_name exaspim_706301 \
---gpu_ids 0 --overlap 15 --dice_size 120 120 120 --normalize_intensity \
---image_dimension 3 --model_suffix _A --save_volume --border_cut 10 --skip_real --load_iter 20000
+--netG unet_deconv --data_name exaspim_703070 \
+--gpu_ids 0 --overlap 15 --dice_size 120 120 120 \
+--image_dimension 3 --model_suffix _A --save_volume --border_cut 10 --skip_real --load_iter 14000
 
 ```
+
+# REMOVED --normalize_intensity
 
 ![Expected output of test_dice.py](imgs/Screen_Shot_2021-11-14_at_2.39.06_AM.png)
 

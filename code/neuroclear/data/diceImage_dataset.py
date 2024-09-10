@@ -26,6 +26,7 @@ class DiceImageDataSet(BaseDataset):
         Parameters:
             opt (Option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
+        print("DiceImageDataSet")
         BaseDataset.__init__(self, opt)
         self.A_path = make_dataset(opt.dataroot, 1)[0] # loads only one image volume.
         self.roi_size = opt.dice_size[0]
@@ -33,6 +34,8 @@ class DiceImageDataSet(BaseDataset):
         self.border_cut = opt.border_cut
 
         A_img_np = io.imread(self.A_path)
+        A_img_np -= np.min(A_img_np)
+        A_img_np = A_img_np / np.max(A_img_np)
         # A_img_np = np.load(self.A_path)
 
         # norm_parms = {'min_max':(np.min(A_img_np), np.max(A_img_np))}
@@ -80,6 +83,7 @@ class DiceImageDataSet(BaseDataset):
 
 class DiceCube():
     def __init__(self, image, roi_size, overlap = 0, border_cut = 0):
+        print("DiceCubeDataSet")
         self.image = image
         self.roi_size = roi_size
         self.overlap = overlap
