@@ -8,24 +8,29 @@ from skimage import exposure
 import data
 import torch
 
-class Assemble_Dice():
+
+class Assemble_Dice:
     def __init__(self, opt):
         dataset_class = data.find_dataset_using_name(opt.dataset_mode)
         dataset_tolook_shape = dataset_class(opt)
-        self.image_size_original = dataset_tolook_shape.size_original()  # return the image size before padding.
-        self.image_size = dataset_tolook_shape.size() # Get the y,x,z volume sizes of the image volume.
+        self.image_size_original = (
+            dataset_tolook_shape.size_original()
+        )  # return the image size before padding.
+        self.image_size = (
+            dataset_tolook_shape.size()
+        )  # Get the y,x,z volume sizes of the image volume.
         self.border_cut = opt.border_cut
 
         self.roi_size = opt.dice_size[0]
         self.overlap = opt.overlap
         self.step = self.roi_size - self.overlap
 
-        self.z_steps  = (self.image_size[0]-self.overlap)//self.step
-        self.y_steps = (self.image_size[1]-self.overlap)//self.step
-        self.x_steps  = (self.image_size[2]-self.overlap)//self.step
+        self.z_steps = (self.image_size[0] - self.overlap) // self.step
+        self.y_steps = (self.image_size[1] - self.overlap) // self.step
+        self.x_steps = (self.image_size[2] - self.overlap) // self.step
 
         self.visual_ret = OrderedDict()
-        self.visual_names = ['real', 'fake']
+        self.visual_names = ["real", "fake"]
         self.snapDict = OrderedDict()
         self.cube_queue = OrderedDict()
         self.mask_ret = OrderedDict()
@@ -38,34 +43,38 @@ class Assemble_Dice():
         if self.normalize_intensity:
             self.p1, self.p99 = opt.sat_level
 
-
         if self.histogram_match:
-            print ("We will match the histograms of output sub-volumes with input sub-volumes.")
+            print(
+                "We will match the histograms of output sub-volumes with input sub-volumes."
+            )
 
         if self.skip_real:
-            print ("We will skip assembling for the real (input) volume. ")
+            print("We will skip assembling for the real (input) volume. ")
 
-
-        self.len_cube_queue = self.z_steps  * self.x_steps * self.y_steps # total number of cubes
+        self.len_cube_queue = (
+            self.z_steps * self.x_steps * self.y_steps
+        )  # total number of cubes
 
         # initialize the mapping.
         for name in self.visual_names:
-            if self.skip_real and name == 'real':
+            if self.skip_real and name == "real":
                 pass
             else:
-                self.visual_ret[name] =np.zeros(self.image_size, dtype = np.float32)
-                self.mask_ret[name] = np.zeros(self.image_size,  dtype = np.float32)
+                self.visual_ret[name] = np.zeros(self.image_size, dtype=np.float32)
+                self.mask_ret[name] = np.zeros(self.image_size, dtype=np.float32)
                 self.cube_queue[name] = []
 
     def indexTo3DIndex(self, index):
         # Dicing order: x-> y-> z
         x_cube_index = index % self.x_steps
-        y_cube_index = (index % (self.x_steps*self.y_steps))//self.x_steps
-        z_cube_index = (index) // (self.x_steps*self.y_steps)
+        y_cube_index = (index % (self.x_steps * self.y_steps)) // self.x_steps
+        z_cube_index = (index) // (self.x_steps * self.y_steps)
 
         return z_cube_index, y_cube_index, x_cube_index
 
-    def indexToCoordinates(self, index): # converts 1D dicing order to 3D stacking order
+    def indexToCoordinates(
+        self, index
+    ):  # converts 1D dicing order to 3D stacking order
 
         # Dicing order: x-> y-> z
         z_cube_index, y_cube_index, x_cube_index = self.indexTo3DIndex(index)
@@ -78,7 +87,9 @@ class Assemble_Dice():
 
     def varycubeinput(self, input):
         # takes visual dictionary and creates a list of augmented copies of the visual.
-        data_name = list(input.keys())# TODO: there's a difference between the data names in input and output: A vs. B <-> real vs. fake
+        data_name = list(
+            input.keys()
+        )  # TODO: there's a difference between the data names in input and output: A vs. B <-> real vs. fake
         input_visual = input[data_name[0]]
         input_path = input[data_name[1]]
         axis_len = len(input_visual.shape)
@@ -87,7 +98,7 @@ class Assemble_Dice():
         input_list = []
         input_list.append(input)
 
-        for axis in axes: # per axis of flipping, add each augmented copy to a list
+        for axis in axes:  # per axis of flipping, add each augmented copy to a list
             input_dict = OrderedDict()
             axis = int(axis)
             input_dict[data_name[0]] = input_visual.flip(axis)
@@ -104,15 +115,15 @@ class Assemble_Dice():
         axes = np.arange(2, axis_len)
 
         dict_list = []
-        dict_list.append(visual_list[0]) # include the unchanged.
-        visual_list.pop(0) # remove the unchanged from the list
+        dict_list.append(visual_list[0])  # include the unchanged.
+        visual_list.pop(0)  # remove the unchanged from the list
 
         # dimensions are: cube_variation, batch_num, color_channel, z, y, x
         for i, flip_var in enumerate(visual_list):
             visual_dict = OrderedDict()
             for name in keys:
                 axis = int(axes[i])
-                visual_dict[name] = flip_var[name].flip(axis) # unflip them
+                visual_dict[name] = flip_var[name].flip(axis)  # unflip them
             dict_list.append(visual_dict)
 
         visual_recon_dict = OrderedDict()
@@ -127,32 +138,46 @@ class Assemble_Dice():
 
         return visual_recon_dict
 
-    def addToStack(self, cube): # Cube is an orderedDict with visual_names as keys.
+    def addToStack(self, cube):  # Cube is an orderedDict with visual_names as keys.
         cube_dict = OrderedDict()
         for name in self.visual_names:
             image_tensor = cube[name]
-            image_numpy_og = image_tensor.cpu().float().numpy()  # convert it into a numpy array
+            image_numpy_og = (
+                image_tensor.cpu().float().numpy()
+            )  # convert it into a numpy array
             cube_numpy = image_numpy_og.copy()
 
-            _, _, h, w, d = cube_numpy.shape # When we add an output cube from the network, it include two extra dimensions: batch_index, color_channel
-            cube_numpy = cube_numpy.squeeze() # remove the batch and color channel axis.
+            _, _, h, w, d = (
+                cube_numpy.shape
+            )  # When we add an output cube from the network, it include two extra dimensions: batch_index, color_channel
+            cube_numpy = (
+                cube_numpy.squeeze()
+            )  # remove the batch and color channel axis.
 
-            cube_numpy = cube_numpy.astype(np.float32) # saves memory
+            cube_numpy = cube_numpy.astype(np.float32)  # saves memory
 
             # Remove the border regions to avoid the popping effect.
-            cube_numpy = cube_numpy[self.border_cut:-self.border_cut, self.border_cut:-self.border_cut, self.border_cut:-self.border_cut]
+            cube_numpy = cube_numpy[
+                self.border_cut : -self.border_cut,
+                self.border_cut : -self.border_cut,
+                self.border_cut : -self.border_cut,
+            ]
 
-            assert cube_numpy.shape == (self.roi_size, self.roi_size, self.roi_size), "the cube dimensions are invalid."
+            assert cube_numpy.shape == (
+                self.roi_size,
+                self.roi_size,
+                self.roi_size,
+            ), "the cube dimensions are invalid."
 
             cube_dict[name] = cube_numpy
 
         # Perform histogram matching on the output cube to the input cube as post-processing.
         if self.histogram_match:
-            cube_dict['fake'] = match_histograms(cube_dict['fake'], cube_dict['real'])
+            cube_dict["fake"] = match_histograms(cube_dict["fake"], cube_dict["real"])
         #
 
         for name in self.visual_names:
-            if self.skip_real and name == 'real':
+            if self.skip_real and name == "real":
                 pass
 
             else:
@@ -160,85 +185,116 @@ class Assemble_Dice():
 
     def assemble_all(self):
         for name in self.visual_names:
-            if self.skip_real and name == 'real':
+            if self.skip_real and name == "real":
                 pass
             else:
-                print ("Patching for... " + str(name))
+                print("Patching for... " + str(name))
                 for index, cube in enumerate(self.cube_queue[name]):
                     current_z, current_y, current_x = self.indexToCoordinates(index)
 
                     # assert cube.dtype == self.imtype, "Data type of the assembling cubes does not match the given data type. "
                     if self.overlap > 0:
-                        self.visual_ret[name][current_z:current_z + self.roi_size, current_y:current_y + self.roi_size,
-                        current_x:current_x + self.roi_size] += cube/8 # divide by 4 to prevent the overflowing.
-                        self.mask_ret[name][current_z:current_z + self.roi_size, current_y:current_y + self.roi_size,
-                        current_x:current_x + self.roi_size] += np.ones((self.roi_size,self.roi_size,self.roi_size),  dtype = np.float32)
+                        self.visual_ret[name][
+                            current_z : current_z + self.roi_size,
+                            current_y : current_y + self.roi_size,
+                            current_x : current_x + self.roi_size,
+                        ] += (
+                            cube / 8
+                        )  # divide by 4 to prevent the overflowing.
+                        self.mask_ret[name][
+                            current_z : current_z + self.roi_size,
+                            current_y : current_y + self.roi_size,
+                            current_x : current_x + self.roi_size,
+                        ] += np.ones(
+                            (self.roi_size, self.roi_size, self.roi_size),
+                            dtype=np.float32,
+                        )
                     if cube.shape != (self.roi_size, self.roi_size, self.roi_size):
-                        raise Exception('The cube does not have the proper size.')
+                        raise Exception("The cube does not have the proper size.")
 
-                print ("done patching the cubes for {} image volume.".format(str(name)))
+                print("done patching the cubes for {} image volume.".format(str(name)))
 
                 if self.overlap > 0:
-                    print("merging all gaps by linear averaging for {} image volume...".format(str(name)))
+                    print(
+                        "merging all gaps by linear averaging for {} image volume...".format(
+                            str(name)
+                        )
+                    )
 
-                    self.visual_ret[name] = (self.visual_ret[name]/self.mask_ret[name])*8  # multiply by 4 to recover the original values without overflowing from earlier.
+                    self.visual_ret[name] = (
+                        self.visual_ret[name] / self.mask_ret[name]
+                    ) * 8  # multiply by 4 to recover the original values without overflowing from earlier.
                     print("All gaps merged for {} image volume.".format(str(name)))
 
-                print ("For debug: maximum iterations of overlaps: " + str(np.max(self.mask_ret[name])))
-
+                print(
+                    "For debug: maximum iterations of overlaps: "
+                    + str(np.max(self.mask_ret[name]))
+                )
 
                 if self.normalize_intensity:
-                    p1_, p99_ = np.percentile(self.visual_ret[name], (self.p1, self.p99))
-                    self.visual_ret[name] = exposure.rescale_intensity(self.visual_ret[name], in_range=(p1_, p99_))
+                    p1_, p99_ = np.percentile(
+                        self.visual_ret[name], (self.p1, self.p99)
+                    )
+                    self.visual_ret[name] = exposure.rescale_intensity(
+                        self.visual_ret[name], in_range=(p1_, p99_)
+                    )
 
                 ## convert the datatype
-                if self.imtype == 'uint8':
+                if self.imtype == "uint8":
                     # self.visual_ret[name] *= self.img_std
                     # self.visual_ret[name] += self.img_mean # then the image is scaled to 0-1.
 
                     self.visual_ret[name] *= 255
                     self.visual_ret[name] = self.visual_ret[name].astype(np.uint8)
 
-                if self.imtype == 'uint16':
+                if self.imtype == "uint16":
                     # self.visual_ret[name] *= self.img_std
                     # self.visual_ret[name] += self.img_mean # then the image is scaled to 0-1.
 
-                    self.visual_ret[name] *= 2 ** 16 - 1
+                    self.visual_ret[name] *= 2**16 - 1
                     self.visual_ret[name] = self.visual_ret[name].astype(np.uint16)
 
                 # crop the regions that were padded for clean-cut dicing.
                 if self.image_size_original is not None:
-                    padders_ = [self.image_size[i] - self.image_size_original[i] for i in range(len(self.image_size))]
-                    print("Image cropped to revert back to the original size by: " + str(padders_))
-                    self.visual_ret[name] = self.visual_ret[name][:-padders_[0], :-padders_[1], :-padders_[2]]
+                    padders_ = [
+                        self.image_size[i] - self.image_size_original[i]
+                        for i in range(len(self.image_size))
+                    ]
+                    print(
+                        "Image cropped to revert back to the original size by: "
+                        + str(padders_)
+                    )
+                    self.visual_ret[name] = self.visual_ret[name][
+                        : -padders_[0], : -padders_[1], : -padders_[2]
+                    ]
 
     # tells you if the index corresponds to a cube outside the boundary of the whole image.
     def if_overEdge(self, index):
-        z_cube_index, y_cube_index, x_cube_index  = self.indexTo3DIndex(index)
+        z_cube_index, y_cube_index, x_cube_index = self.indexTo3DIndex(index)
 
         z_over = z_cube_index > self.z_steps or z_cube_index < 0
         y_over = y_cube_index > self.y_steps or y_cube_index < 0
         x_over = x_cube_index > self.x_steps or x_cube_index < 0
-        all_over = index >  (self.len_cube_queue-1)
+        all_over = index > (self.len_cube_queue - 1)
 
         return z_over or y_over or x_over or all_over
 
     # slice image across z-depth
     def getSnapshots(self, index, slice_axis=2):
         for name in self.visual_names:
-            if slice_axis ==0:
+            if slice_axis == 0:
                 self.snapDict[name] = self.visual_ret[name][index, :, :]
-            if slice_axis ==1:
+            if slice_axis == 1:
                 self.snapDict[name] = self.visual_ret[name][:, index, :]
-            if slice_axis ==2:
-                self.snapDict[name] = self.visual_ret[name][:,:,index]
+            if slice_axis == 2:
+                self.snapDict[name] = self.visual_ret[name][:, :, index]
         return self.snapDict
 
     def getDict(self):
         return self.visual_ret
 
     def getMaskRet(self):
-        return self.mask_ret['real']
+        return self.mask_ret["real"]
 
     def getCubeQueue(self):
         return self.cube_queue

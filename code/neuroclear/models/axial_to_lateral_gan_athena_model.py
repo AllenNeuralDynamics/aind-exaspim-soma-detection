@@ -61,18 +61,47 @@ class AxialToLateralGANAthenaModel(BaseModel):
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
         if is_train:
-            parser.add_argument('--lambda_A', type=float, default=10.0, help='weight for cycle loss (A -> B -> A)')
-            parser.add_argument('--pool_size', type=int, default=50,
-                                help='the size of image buffer that stores previously generated images')
-            parser.add_argument('--gan_mode', type=str, default='vanilla',
-                                help='the type of GAN objective. [vanilla| lsgan | wgangp]. vanilla GAN loss is the cross-entropy objective used in the original GAN paper.')
+            parser.add_argument(
+                "--lambda_A",
+                type=float,
+                default=10.0,
+                help="weight for cycle loss (A -> B -> A)",
+            )
+            parser.add_argument(
+                "--pool_size",
+                type=int,
+                default=50,
+                help="the size of image buffer that stores previously generated images",
+            )
+            parser.add_argument(
+                "--gan_mode",
+                type=str,
+                default="vanilla",
+                help="the type of GAN objective. [vanilla| lsgan | wgangp]. vanilla GAN loss is the cross-entropy objective used in the original GAN paper.",
+            )
         # conversion axis
-        parser.add_argument('--conversion_plane', type=str, nargs = '+', default = ['yz', 'xy'],
-                            help = 'Describe source plane and target plane. e.g.: yz-plane to xy-plane -> yz xy')
+        parser.add_argument(
+            "--conversion_plane",
+            type=str,
+            nargs="+",
+            default=["yz", "xy"],
+            help="Describe source plane and target plane. e.g.: yz-plane to xy-plane -> yz xy",
+        )
 
-        parser.add_argument('--lambda_plane', type =int, nargs = '+', default = [1, 1, 1], help = 'weight ratio for matching to source, target, reference plane of fake to target plane of real')
+        parser.add_argument(
+            "--lambda_plane",
+            type=int,
+            nargs="+",
+            default=[1, 1, 1],
+            help="weight ratio for matching to source, target, reference plane of fake to target plane of real",
+        )
 
-        parser.add_argument('--netG_B', type=str, default='deep_linear_gen', help='Specify the generator in B->A path. ')
+        parser.add_argument(
+            "--netG_B",
+            type=str,
+            default="deep_linear_gen",
+            help="Specify the generator in B->A path. ",
+        )
 
         # parser.set_defaults(norm='instance')
 
@@ -86,79 +115,205 @@ class AxialToLateralGANAthenaModel(BaseModel):
         """
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['D_A_xy', 'D_A_xz', 'D_A_yz', 'G_A', 'G_A_xy', 'G_A_xz', 'G_A_yz', 'cycle_A', 'D_B_xy', 'D_B_xz', 'D_B_yz',
-                           'G_B', 'G_B_xy', 'G_B_xz', 'G_B_yz']
+        self.loss_names = [
+            "D_A_xy",
+            "D_A_xz",
+            "D_A_yz",
+            "G_A",
+            "G_A_xy",
+            "G_A_xz",
+            "G_A_yz",
+            "cycle_A",
+            "D_B_xy",
+            "D_B_xz",
+            "D_B_yz",
+            "G_B",
+            "G_B_xy",
+            "G_B_xz",
+            "G_B_yz",
+        ]
         self.gan_mode = opt.gan_mode
 
-        self.gen_dimension = 3 # 3D convolutions in generators
-        self.dis_dimension = 2 # 2D convolutions in discriminators
+        self.gen_dimension = 3  # 3D convolutions in generators
+        self.dis_dimension = 2  # 2D convolutions in discriminators
 
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
-        visual_names_A = ['real', 'fake', 'rec']
-        visual_names_B = ['real', 'fake', 'rec']
+        visual_names_A = ["real", "fake", "rec"]
+        visual_names_B = ["real", "fake", "rec"]
 
-        plane_to_slice_axis = {'xy':0, 'xz':1, 'yz':2}
+        plane_to_slice_axis = {"xy": 0, "xz": 1, "yz": 2}
 
-        remain_sl_axis_name = [axis for axis in plane_to_slice_axis.keys() if axis != opt.conversion_plane[0] and axis !=opt.conversion_plane[1]][0]
+        remain_sl_axis_name = [
+            axis
+            for axis in plane_to_slice_axis.keys()
+            if axis != opt.conversion_plane[0] and axis != opt.conversion_plane[1]
+        ][0]
 
-        print ("source plane is {}".format(opt.conversion_plane[0]))
-        print ("target plane is {}".format(opt.conversion_plane[1]))
-        print ("remaining plane is {}".format(remain_sl_axis_name))
+        print("source plane is {}".format(opt.conversion_plane[0]))
+        print("target plane is {}".format(opt.conversion_plane[1]))
+        print("remaining plane is {}".format(remain_sl_axis_name))
 
         self.source_sl_axis = plane_to_slice_axis[opt.conversion_plane[0]]
         self.target_sl_axis = plane_to_slice_axis[opt.conversion_plane[1]]
         self.remain_sl_axis = plane_to_slice_axis[remain_sl_axis_name]
 
-        self.lambda_plane_target, self.lambda_plane_source, self.lambda_plane_ref = [factor/(opt.lambda_plane[0]+opt.lambda_plane[1]+opt.lambda_plane[2]) for factor in opt.lambda_plane]
+        self.lambda_plane_target, self.lambda_plane_source, self.lambda_plane_ref = [
+            factor / (opt.lambda_plane[0] + opt.lambda_plane[1] + opt.lambda_plane[2])
+            for factor in opt.lambda_plane
+        ]
 
-        self.visual_names = visual_names_A + visual_names_B  # combine visualizations for A and B
+        self.visual_names = (
+            visual_names_A + visual_names_B
+        )  # combine visualizations for A and B
 
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>.
         if self.isTrain:
-            self.model_names = ['G_A', 'G_B', 'D_A_xy', 'D_A_xz', 'D_A_yz', 'D_B_xy', 'D_B_xz', 'D_B_yz']
+            self.model_names = [
+                "G_A",
+                "G_B",
+                "D_A_xy",
+                "D_A_xz",
+                "D_A_yz",
+                "D_B_xy",
+                "D_B_xz",
+                "D_B_yz",
+            ]
         else:  # during test time, only load Gs
-            self.model_names = ['G_A', 'G_B']
+            self.model_names = ["G_A", "G_B"]
 
         # define networks (both Generators and discriminators)
         # The naming is different from those used in the paper.
         # Code (vs. paper): G_A (G), G_B (F), D_A (D_Y), D_B (D_X)
-        self.netG_A = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
-                                            not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, dimension=self.gen_dimension)
+        self.netG_A = networks.define_G(
+            opt.input_nc,
+            opt.output_nc,
+            opt.ngf,
+            opt.netG,
+            opt.norm,
+            not opt.no_dropout,
+            opt.init_type,
+            opt.init_gain,
+            self.gpu_ids,
+            dimension=self.gen_dimension,
+        )
 
-        self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG_B, opt.norm,
-                                            not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, dimension=self.gen_dimension)
+        self.netG_B = networks.define_G(
+            opt.output_nc,
+            opt.input_nc,
+            opt.ngf,
+            opt.netG_B,
+            opt.norm,
+            not opt.no_dropout,
+            opt.init_type,
+            opt.init_gain,
+            self.gpu_ids,
+            dimension=self.gen_dimension,
+        )
 
         if self.isTrain:  # define discriminators
-            self.netD_A_yz = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
-                                               opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, False, self.gpu_ids, dimension=self.dis_dimension)
+            self.netD_A_yz = networks.define_D(
+                opt.output_nc,
+                opt.ndf,
+                opt.netD,
+                opt.n_layers_D,
+                opt.norm,
+                opt.init_type,
+                opt.init_gain,
+                False,
+                self.gpu_ids,
+                dimension=self.dis_dimension,
+            )
 
-            self.netD_A_xy = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
-                                               opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, False, self.gpu_ids, dimension=self.dis_dimension)
+            self.netD_A_xy = networks.define_D(
+                opt.output_nc,
+                opt.ndf,
+                opt.netD,
+                opt.n_layers_D,
+                opt.norm,
+                opt.init_type,
+                opt.init_gain,
+                False,
+                self.gpu_ids,
+                dimension=self.dis_dimension,
+            )
 
-            self.netD_A_xz = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
-                                               opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, False, self.gpu_ids, dimension=self.dis_dimension)
+            self.netD_A_xz = networks.define_D(
+                opt.output_nc,
+                opt.ndf,
+                opt.netD,
+                opt.n_layers_D,
+                opt.norm,
+                opt.init_type,
+                opt.init_gain,
+                False,
+                self.gpu_ids,
+                dimension=self.dis_dimension,
+            )
 
-            self.netD_B_yz = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
-                                               opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, False, self.gpu_ids, dimension=self.dis_dimension)
+            self.netD_B_yz = networks.define_D(
+                opt.input_nc,
+                opt.ndf,
+                opt.netD,
+                opt.n_layers_D,
+                opt.norm,
+                opt.init_type,
+                opt.init_gain,
+                False,
+                self.gpu_ids,
+                dimension=self.dis_dimension,
+            )
 
-            self.netD_B_xy = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
-                                               opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, False, self.gpu_ids, dimension=self.dis_dimension)
+            self.netD_B_xy = networks.define_D(
+                opt.input_nc,
+                opt.ndf,
+                opt.netD,
+                opt.n_layers_D,
+                opt.norm,
+                opt.init_type,
+                opt.init_gain,
+                False,
+                self.gpu_ids,
+                dimension=self.dis_dimension,
+            )
 
-            self.netD_B_xz = networks.define_D(opt.input_nc, opt.ndf, opt.netD, opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, False,
-                                               self.gpu_ids, dimension=self.dis_dimension)
-
+            self.netD_B_xz = networks.define_D(
+                opt.input_nc,
+                opt.ndf,
+                opt.netD,
+                opt.n_layers_D,
+                opt.norm,
+                opt.init_type,
+                opt.init_gain,
+                False,
+                self.gpu_ids,
+                dimension=self.dis_dimension,
+            )
 
         if self.isTrain:
             # define loss functions
-            self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)  # define GAN loss.
+            self.criterionGAN = networks.GANLoss(opt.gan_mode).to(
+                self.device
+            )  # define GAN loss.
             self.criterionCycle = torch.nn.L1Loss()
 
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
-            self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()),
-                                                lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A_yz.parameters(), self.netD_A_xy.parameters(), self.netD_A_xz.parameters(),
-                                                                self.netD_B_yz.parameters(), self.netD_B_xy.parameters(), self.netD_B_xz.parameters()),
-                                                lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.optimizer_G = torch.optim.Adam(
+                itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()),
+                lr=opt.lr,
+                betas=(opt.beta1, 0.999),
+            )
+            self.optimizer_D = torch.optim.Adam(
+                itertools.chain(
+                    self.netD_A_yz.parameters(),
+                    self.netD_A_xy.parameters(),
+                    self.netD_A_xz.parameters(),
+                    self.netD_B_yz.parameters(),
+                    self.netD_B_xy.parameters(),
+                    self.netD_B_xz.parameters(),
+                ),
+                lr=opt.lr,
+                betas=(opt.beta1, 0.999),
+            )
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
 
@@ -172,23 +327,21 @@ class AxialToLateralGANAthenaModel(BaseModel):
 
         The option 'direction' can be used to swap domain A and domain B.
         """
-        AtoB = self.opt.direction == 'AtoB'
-        self.real = input['A' if AtoB else 'B'].to(self.device)
-        self.image_paths = input['A_paths' if AtoB else 'B_paths']
+        AtoB = self.opt.direction == "AtoB"
+        self.real = input["A" if AtoB else "B"].to(self.device)
+        self.image_paths = input["A_paths" if AtoB else "B_paths"]
 
         self.cube_shape = self.real.shape
         self.num_slice = self.cube_shape[-3]
-
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>.
         In this version, we iterate through each slice in a cube.
         """
         self.fake = self.netG_A(self.real)  # G_A(A)
-        self.rec = self.netG_B(self.fake)   # G_B(G_A(A))
+        self.rec = self.netG_B(self.fake)  # G_B(G_A(A))
 
     def backward_D_basic(self, netD, real, fake, slice_axis_real, slice_axis_fake):
-
         """Calculate GAN loss for the discriminator
 
         Parameters:
@@ -205,10 +358,14 @@ class AxialToLateralGANAthenaModel(BaseModel):
         pred_fake = self.iter_f(fake.detach(), netD, slice_axis_fake)
 
         # real
-        loss_D_real = self.criterionGAN(pred_real, True) # Target_is_real -> True: loss (pred_real - unit vector)
+        loss_D_real = self.criterionGAN(
+            pred_real, True
+        )  # Target_is_real -> True: loss (pred_real - unit vector)
 
         # Fake
-        loss_D_fake = self.criterionGAN(pred_fake, False) # no loss with the unit vector
+        loss_D_fake = self.criterionGAN(
+            pred_fake, False
+        )  # no loss with the unit vector
 
         # Combined loss and calculate gradients
         loss_D = (loss_D_real + loss_D_fake) * 0.5
@@ -217,38 +374,94 @@ class AxialToLateralGANAthenaModel(BaseModel):
         return loss_D
 
     def backward_D_A_xy(self):
-        self.loss_D_A_xy = self.backward_D_basic(self.netD_A_xy, self.real, self.fake, self.target_sl_axis, self.target_sl_axis) # comparing XY_original to XY_fake
+        self.loss_D_A_xy = self.backward_D_basic(
+            self.netD_A_xy,
+            self.real,
+            self.fake,
+            self.target_sl_axis,
+            self.target_sl_axis,
+        )  # comparing XY_original to XY_fake
 
     def backward_D_A_yz(self):
         """Calculate GAN loss for discriminator D_A"""
-        self.loss_D_A_yz = self.backward_D_basic(self.netD_A_yz, self.real, self.fake, self.target_sl_axis, self.source_sl_axis) # comparing XY_original to YZ_fake
+        self.loss_D_A_yz = self.backward_D_basic(
+            self.netD_A_yz,
+            self.real,
+            self.fake,
+            self.target_sl_axis,
+            self.source_sl_axis,
+        )  # comparing XY_original to YZ_fake
 
     def backward_D_A_xz(self):
-        self.loss_D_A_xz = self.backward_D_basic(self.netD_A_xz, self.real, self.fake, self.target_sl_axis, self.remain_sl_axis) # comparing XY_original to XZ_fake
-
+        self.loss_D_A_xz = self.backward_D_basic(
+            self.netD_A_xz,
+            self.real,
+            self.fake,
+            self.target_sl_axis,
+            self.remain_sl_axis,
+        )  # comparing XY_original to XZ_fake
 
     def backward_D_B_xy(self):
-        self.loss_D_B_xy = self.backward_D_basic(self.netD_B_xy, self.real, self.rec, self.target_sl_axis, self.target_sl_axis) # comparing XY_original to XY_reconstructed
+        self.loss_D_B_xy = self.backward_D_basic(
+            self.netD_B_xy,
+            self.real,
+            self.rec,
+            self.target_sl_axis,
+            self.target_sl_axis,
+        )  # comparing XY_original to XY_reconstructed
 
     def backward_D_B_yz(self):
-        """Calculate GAN loss for discriminator D_B, which compares the original and the reconstructed. """
-        self.loss_D_B_yz = self.backward_D_basic(self.netD_B_yz, self.real, self.rec, self.source_sl_axis, self.source_sl_axis) #comparing YZ_original to YZ_reconstructed
+        """Calculate GAN loss for discriminator D_B, which compares the original and the reconstructed."""
+        self.loss_D_B_yz = self.backward_D_basic(
+            self.netD_B_yz,
+            self.real,
+            self.rec,
+            self.source_sl_axis,
+            self.source_sl_axis,
+        )  # comparing YZ_original to YZ_reconstructed
 
     def backward_D_B_xz(self):
-        self.loss_D_B_xz = self.backward_D_basic(self.netD_B_xz, self.real, self.rec, self.remain_sl_axis, self.remain_sl_axis) # comparing XZ_original to XZ_reconstructed
+        self.loss_D_B_xz = self.backward_D_basic(
+            self.netD_B_xz,
+            self.real,
+            self.rec,
+            self.remain_sl_axis,
+            self.remain_sl_axis,
+        )  # comparing XZ_original to XZ_reconstructed
 
     def backward_G(self):
         """Calculate the loss for generators G_A and G_B"""
         lambda_A = self.opt.lambda_A
 
-        self.loss_G_A_xy = self.criterionGAN(self.iter_f(self.fake, self.netD_A_xy, self.target_sl_axis), True) * self.lambda_plane_target
-        self.loss_G_A_yz = self.criterionGAN(self.iter_f(self.fake, self.netD_A_yz, self.source_sl_axis), True) * self.lambda_plane_source
-        self.loss_G_A_xz = self.criterionGAN(self.iter_f(self.fake, self.netD_A_xz, self.remain_sl_axis), True) * self.lambda_plane_ref
+        self.loss_G_A_xy = (
+            self.criterionGAN(
+                self.iter_f(self.fake, self.netD_A_xy, self.target_sl_axis), True
+            )
+            * self.lambda_plane_target
+        )
+        self.loss_G_A_yz = (
+            self.criterionGAN(
+                self.iter_f(self.fake, self.netD_A_yz, self.source_sl_axis), True
+            )
+            * self.lambda_plane_source
+        )
+        self.loss_G_A_xz = (
+            self.criterionGAN(
+                self.iter_f(self.fake, self.netD_A_xz, self.remain_sl_axis), True
+            )
+            * self.lambda_plane_ref
+        )
         self.loss_G_A = self.loss_G_A_xy + self.loss_G_A_yz + self.loss_G_A_xz
 
-        self.loss_G_B_xy = self.criterionGAN(self.iter_f(self.rec, self.netD_B_xy, self.target_sl_axis), True) * (1 / 3)
-        self.loss_G_B_yz = self.criterionGAN(self.iter_f(self.rec, self.netD_B_yz, self.source_sl_axis), True) * (1 / 3)
-        self.loss_G_B_xz = self.criterionGAN(self.iter_f(self.rec, self.netD_B_xz, self.remain_sl_axis), True) * (1 / 3)
+        self.loss_G_B_xy = self.criterionGAN(
+            self.iter_f(self.rec, self.netD_B_xy, self.target_sl_axis), True
+        ) * (1 / 3)
+        self.loss_G_B_yz = self.criterionGAN(
+            self.iter_f(self.rec, self.netD_B_yz, self.source_sl_axis), True
+        ) * (1 / 3)
+        self.loss_G_B_xz = self.criterionGAN(
+            self.iter_f(self.rec, self.netD_B_xz, self.remain_sl_axis), True
+        ) * (1 / 3)
 
         self.loss_G_B = self.loss_G_B_xy + self.loss_G_B_yz + self.loss_G_B_xz
 
@@ -262,15 +475,35 @@ class AxialToLateralGANAthenaModel(BaseModel):
     def optimize_parameters(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         # forward
-        self.forward()      # compute fake images and reconstruction images.
+        self.forward()  # compute fake images and reconstruction images.
         # G_A and G_B
-        self.set_requires_grad([self.netD_A_xy, self.netD_A_yz, self.netD_A_xz,  self.netD_B_xy, self.netD_B_yz, self.netD_B_xz], False)  # Ds require no gradients when optimizing Gs
+        self.set_requires_grad(
+            [
+                self.netD_A_xy,
+                self.netD_A_yz,
+                self.netD_A_xz,
+                self.netD_B_xy,
+                self.netD_B_yz,
+                self.netD_B_xz,
+            ],
+            False,
+        )  # Ds require no gradients when optimizing Gs
         self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
-        self.backward_G()             # calculate gradients for G_A and G_B
-        self.optimizer_G.step()       # update G_A and G_B's weights
+        self.backward_G()  # calculate gradients for G_A and G_B
+        self.optimizer_G.step()  # update G_A and G_B's weights
 
         # D_A and D_B
-        self.set_requires_grad([self.netD_A_xy, self.netD_A_yz, self.netD_A_xz, self.netD_B_xy, self.netD_B_yz,  self.netD_B_xz], True)
+        self.set_requires_grad(
+            [
+                self.netD_A_xy,
+                self.netD_A_yz,
+                self.netD_A_xz,
+                self.netD_B_xy,
+                self.netD_B_yz,
+                self.netD_B_xz,
+            ],
+            True,
+        )
         self.optimizer_D.zero_grad()  # set D_A and D_B's gradients to zero
 
         self.backward_D_A_xy()
@@ -284,18 +517,36 @@ class AxialToLateralGANAthenaModel(BaseModel):
 
     # Apply discriminator to each slice in a given dimension and save it as a volume.
     def iter_f(self, input, function, slice_axis):
-        input_tensor = Volume(input, self.device) # Dimension: batch, color_channel, z, y, x
-        test_slice = function(input_tensor.get_slice(0, slice_axis)) # get image dimension after convolving through the discriminator
-        output_tensor = Volume(torch.zeros(test_slice.shape[0], test_slice.shape[1], self.num_slice, test_slice.shape[2], test_slice.shape[3]), self.device)
+        input_tensor = Volume(
+            input, self.device
+        )  # Dimension: batch, color_channel, z, y, x
+        test_slice = function(
+            input_tensor.get_slice(0, slice_axis)
+        )  # get image dimension after convolving through the discriminator
+        output_tensor = Volume(
+            torch.zeros(
+                test_slice.shape[0],
+                test_slice.shape[1],
+                self.num_slice,
+                test_slice.shape[2],
+                test_slice.shape[3],
+            ),
+            self.device,
+        )
 
         for i in range(self.num_slice):
-            input_slice = input_tensor.get_slice(i, slice_axis) # batch, color_channel, y, x
+            input_slice = input_tensor.get_slice(
+                i, slice_axis
+            )  # batch, color_channel, y, x
             output_slice = function(input_slice)
-            output_tensor.set_slice(i, 0, output_slice) # stack the output by the discriminator on z-axis.
+            output_tensor.set_slice(
+                i, 0, output_slice
+            )  # stack the output by the discriminator on z-axis.
 
         return output_tensor.get_volume()
 
-class Volume():
+
+class Volume:
     def __init__(self, vol, device):
         self.volume = vol.to(device)  # push the volume to cuda memory
         self.num_slice = vol.shape[-1]

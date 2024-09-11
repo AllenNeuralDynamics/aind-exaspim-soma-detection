@@ -134,7 +134,7 @@ python train_onecube.py \
 
 ```bash
 python train_onecube.py \
---dataroot /data/exaspim_685221 \
+--dataroot /data/train_exaspim_685221 \
 --checkpoints_dir /results/checkpoints  --add_date \
 --name axial_to_lateral_gan_apollo --dataset_mode singlevolume \
 --print_freq 10 --display_freq 20 \
@@ -142,7 +142,7 @@ python train_onecube.py \
 --netG unet_deconv --netG_B deep_linear_gen --netD basic --gan_mode lsgan \
 --init_type kaiming --norm instance --batch_size 1 \
 --lambda_A 5 --crop_size 108 108 108 --display_histogram  --lambda_plane 1 1 1 \
---save_by_iter --save_latest_freq 1000 --lr_policy constant --randomize_projection_depth --projection_depth 10
+--save_by_iter --save_latest_freq 1000 --lr_policy constant --randomize_projection_depth --projection_depth 20
 ```
 
 python train_onecube.py --dataroot /data/simulated/blurred --name maps_cyclegan --model axial_to_lateral_gan_athena

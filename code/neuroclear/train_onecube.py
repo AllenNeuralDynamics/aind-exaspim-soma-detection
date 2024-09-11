@@ -32,79 +32,86 @@ from tqdm import tqdm
 
 import numpy as np
 
-if __name__ == '__main__':
-    opt = TrainOptions().parse()   # get training options
+if __name__ == "__main__":
+    opt = TrainOptions().parse()  # get training options
 
     ## DEBUG FLAG
     if opt.debug:
-        print ("DEBUG MODE ACTIVATED.")
+        print("DEBUG MODE ACTIVATED.")
         import pydevd_pycharm
-        Host_IP_address = '143.248.31.79'
-        print ("For debug, listening to...{}".format(Host_IP_address))
+
+        Host_IP_address = "143.248.31.79"
+        print("For debug, listening to...{}".format(Host_IP_address))
         # pydevd_pycharm.settrace('143.248.31.79', port=5678, stdoutToServer=True, stderrToServer=True)
-        pydevd_pycharm.settrace(Host_IP_address, port=5678, stdoutToServer=True, stderrToServer=True)
+        pydevd_pycharm.settrace(
+            Host_IP_address, port=5678, stdoutToServer=True, stderrToServer=True
+        )
     ##
 
     dataset_class = data.find_dataset_using_name(opt.dataset_mode)
     dataset = dataset_class(opt)
 
-    model = create_model(opt)      # create a model given opt.model and other options
-    model.setup(opt)               # regular setup: load and print networks; create schedulers
-    visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
+    model = create_model(opt)  # create a model given opt.model and other options
+    model.setup(opt)  # regular setup: load and print networks; create schedulers
+    visualizer = Visualizer(opt)
 
-    iter_data_time = time.time()    # timer for data loading per iteration
-    total_iters = 0  # the number of training iterations in current epoch, reset to 0 every epoch
-
+    iter_data_time = time.time()
+    total_iters = 0
     if opt.load_iter > 0:
-        loaded_iter = opt.load_iter+1
+        loaded_iter = opt.load_iter + 1
     else:
         loaded_iter = 0
 
     total_iters = total_iters + loaded_iter
 
-    visualizer.reset()              # reset the visualizer: make sure it saves the results to HTML at least once every epoch
+    visualizer.reset()
     visualizer.display_model_hyperparameters()
-    print ("Model hyperparameters documented on tensorboard.")
-    while True: # infinite training within epoch
-
-        random_index = np.random.randint(0,10)
+    while True:
+        # Get data and apply preprocessing
+        random_index = np.random.randint(0, 10)
         data = dataset[random_index]
+        model.set_input(data)
 
-        iter_start_time = time.time()  # timer for computation per iteration
+        # Compute loss, gradients, update weights
+        model.optimize_parameters()
 
-        if (total_iters-loaded_iter) % opt.print_freq == 0:
+        # Update timer
+        iter_start_time = time.time()
+        if (total_iters - loaded_iter) % opt.print_freq == 0:
             t_data = iter_start_time - iter_data_time
-
         total_iters += opt.batch_size
-        model.set_input(data)         # unpack data from dataset and apply preprocessing
-        model.optimize_parameters()   # calculate loss functions, get gradients, update network weights
 
-        if total_iters % opt.display_freq == 0:   # display images on tensorboard
+        # Check whether to display images on tensorboard
+        if total_iters % opt.display_freq == 0:
             save_result = total_iters % opt.update_html_freq == 0
             model.compute_visuals()
             visualizer.display_current_results(model.get_current_visuals(), total_iters)
 
-        if total_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
-            print ("----------------------------------")
-            print ("exp name: " + str(opt.name) + ", gpu_id:"+str(opt.gpu_ids))
-            print ("----------------------------------")
+        # Print training losses and save logging information to the disk
+        if total_iters % opt.print_freq == 0:
+            print("----------------------------------")
+            print("exp name: " + str(opt.name))
+            print("----------------------------------")
             losses = model.get_current_losses()
             t_comp = (time.time() - iter_start_time) / opt.batch_size
             visualizer.print_current_losses(1, total_iters, losses, t_comp, t_data)
-
             if opt.display_id > 0:
-                visualizer.plot_current_losses(total_iters, losses, is_epoch = False)
+                visualizer.plot_current_losses(total_iters, losses, is_epoch=False)
 
-        if total_iters % opt.save_latest_freq == 0:   # cache our latest model every <save_latest_freq> iterations
-            print ("----------------------------------")
-            print('saving the latest model (iteration %d)' % total_iters)
-            save_suffix = 'iter_%d' % total_iters if opt.save_by_iter else 'latest'
+        # Cache latest model every <save_latest_freq> iterations
+        if total_iters % opt.save_latest_freq == 0:  
+            print("----------------------------------")
+            print("saving the latest model (iteration %d)" % total_iters)
+            save_suffix = "iter_%d" % total_iters if opt.save_by_iter else "latest"
             model.save_networks(save_suffix)
-            print('saving the current histogram (iteration %d)' % total_iters)
-            visualizer.display_current_histogram(model.get_current_visuals(), total_iters)
-            print('saving the current visuals (iteration %d)' % total_iters)
+            print("saving the current histogram (iteration %d)" % total_iters)
+            visualizer.display_current_histogram(
+                model.get_current_visuals(), total_iters
+            )
+            print("saving the current visuals (iteration %d)" % total_iters)
             visualizer.save_current_visuals(model.get_current_visuals(), total_iters)
-            print ("----------------------------------")
+            print("----------------------------------")
 
-        model.update_learning_rate()  # update here instead of at the end of every epoch
+        # update here instead of at the end of every epoch
+        model.update_learning_rate()  
         iter_data_time = time.time()

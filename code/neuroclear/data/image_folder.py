@@ -15,24 +15,40 @@ from os import listdir
 from os.path import isfile, join
 
 IMG_EXTENSIONS = [
-    '.jpg', '.JPG', '.jpeg', '.JPEG',
-    '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP','.npy', '.tif','.tiff'
+    ".jpg",
+    ".JPG",
+    ".jpeg",
+    ".JPEG",
+    ".png",
+    ".PNG",
+    ".ppm",
+    ".PPM",
+    ".bmp",
+    ".BMP",
+    ".npy",
+    ".tif",
+    ".tiff",
 ]
+
 
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
+
 def make_dataset(dir, max_dataset_size=float("inf")):
 
-    assert os.path.isdir(dir), '%s is not a valid directory' % dir
+    assert os.path.isdir(dir), "%s is not a valid directory" % dir
     images = []
     for root, _, fnames in sorted(os.walk(dir)):
         for fname in fnames:
-            if is_image_file(fname) and fname[0] is not '.': # also discard the hidden files.
+            if (
+                is_image_file(fname) and fname[0] is not "."
+            ):  # also discard the hidden files.
                 path = os.path.join(root, fname)
                 images.append(path)
 
-    return images[:min(max_dataset_size, len(images))]
+    return images[: min(max_dataset_size, len(images))]
+
 
 def merge_datasets(dirs, max_dataset_size=float("inf")):
     image_set = []
@@ -42,18 +58,22 @@ def merge_datasets(dirs, max_dataset_size=float("inf")):
     # print (f'image set has a size of: {len(image_set)}')
     return image_set
 
+
 def default_loader(path):
-    return Image.open(path).convert('RGB')
+    return Image.open(path).convert("RGB")
+
 
 class ImageFolder(data.Dataset):
 
-    def __init__(self, root, transform=None, return_paths=False,
-                 loader=default_loader):
+    def __init__(self, root, transform=None, return_paths=False, loader=default_loader):
         imgs = make_dataset(root)
         if len(imgs) == 0:
-            raise(RuntimeError("Found 0 images in: " + root + "\n"
-                               "Supported image extensions are: " +
-                               ",".join(IMG_EXTENSIONS)))
+            raise (
+                RuntimeError(
+                    "Found 0 images in: " + root + "\n"
+                    "Supported image extensions are: " + ",".join(IMG_EXTENSIONS)
+                )
+            )
 
         self.root = root
         self.imgs = imgs

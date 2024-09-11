@@ -9,7 +9,7 @@ import math
 
 
 def tensor2im(input_image, imtype=np.uint16):
-    """"Converts a Tensor array into a numpy image array.
+    """ "Converts a Tensor array into a numpy image array.
 
     Parameters:
         input_image (tensor) --  the input image tensor array
@@ -20,18 +20,20 @@ def tensor2im(input_image, imtype=np.uint16):
             image_tensor = input_image.data
         else:
             return input_image
-        image_numpy_og = image_tensor.cpu().float().numpy()  # convert it into a numpy array
+        image_numpy_og = (
+            image_tensor.cpu().float().numpy()
+        )  # convert it into a numpy array
         image_numpy = image_numpy_og.copy()
 
         if imtype == np.uint8:
             image_numpy = np.clip(image_numpy, 0, 1)
-            image_numpy *= (2 ** 8 * 1.0 - 1)
+            image_numpy *= 2**8 * 1.0 - 1
             image_numpy = np.clip(image_numpy, 0, 255)
 
         if imtype == np.uint16:
             image_numpy = np.clip(image_numpy, 0, 1)
-            image_numpy *= (2 ** 16 * 1.0 - 1)
-            image_numpy = np.clip(image_numpy, 0, 2**16-1)
+            image_numpy *= 2**16 * 1.0 - 1
+            image_numpy = np.clip(image_numpy, 0, 2**16 - 1)
         if imtype == np.float:
             pass
     else:
@@ -39,19 +41,21 @@ def tensor2im(input_image, imtype=np.uint16):
     return image_numpy.astype(imtype)
 
 
-def normalize(img_np, data_type = float):
+def normalize(img_np, data_type=float):
     img_min = np.min(img_np)
     img_max = np.max(img_np)
 
     new_min = 0
     if data_type == np.uint8:
-        new_max = 2**8-1
+        new_max = 2**8 - 1
     elif data_type == np.uint16:
-        new_max = 2**16-1
+        new_max = 2**16 - 1
     elif data_type == np.float:
         new_max = 1
 
-    img_normd = (img_np - img_min) * ((new_max - new_min) / (img_max - img_min)) + new_min
+    img_normd = (img_np - img_min) * (
+        (new_max - new_min) / (img_max - img_min)
+    ) + new_min
     img_normd = img_normd.astype(data_type)
 
     return img_normd
@@ -79,36 +83,36 @@ def noisy(noise_typ, image, sigma=0.1, peak=0.1, is_tensor=False, is_normalize=T
         noisy = normalize(noisy)
 
     if is_tensor:
-        noisy = torch.from_numpy(noisy).float().to(torch.device('cuda')).detach()
+        noisy = torch.from_numpy(noisy).float().to(torch.device("cuda")).detach()
 
     return noisy
 
 
 def get_mse(source, target):
-    mse = np.mean((target - source)**2)
+    mse = np.mean((target - source) ** 2)
     return mse
 
 
 def get_snr(img_original, img_noised):
     mse = np.mean((img_original - img_noised) ** 2)  # Pw
-    Ps = np.mean(img_original ** 2)
+    Ps = np.mean(img_original**2)
     snr_linearscale = Ps / mse
     return 10 * math.log(snr_linearscale, 10)
 
 
 def standardize(img_np):
-    return (img_np-np.mean(img_np))/np.std(img_np)
+    return (img_np - np.mean(img_np)) / np.std(img_np)
 
 
 def get_psnr(source, target, data_range):
     target = target.astype(float)
     source = source.astype(float)
 
-    mse = np.mean((target - source)**2)
-    return 20*math.log(data_range,10)-10*math.log(mse,10)
+    mse = np.mean((target - source) ** 2)
+    return 20 * math.log(data_range, 10) - 10 * math.log(mse, 10)
 
 
-def diagnose_network(net, name='network'):
+def diagnose_network(net, name="network"):
     """Calculate and print the mean of average absolute(gradients)
 
     Parameters:
@@ -148,11 +152,13 @@ def print_numpy(x, val=True, shp=False):
     """
     x = x.astype(np.float64)
     if shp:
-        print('shape,', x.shape)
+        print("shape,", x.shape)
     if val:
         x = x.flatten()
-        print('mean = %3.3f, min = %3.3f, max = %3.3f, median = %3.3f, std=%3.3f' % (
-            np.mean(x), np.min(x), np.max(x), np.median(x), np.std(x)))
+        print(
+            "mean = %3.3f, min = %3.3f, max = %3.3f, median = %3.3f, std=%3.3f"
+            % (np.mean(x), np.min(x), np.max(x), np.median(x), np.std(x))
+        )
 
 
 def mkdirs(paths):
@@ -217,5 +223,9 @@ def crop_for_dicing(image, roi_size, overlap=0):
     # image_cropped = image[:-z_crop, :-y_crop, :-x_crop]
     image_cropped = image[z_crop:, y_crop:, x_crop:]
 
-    print("image volume is cropped for equal dicing. crop sizes are: {}".format((z_crop, y_crop, x_crop)))
+    print(
+        "image volume is cropped for equal dicing. crop sizes are: {}".format(
+            (z_crop, y_crop, x_crop)
+        )
+    )
     return image_cropped

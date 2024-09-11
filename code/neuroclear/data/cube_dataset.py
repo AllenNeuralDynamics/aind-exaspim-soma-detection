@@ -6,7 +6,7 @@ import re
 
 
 def numericalSort(value):
-    numbers = re.compile(r'(\d+)')
+    numbers = re.compile(r"(\d+)")
     parts = numbers.split(value)
     parts[1::2] = map(int, parts[1::2])
     return parts
@@ -26,11 +26,11 @@ class CubeDataset(BaseDataset):
 
         BaseDataset.__init__(self, opt)
         self.A_paths = make_dataset(opt.dataroot)
-        self.A_paths.sort(key = numericalSort)
+        self.A_paths.sort(key=numericalSort)
 
         self.A_size = len(self.A_paths)  # get the size of dataset A
 
-        btoA = self.opt.direction == 'BtoA'
+        btoA = self.opt.direction == "BtoA"
         self.transform_A = get_transform(self.opt)
 
         self.isTrain = opt.isTrain
@@ -48,7 +48,9 @@ class CubeDataset(BaseDataset):
             B_paths (str)    -- image paths
         """
 
-        A_path = self.A_paths[index % self.A_size]  # make sure index is within then range
+        A_path = self.A_paths[
+            index % self.A_size
+        ]  # make sure index is within then range
 
         # Switch to importing a numpy file.
         A_img_np = io.imread(A_path)
@@ -56,7 +58,7 @@ class CubeDataset(BaseDataset):
         # apply image transformation
         A = self.transform_A(A_img_np)
 
-        return {'A': A, 'A_paths': A_path}
+        return {"A": A, "A_paths": A_path}
 
     def __len__(self):
         """Return the total number of images in the dataset.
