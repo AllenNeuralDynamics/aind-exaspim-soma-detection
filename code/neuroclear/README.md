@@ -162,13 +162,13 @@ Expected output of train_onecube.py
 - You can test a trained model with a format like this. The flags are documented in **options** folder.
 
 ```bash
-python test_dice.py --dataroot /data/exaspim_703070  \
+python test_dice.py --dataroot /data/test_exaspim_685221  \
 --checkpoints_dir /results/checkpoints --results_dir /results/inference  \
---name 20240910-0045_axial_to_lateral_gan_apollo --serial_batches \
+--name 20240911-0558_axial_to_lateral_gan_apollo --serial_batches \
 --preprocess addColorChannel --dataset_mode diceImage \
---netG unet_deconv --data_name exaspim_703070 \
+--netG unet_deconv --data_name test_exaspim_685221 \
 --gpu_ids 0 --overlap 15 --dice_size 120 120 120 \
---image_dimension 3 --model_suffix _A --save_volume --border_cut 10 --skip_real --load_iter 14000
+--image_dimension 3 --model_suffix _A --save_volume --border_cut 10 --skip_real --load_iter 10000
 
 ```
 

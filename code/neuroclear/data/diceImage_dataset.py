@@ -38,15 +38,17 @@ class DiceImageDataSet(BaseDataset):
         """
         print("DiceImageDataSet")
         BaseDataset.__init__(self, opt)
-        self.A_path = make_dataset(opt.dataroot, 1)[0]  # loads only one image volume.
         self.roi_size = opt.dice_size[0]
         self.overlap = opt.overlap
         self.border_cut = opt.border_cut
 
-        A_img_np = io.imread(self.A_path)
-        A_img_np -= np.min(A_img_np)
-        A_img_np = A_img_np / np.max(A_img_np)
-        # A_img_np = np.load(self.A_path)
+        # Read Image
+        self.A_path = make_dataset(opt.dataroot, 1)[0]
+        A_img_np = io.imread(self.A_path).astype(np.float32)
+
+        # Normalize
+        A_img_np = A_img_np - np.percentile(A_img_np, 5)
+        A_img_np = A_img_np / np.percentile(A_img_np, 99)
 
         # norm_parms = {'min_max':(np.min(A_img_np), np.max(A_img_np))}
         # self.transform = get_transform(opt, norm_parms)
