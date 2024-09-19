@@ -204,9 +204,7 @@ def __permutate(img_np):
     return img_np
 
 
-def __randomcontrast(
-    img_np, randomcontrast_val
-):  # randomly change the contrast of the image (by constast-stretch)
+def __randomcontrast(img_np, randomcontrast_val):
     random_contrast = random.randint(
         randomcontrast_val, 99
     )  # by default, randomcontrast_val = 50
@@ -257,7 +255,7 @@ def __centercrop(img_np, crop_portion):
             int(z * crop_portion / 2),
             int(y * crop_portion / 2),
             int(x * crop_portion / 2),
-        )  # For 2D, crop_z will be ignored.
+        )
         img_cropped = img_np[crop_z:-crop_z, crop_y:-crop_y, crop_x:-crop_x]
 
     else:  # 2D data

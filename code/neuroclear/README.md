@@ -142,7 +142,7 @@ python train_onecube.py \
 --netG unet_deconv --netG_B deep_linear_gen --netD basic --gan_mode lsgan \
 --init_type kaiming --norm instance --batch_size 1 \
 --lambda_A 5 --crop_size 108 108 108 --display_histogram  --lambda_plane 1 1 1 \
---save_by_iter --save_latest_freq 1000 --lr_policy constant --randomize_projection_depth --projection_depth 20
+--save_by_iter --save_latest_freq 1000 --lr_policy constant --randomize_projection_depth --projection_depth 10
 ```
 
 python train_onecube.py --dataroot /data/simulated/blurred --name maps_cyclegan --model axial_to_lateral_gan_athena
@@ -164,12 +164,11 @@ Expected output of train_onecube.py
 ```bash
 python test_dice.py --dataroot /data/test_exaspim_685221  \
 --checkpoints_dir /results/checkpoints --results_dir /results/inference  \
---name 20240911-0558_axial_to_lateral_gan_apollo --serial_batches \
+--name 20240916-1744_axial_to_lateral_gan_apollo --serial_batches \
 --preprocess addColorChannel --dataset_mode diceImage \
 --netG unet_deconv --data_name test_exaspim_685221 \
 --gpu_ids 0 --overlap 15 --dice_size 120 120 120 \
---image_dimension 3 --model_suffix _A --save_volume --border_cut 10 --skip_real --load_iter 10000
-
+--image_dimension 3 --model_suffix _A --save_volume --border_cut 10 --skip_real --load_iter 4000
 ```
 
 # REMOVED --normalize_intensity

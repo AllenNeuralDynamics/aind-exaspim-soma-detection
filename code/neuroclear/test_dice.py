@@ -79,14 +79,10 @@ if __name__ == "__main__":
     dataset_size_original = (
         dataset_tolook_shape.size_original()
     )  # return the image size before padding.
-    dataset_size = (
-        dataset_tolook_shape.size()
-    )  # Get the y,x,z volume sizes of the image volume.
+    dataset_size = dataset_tolook_shape.size()
     print("original dataset_shape: " + str(dataset_size_original))
 
-    dataset = create_dataset(
-        opt
-    )  # create a dataset given opt.dataset_mode and other options
+    dataset = create_dataset(opt)
     model = create_model(opt)  # create a model given opt.model and other options
     model.setup(opt)  # regular setup: load and print networks; create schedulers
 
@@ -94,7 +90,7 @@ if __name__ == "__main__":
     if opt.data_name == None:
         web_dir = os.path.join(
             opt.results_dir, opt.name, "{}_{}".format(opt.phase, opt.epoch)
-        )  # define the website directory
+        )
     else:
         web_dir = os.path.join(
             opt.results_dir,
@@ -187,7 +183,7 @@ if __name__ == "__main__":
                 + str(opt.epoch)
                 + ".tif"
             )
-        imsave(output_xy_vol_path, fake_volume)
+        imsave(output_xy_vol_path, fake_volume[8:-8, 8:-8, 8:-8])
         print("Output volume is saved as a tiff file. ")
 
         if not opt.skip_real:
@@ -277,12 +273,8 @@ if __name__ == "__main__":
     if opt.dataroot_gt is not None:
         GT_path = make_dataset(opt.dataroot_gt, 1)[0]
         gt_volume = io.imread(GT_path)
-        # Ground_truth = Ground_truth[-z:, -y:, -x:] #crop to match the cropped input and output
 
         print("Calculating PSNR for the whole image volume...")
-
-        ##
-        # Calculate image metrics
 
         datarange = 2**8 - 1
 

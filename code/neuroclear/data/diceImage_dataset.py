@@ -47,11 +47,8 @@ class DiceImageDataSet(BaseDataset):
         A_img_np = io.imread(self.A_path).astype(np.float32)
 
         # Normalize
-        A_img_np = A_img_np - np.percentile(A_img_np, 5)
+        A_img_np = A_img_np - np.min(A_img_np)
         A_img_np = A_img_np / np.percentile(A_img_np, 99)
-
-        # norm_parms = {'min_max':(np.min(A_img_np), np.max(A_img_np))}
-        # self.transform = get_transform(opt, norm_parms)
 
         self.transform = get_transform(opt)
 
