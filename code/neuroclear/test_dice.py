@@ -47,6 +47,7 @@ import numpy as np
 from data.image_folder import make_dataset
 from tifffile import imsave
 
+
 if __name__ == "__main__":
     opt = TestOptions().parse()  # get test options
 
@@ -135,13 +136,11 @@ if __name__ == "__main__":
 
         dice_assembly.addToStack(visuals)  # converts tensor to img and add to stack.
 
-    print("Inference Done. ")
 
     dice_assembly.assemble_all()
     # dice_assembly.assemble_all(imtype = output_type, background_threshold=( bckgr_thre, bckgr_val))
     print("Image volume re-assembled.")
     img_whole_dict = dice_assembly.getDict()
-    print("re-merged image shape: {}".format(img_whole_dict["fake"].shape))
     webpage_wholeimg = html.HTML(
         web_dir,
         "Whole_img: Experiment = %s, Phase = %s, Epoch = %s"
@@ -150,10 +149,8 @@ if __name__ == "__main__":
 
     if opt.data_type == "uint16":
         data_range = 2**16 - 1
-        # output_dtype = np.uint16
     elif opt.data_type == "uint8":
         data_range = 2**8 - 1
-        # output_dtype = np.uint8
 
     ############# Change the image type ##################
     if not opt.skip_real:
@@ -183,12 +180,12 @@ if __name__ == "__main__":
                 + str(opt.epoch)
                 + ".tif"
             )
-        imsave(output_xy_vol_path, fake_volume[8:-8, 8:-8, 8:-8])
+        imsave(output_xy_vol_path, fake_volume[0:-108, 0:-108, 0:-108])
         print("Output volume is saved as a tiff file. ")
 
         if not opt.skip_real:
             input_xy_vol_path = web_dir + "/volumes/input_volume_xy-view.tif"
-            imsave(input_xy_vol_path, real_volume)
+            imsave(input_xy_vol_path, real_volume[0:-108, 0:-108, 0:-108])
             print("Input volume is saved as a tiff file. ")
 
     if opt.save_projections:

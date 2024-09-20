@@ -1,6 +1,8 @@
-# TODO August 06 verion
 from .base_model import BaseModel
+from tifffile import imwrite
 from . import networks
+
+import numpy as np
 
 
 class TestModel(BaseModel):
@@ -75,7 +77,7 @@ class TestModel(BaseModel):
 
     def forward(self):
         """Run forward pass."""
-        self.fake = self.netG(self.real)  # G(real)
+        self.fake = self.netG(self.real)
 
     def optimize_parameters(self):
         """No optimization for test model."""

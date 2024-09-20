@@ -163,12 +163,12 @@ Expected output of train_onecube.py
 
 ```bash
 python test_dice.py --dataroot /data/test_exaspim_685221  \
---checkpoints_dir /results/checkpoints --results_dir /results/inference  \
---name 20240916-1744_axial_to_lateral_gan_apollo --serial_batches \
+--checkpoints_dir /results/checkpoints-global_normalization/checkpoints --results_dir /results/inference  \
+--name 20240911-0558_axial_to_lateral_gan_apollo --serial_batches \
 --preprocess addColorChannel --dataset_mode diceImage \
 --netG unet_deconv --data_name test_exaspim_685221 \
---gpu_ids 0 --overlap 15 --dice_size 120 120 120 \
---image_dimension 3 --model_suffix _A --save_volume --border_cut 10 --skip_real --load_iter 4000
+--gpu_ids 0 --overlap 16 --dice_size 120 120 120 \
+--image_dimension 3 --model_suffix _A --save_volume --border_cut 10 --load_iter 10000
 ```
 
 # REMOVED --normalize_intensity

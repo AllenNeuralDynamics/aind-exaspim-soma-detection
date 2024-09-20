@@ -48,7 +48,7 @@ class DiceImageDataSet(BaseDataset):
 
         # Normalize
         A_img_np = A_img_np - np.min(A_img_np)
-        A_img_np = A_img_np / np.percentile(A_img_np, 99)
+        A_img_np = A_img_np / np.percentile(A_img_np, 5)
 
         self.transform = get_transform(opt)
 
