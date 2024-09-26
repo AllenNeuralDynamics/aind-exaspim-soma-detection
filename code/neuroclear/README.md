@@ -140,7 +140,7 @@ python train_onecube.py \
 --print_freq 10 --display_freq 20 \
 --preprocess normalize_random3Drotate_randomcrop_randomflip_addColorChannel_addBatchChannel --model axial_to_lateral_gan_apollo \
 --netG unet_deconv --netG_B deep_linear_gen --netD basic --gan_mode lsgan \
---init_type kaiming --norm instance --batch_size 1 \
+--init_type kaiming --norm instance --batch_size 16 \
 --lambda_A 5 --crop_size 108 108 108 --display_histogram  --lambda_plane 1 1 1 \
 --save_by_iter --save_latest_freq 500 --lr_policy constant --randomize_projection_depth --projection_depth 15
 ```

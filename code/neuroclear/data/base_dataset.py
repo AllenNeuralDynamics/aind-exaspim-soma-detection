@@ -86,7 +86,7 @@ def get_params(opt, vol_shape):
     return {"crop_pos": (z, y, x), "flip_axis": flip_axis, "angle_3D": angle_3D}
 
 
-def get_transform(opt, params=None):
+def get_transform(opt, params=None, img_intensity_threshold=0):
     transform_list = []
     image_dimension = int(opt.image_dimension)
 
@@ -119,7 +119,7 @@ def get_transform(opt, params=None):
     if "randomcrop" in opt.preprocess:
         if params is None:
             transform_list += [
-                transforms.Lambda(lambda img_np: __randomcrop(img_np, opt.crop_size))
+                transforms.Lambda(lambda img_np: __randomcrop(img_np, opt.crop_size, img_intensity_threshold))
             ]
         else:
             transform_list += [
@@ -223,12 +223,13 @@ def __randomcontrast(img_np, randomcontrast_val):
     return img_normed
 
 
-def __randomcrop(img, shape):
+def __randomcrop(img, shape, img_intensity_threshold=0):
     cnt = 0
     while cnt < 25:
         start_idxs = [rand(0, s1 - s2) for s1, s2 in zip(img.shape, shape)]
         slices = [slice(idx, idx + cs) for idx, cs in zip(start_idxs, shape)]
-        if np.sum(img[tuple(slices)] > 0.7) > 1000:
+        brightness_score = np.sum(img[tuple(slices)] > img_intensity_threshold)
+        if brightness_score > 40 ** 3:
             return img[tuple(slices)]
         else:
             cnt += 1

@@ -30,13 +30,15 @@ class SingleVolumeDataset(BaseDataset):
         self.A_path = make_dataset(opt.dataroot, 1)[0]  # loads only one image volume.
         self.A_img_np = io.imread(self.A_path)
 
-        # Normalize
-        #self.A_img_np = self.A_img_np - np.min(self.A_img_np)
-        #self.A_img_np = self.A_img_np / np.percentile(self.A_img_np, 99)
+        # Set sampling chunk thresholds
+        img_intensity_threshold = np.percentile(self.A_img_np, 95)
+        print("Intensity threshold for sampling:", img_intensity_threshold)
 
         # Set transforms
         btoA = self.opt.direction == "BtoA"
-        self.transform_A = get_transform(self.opt)
+        self.transform_A = get_transform(
+            self.opt, img_intensity_threshold=img_intensity_threshold
+        )
         self.isTrain = opt.isTrain
 
     def __getitem__(self, index):
