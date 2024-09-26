@@ -180,12 +180,12 @@ if __name__ == "__main__":
                 + str(opt.epoch)
                 + ".tif"
             )
-        imsave(output_xy_vol_path, fake_volume[0:-108, 0:-108, 0:-108])
+        imsave(output_xy_vol_path, fake_volume)
         print("Output volume is saved as a tiff file. ")
 
         if not opt.skip_real:
             input_xy_vol_path = web_dir + "/volumes/input_volume_xy-view.tif"
-            imsave(input_xy_vol_path, real_volume[0:-108, 0:-108, 0:-108])
+            imsave(input_xy_vol_path, real_volume)
             print("Input volume is saved as a tiff file. ")
 
     if opt.save_projections:

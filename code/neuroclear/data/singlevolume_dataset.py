@@ -28,11 +28,11 @@ class SingleVolumeDataset(BaseDataset):
         # Read image
         BaseDataset.__init__(self, opt)
         self.A_path = make_dataset(opt.dataroot, 1)[0]  # loads only one image volume.
-        self.A_img_np = io.imread(self.A_path).astype(np.float32)
+        self.A_img_np = io.imread(self.A_path)
 
         # Normalize
-        self.A_img_np = self.A_img_np - np.percentile(self.A_img_np, 5)
-        self.A_img_np = self.A_img_np / np.percentile(self.A_img_np, 99)
+        #self.A_img_np = self.A_img_np - np.min(self.A_img_np)
+        #self.A_img_np = self.A_img_np / np.percentile(self.A_img_np, 99)
 
         # Set transforms
         btoA = self.opt.direction == "BtoA"

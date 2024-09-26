@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
     visualizer.reset()
     visualizer.display_model_hyperparameters()
-    while True:
+    while total_iters <= 12000:
         # Get data and apply preprocessing
         random_index = np.random.randint(0, 10)
         data = dataset[random_index]

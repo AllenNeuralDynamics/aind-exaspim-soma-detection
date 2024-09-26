@@ -77,7 +77,20 @@ class TestModel(BaseModel):
 
     def forward(self):
         """Run forward pass."""
+        #input_img = np.array(self.real[0, ...].cpu().detach())
+        #print("input_min:", np.min(input_img))
+        #print("input_mean:", np.mean(input_img))
+        #print("input_max:", np.max(input_img))
+        #imwrite("input.tiff", input_img)
+        
         self.fake = self.netG(self.real)
+        
+        #output_img = np.array(self.fake[0, ...].cpu().detach())
+        #print("output_min:", np.min(output_img))
+        #print("output_mean:", np.mean(output_img))
+        #print("output_max:", np.max(output_img))
+        #imwrite("output.tiff", output_img)
+        #stop
 
     def optimize_parameters(self):
         """No optimization for test model."""

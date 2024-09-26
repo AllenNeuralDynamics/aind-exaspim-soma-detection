@@ -122,7 +122,6 @@ def get_transform(opt, params=None):
                 transforms.Lambda(lambda img_np: __randomcrop(img_np, opt.crop_size))
             ]
         else:
-            print("here - 2")
             transform_list += [
                 transforms.Lambda(
                     lambda img_np: __crop(img_np, params["crop_pos"], opt.crop_size)
@@ -134,8 +133,8 @@ def get_transform(opt, params=None):
             transforms.Lambda(lambda img_np: __centercrop(img_np, opt.crop_portion))
         ]
 
-        # if 'normalize_intensity' in opt.preprocess:
-        # 	transform_list += [transforms.Lambda(lambda img_np: __normalize(img_np))]
+    if 'normalize' in opt.preprocess:
+        transform_list += [transforms.Lambda(lambda img_np: __normalize(img_np))]
 
     if "randomflip" in opt.preprocess:
         if params is None:
