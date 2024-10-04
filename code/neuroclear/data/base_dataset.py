@@ -229,7 +229,7 @@ def __randomcrop(img, shape, img_intensity_threshold=0):
         start_idxs = [rand(0, s1 - s2) for s1, s2 in zip(img.shape, shape)]
         slices = [slice(idx, idx + cs) for idx, cs in zip(start_idxs, shape)]
         brightness_score = np.sum(img[tuple(slices)] > img_intensity_threshold)
-        if brightness_score > 40 ** 3:
+        if brightness_score > 30 ** 3:
             return img[tuple(slices)]
         else:
             cnt += 1

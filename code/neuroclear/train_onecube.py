@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
     visualizer.reset()
     visualizer.display_model_hyperparameters()
-    while total_iters <= 12000:
+    while total_iters <= 16000:
         # Get data and apply preprocessing
         random_index = np.random.randint(0, 10)
         data = dataset[random_index]
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         iter_start_time = time.time()
         if (total_iters - loaded_iter) % opt.print_freq == 0:
             t_data = iter_start_time - iter_data_time
-        total_iters += opt.batch_size
+        total_iters += 1 #opt.batch_size
 
         # Check whether to display images on tensorboard
         if total_iters % opt.display_freq == 0:

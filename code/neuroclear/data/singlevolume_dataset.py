@@ -31,7 +31,7 @@ class SingleVolumeDataset(BaseDataset):
         self.A_img_np = io.imread(self.A_path)
 
         # Set sampling chunk thresholds
-        img_intensity_threshold = np.percentile(self.A_img_np, 95)
+        img_intensity_threshold = np.percentile(self.A_img_np, 80)
         print("Intensity threshold for sampling:", img_intensity_threshold)
 
         # Set transforms
