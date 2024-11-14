@@ -11,7 +11,7 @@ COPY git-askpass /
 RUN pip install -U --no-cache-dir \
     matplotlib \
     s3fs \
-    cupy
+     cupy-cuda11x
 
 RUN conda install -y \
         jupyterlab==4.0.11 \
