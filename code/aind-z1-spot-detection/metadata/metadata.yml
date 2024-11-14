@@ -1,0 +1,10 @@
+metadata_version: 1
+name: aind-z1-puncta-detection
+description: AIND Z1 puncta detection capsule using Laplacian of Gaussians
+tags:
+- z1
+authors:
+- name: Camilo Laiton
+- name: Tim Wang
+- name: Sharmishtaa Seshamani
+- name: David Feng

@@ -8,6 +8,11 @@ ARG GIT_ASKPASS
 ARG GIT_ACCESS_TOKEN
 COPY git-askpass /
 
+RUN pip install -U --no-cache-dir \
+    matplotlib \
+    s3fs \
+    cupy
+
 RUN conda install -y \
         jupyterlab==4.0.11 \
     && conda clean -ya
