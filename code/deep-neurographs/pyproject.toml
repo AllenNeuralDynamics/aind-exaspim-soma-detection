@@ -1,0 +1,96 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deep-neurographs"
+description = "Neuron reconstruction framework that detects and corrects false splits in a predicted segmentation."
+license = {text = "MIT"}
+requires-python = ">=3.7"
+authors = [
+    {name = "Anna Grim"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3"
+]
+readme = "README.md"
+dynamic = ["version"]
+
+dependencies = [
+    'boto3',
+    'fastremap',
+    'google-cloud-storage',
+    'more_itertools',
+    'networkx',
+    'plotly',
+    'scikit-image',
+    'scikit-learn',
+    'scipy',
+    'tensorboard',
+    'tensorstore',
+    'torch',
+    'torcheval',
+    'torchio',
+    'torch_geometric==2.5.3',
+    'tqdm',
+    'zarr',
+]
+
+[project.optional-dependencies]
+dev = [
+    'black',
+    'coverage',
+    'flake8',
+    'interrogate',
+    'isort',
+    'Sphinx',
+    'furo'
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "deep_neurographs.__version__"}
+
+[tool.black]
+line-length = 79
+target_version = ['py36']
+exclude = '''
+
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | build
+    | dist
+  )/
+  | .gitignore
+)
+'''
+
+[tool.coverage.run]
+omit = ["*__init__*"]
+source = ["deep_neurographs", "tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "if __name__ == .__main__.:",
+    "from",
+    "import",
+    "pragma: no cover"
+]
+fail_under = 100
+
+[tool.isort]
+line_length = 79
+profile = "black"
+
+[tool.interrogate]
+exclude = ["setup.py", "docs", "build"]
+fail-under = 100
