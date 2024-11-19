@@ -15,6 +15,7 @@ RUN pip install -U --no-cache-dir \
 
 RUN conda install -y \
         jupyterlab==4.0.11 \
+        fastremap \
     && conda clean -ya
 
 COPY postInstall /
