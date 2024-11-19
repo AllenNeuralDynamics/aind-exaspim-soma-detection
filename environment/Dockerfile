@@ -15,7 +15,7 @@ RUN pip install -U --no-cache-dir \
 
 RUN conda install -y \
         jupyterlab==4.0.11 \
-        fastremap \
+        tensorboard \
     && conda clean -ya
 
 COPY postInstall /
