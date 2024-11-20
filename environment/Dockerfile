@@ -15,7 +15,7 @@ RUN pip install -U --no-cache-dir \
 
 RUN conda install -y \
         jupyterlab==4.0.11 \
-        tensorboard \
+        pip install protobuf==3.20.3 \
     && conda clean -ya
 
 COPY postInstall /
