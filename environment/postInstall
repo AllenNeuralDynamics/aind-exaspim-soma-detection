@@ -4,7 +4,3 @@ set -e
 git clone https://github.com/AllenInstitute/deep-neurographs
 cd deep-neurographs
 pip install -e .
-
-git clone https://github.com/AllenNeuralDynamics/segmentation-skeleton-metrics
-cd segmentation-skeleton-metrics
-pip install -e .
