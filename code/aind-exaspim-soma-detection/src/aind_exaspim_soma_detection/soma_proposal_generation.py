@@ -110,7 +110,7 @@ def fit_gaussian(img, center, radius):
         params, _ = curve_fit(gaussian_3d, coords, img_vals, p0=p0)
         return img_vals, coords, params
     except RuntimeError as e:
-        return None
+        return None, None, None
 
 
 def fitness_quality(img, coords, params):
@@ -131,3 +131,30 @@ def gaussian_3d(
     ) + offset).ravel()
     return value
 
+
+# --- utils ---
+def is_inbounds(img, voxel, d=16):
+    """
+    Check if a voxel is within bounds of a 3D image, with a specified margin.
+
+    Parameters
+    ----------
+    img : ArrayLike
+        The 3D image array.
+    voxel : Tuple[int]
+        The coordinates of the voxel to check (x, y, z).
+    d : int, optional
+        Margin distance from the edges of the image. The default is 16.
+
+    Returns
+    -------
+    bool
+        True if the voxel is within bounds, considering the margin "d", and
+        False otherwise.
+
+    """
+    shape = img.shape
+    for i in range(3):
+        if voxel[i] < d or voxel[i] >= shape[i] - d:
+            return False
+    return True
