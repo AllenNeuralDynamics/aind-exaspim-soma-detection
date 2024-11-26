@@ -10,6 +10,7 @@ add description
 
 from concurrent.futures import ThreadPoolExecutor
 
+import boto3
 import os
 import shutil
 
@@ -55,8 +56,31 @@ def rmdir(path):
         shutil.rmtree(path)
 
 
+def write_to_s3(local_path, bucket_name, prefix):
+    """
+    Writes a single file on local machine to an s3 bucket.
+
+    Parameters
+    ----------
+    local_path : str
+        Path to file to be written to s3.
+    bucket_name : str
+        Name of s3 bucket.
+    prefix : str
+        Path within s3 bucket.
+
+    Returns
+    -------
+    None
+
+    """
+    s3 = boto3.client('s3')
+    s3.upload_file(local_path, bucket_name, prefix)
+
+
 # --- swc utils ---
-def write_points(points, color=None, prefix=""):
+def write_points(output_dir, points, color=None, prefix=""):
+    util.mkdir(output_dir, delete=True)
     with ThreadPoolExecutor() as executor:
         # Assign Threads
         threads = list()
