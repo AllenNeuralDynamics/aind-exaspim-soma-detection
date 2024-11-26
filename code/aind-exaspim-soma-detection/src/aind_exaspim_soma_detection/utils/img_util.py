@@ -14,6 +14,24 @@ import numpy as np
 ANISOTROPY = [0.748, 0.748, 1.0]
 
 
+def sliding_window_coords_3d(img, window_size, overlap):
+    # Calculate the stride based on the overlap and window size
+    stride = tuple(w - o for w, o in zip(window_size, overlap))
+
+    # Get dimensions of the  and window
+    _, _, z_dim, y_dim, x_dim = img.shape
+    z_win, y_win, x_win = window_size
+    z_stride, y_stride, x_stride = stride
+
+    # Loop over the  with the sliding window
+    coords = []
+    for x in range(0, x_dim - x_win + 1, x_stride):
+        for y in range(0, y_dim - y_win + 1, y_stride):
+            for z in range(0, z_dim - z_win + 1, z_stride):
+                coords.append((x, y, z))
+    return coords
+
+
 def get_start_end(voxel, shape, from_center=True):
     """
     Gets the start and end indices of the chunk to be read.
