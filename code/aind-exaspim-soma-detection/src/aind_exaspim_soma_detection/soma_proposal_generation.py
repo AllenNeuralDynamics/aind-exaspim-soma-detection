@@ -46,7 +46,7 @@ def generate_proposals(
 
 
 def detect_blobs(
-    img_patch, bright_threshold=50, LoG_sigma=2, LoG_threshold=10, 
+    img_patch, bright_threshold=50, LoG_sigma=4, LoG_threshold=10, 
 ):
     LoG_img = gaussian_laplace(img_patch, LoG_sigma)
     LoG_thresholded_img = np.logical_and(
@@ -133,16 +133,17 @@ def filter_centers(img_patch, centers, margin):
             # Get subpatch
             center = tuple([int(v) for v in centers[idx]])
             img_subpatch = img_patch[
-                center[0]-margin:center[0]+margin,
-                center[1]-margin:center[1]+margin,
-                center[2]-margin:center[2]+margin,
+                center[0]-margin:center[0]+margin+1,
+                center[1]-margin:center[1]+margin+1,
+                center[2]-margin:center[2]+margin+1,
             ]
 
             # Check whether to keep
             center_subpatch = (margin, margin, margin)
-            if check_gaussian_fit(img_subpatch, center_subpatch) is not None:
-                filtered_centers.append(center)
+            params = check_gaussian_fit(img_subpatch, center_subpatch)
+            if params is not None:
                 discard_nearby_centers(kdtree, visited, center)
+                filtered_centers.append(center)
     return filtered_centers
 
 
