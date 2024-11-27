@@ -10,8 +10,33 @@ Helper routines for working with images.
 
 import matplotlib.pyplot as plt
 import numpy as np
+import s3fs
+import zarr
 
 ANISOTROPY = [0.748, 0.748, 1.0]
+
+
+def open_img(bucket, prefix):
+    """
+    Opens an image stored in an S3 bucket as a Zarr array.
+
+    Parameters:
+    -----------
+    bucket : str
+        Name of the S3 bucket containing the image data.
+    prefix : str
+        The prefix (or path) within the S3 bucket where the image is stored.
+
+    Returns:
+    --------
+    zarr.core.Array or zarr.hierarchy.Group
+        A Zarr object representing the image data.
+
+    """
+    fs = s3fs.S3FileSystem()
+    s3_url = f"s3://{bucket}/{prefix}"
+    store = s3fs.S3Map(root=s3_url, s3=fs)
+    return zarr.open(store, mode='r')
 
 
 def sliding_window_coords_3d(img, window_size, overlap):
@@ -83,15 +108,12 @@ def to_physical(voxel):
 
 def to_voxels(xyz, downsample_factor=0):
     """
-    Converts coordinates from world to voxel.
+    Converts given point from physical to voxel coordinates.
 
     Parameters
     ----------
     xyz : numpy.ndarray
-        xyz coordinate to be converted to voxels.
-    anisotropy : list, optional
-        Anisotropy to be applied to values of interest. The default is
-        [1.0, 1.0, 1.0].
+        xyz point to be converted to voxel coordinates.
     downsample_factor : int, optional
         Downsampling factor that accounts for which level in the image pyramid
         the voxel coordinates must index into. The default is 0.
