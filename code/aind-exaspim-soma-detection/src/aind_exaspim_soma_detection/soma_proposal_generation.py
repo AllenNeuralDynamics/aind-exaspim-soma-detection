@@ -14,6 +14,10 @@ from scipy.ndimage import gaussian_laplace, maximum_filter, center_of_mass
 from scipy.optimize import curve_fit
 from skimage.measure import label
 
+BRIGHT_THRESHOLD = 80
+LOG_SIGMA = 5
+LOG_THRESHOLD = 10
+
 
 # --- Core Routines ---
 def generate_proposals(
@@ -21,9 +25,9 @@ def generate_proposals(
     offset,
     margin,
     window_size,
-    LoG_sigma=5,
-    LoG_threshold=10,
-    bright_threshold=80,
+    bright_threshold=BRIGHT_THRESHOLD,
+    LoG_sigma=LOG_SIGMA,
+    LoG_threshold=LOG_THRESHOLD,
 ):
     # Read patch
     img_patch = get_img_patch(img, offset, window_size, from_center=False)
@@ -46,7 +50,10 @@ def generate_proposals(
 
 
 def detect_blobs(
-    img_patch, bright_threshold=50, LoG_sigma=4, LoG_threshold=10, 
+    img_patch,
+    bright_threshold=BRIGHT_THRESHOLD,
+    LoG_sigma=LOG_SIGMA,
+    LoG_threshold=LOG_THRESHOLD,
 ):
     LoG_img = gaussian_laplace(img_patch, LoG_sigma)
     LoG_thresholded_img = np.logical_and(
