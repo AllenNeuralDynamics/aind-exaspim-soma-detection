@@ -63,24 +63,22 @@ def get_start_end(voxel, shape, from_center=True):
 
 
 # --- coordinate conversions ---
-def to_world(voxel, shift=[0, 0, 0]):
+def to_physical(voxel):
     """
-    Converts coordinates from voxels to world.
+    Converts coordinates from voxels to physical.
 
     Parameters
     ----------
     coord : numpy.ndarray
         Coordinate to be converted.
-    shift : list, optional
-        Shift to be applied to "coord". The default is [0, 0, 0].
 
     Returns
     -------
     tuple
-        Converted coordinates.
+        Physical coordinates of "voxel".
 
     """
-    return tuple([voxel[i] * ANISOTROPY[i] - shift[i] for i in range(3)])
+    return tuple([voxel[i] * ANISOTROPY[i] for i in range(3)])
 
 
 def to_voxels(xyz, downsample_factor=0):
@@ -104,9 +102,14 @@ def to_voxels(xyz, downsample_factor=0):
         Coordinates converted to voxels.
 
     """
-    downsample_factor = 1.0 / 2 ** downsample_factor
+    downsample_factor = 1.0 / 2**downsample_factor
     voxel = downsample_factor * (xyz / np.array(ANISOTROPY))
     return np.round(voxel).astype(int)
+
+
+def local_to_physical(local_voxel, offset, downsample_factor=0):
+    global_voxel = np.array([v + o for v, o in zip(local_voxel, offset)])
+    return to_physical(global_voxel * 2**downsample_factor)
 
 
 # --- visualizations ---

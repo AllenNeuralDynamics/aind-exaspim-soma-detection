@@ -4,7 +4,7 @@ Created on Mon Nov 25 14:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-add description 
+Miscellaneous helper routines.
 
 """
 
@@ -74,13 +74,13 @@ def write_to_s3(local_path, bucket_name, prefix):
     None
 
     """
-    s3 = boto3.client('s3')
+    s3 = boto3.client("s3")
     s3.upload_file(local_path, bucket_name, prefix)
 
 
 # --- swc utils ---
 def write_points(output_dir, points, color=None, prefix=""):
-    util.mkdir(output_dir, delete=True)
+    mkdir(output_dir, delete=True)
     with ThreadPoolExecutor() as executor:
         # Assign Threads
         threads = list()
