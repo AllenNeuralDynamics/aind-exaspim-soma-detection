@@ -4,7 +4,7 @@ Created on Fri Nov 22 12:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-add description
+Code that generates soma proposals.
 
 """
 
@@ -34,7 +34,7 @@ def generate_proposals(
     LoG_threshold=LOG_THRESHOLD,
 ):
     # Read patch
-    img_patch = get_img_patch(img, offset, window_size, from_center=False)
+    img_patch = get_patch(img, offset, window_size, from_center=False)
     if np.max(img_patch) < bright_threshold:
         return list(), list()
 
@@ -329,7 +329,7 @@ def gaussian_3d(xyz, x0, y0, z0, sigma_x, sigma_y, sigma_z, amplitude, offset):
     return value
 
 
-def get_img_patch(img, voxel, shape, from_center=True):
+def get_patch(img, voxel, shape, from_center=True):
     start, end = img_util.get_start_end(voxel, shape, from_center=from_center)
     return img[0, 0, start[2]: end[2], start[1]: end[1], start[0]: end[0]]
 
