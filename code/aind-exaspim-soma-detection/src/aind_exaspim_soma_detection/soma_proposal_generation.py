@@ -21,9 +21,9 @@ def generate_proposals(
     offset,
     margin,
     window_size,
-    LoG_sigma=2,
+    LoG_sigma=5,
     LoG_threshold=10,
-    bright_threshold=50,
+    bright_threshold=80,
 ):
     # Read patch
     img_patch = get_img_patch(img, offset, window_size, from_center=False)
