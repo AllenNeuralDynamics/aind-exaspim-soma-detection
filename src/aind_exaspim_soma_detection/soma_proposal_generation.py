@@ -9,8 +9,7 @@ Code that generates soma proposals.
 """
 
 import numpy as np
-
-from scipy.ndimage import gaussian_laplace, maximum_filter, center_of_mass
+from scipy.ndimage import center_of_mass, gaussian_laplace, maximum_filter
 from scipy.optimize import curve_fit
 from scipy.spatial import KDTree
 from skimage.measure import label
