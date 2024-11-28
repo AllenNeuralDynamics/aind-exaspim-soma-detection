@@ -8,11 +8,13 @@ Miscellaneous helper routines.
 
 """
 
+import os
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 
 import boto3
-import os
-import shutil
+import numpy as np
+import pandas as pd
 
 
 def mkdir(path, delete=False):
@@ -78,8 +80,104 @@ def write_to_s3(local_path, bucket_name, prefix):
     s3.upload_file(local_path, bucket_name, prefix)
 
 
+# --- Extracting somas from smartsheets ---
+def extract_somas_from_smartsheet(path):
+    # Initializations
+    df = pd.read_excel(path, sheet_name="Neuron Reconstructions")
+    n_somas = 0
+    soma_coords = dict()
+
+    # Parse dataframe
+    idx = 0
+    while idx < len(df["Collection"]):
+        if type(df["Collection"][idx]) is str:
+            if "spim" in df["Collection"][idx].lower():
+                brain_id = df["ID"][idx]
+                soma_coords[brain_id] = get_soma_coordinates(df, idx + 1)
+                n_somas += len(soma_coords[brain_id])
+        idx += 1
+
+    # Report Results
+    print("# Whole Brain Samples:", len(soma_coords))
+    print("# Somas:", n_somas)
+    return soma_coords
+
+
+def get_soma_coordinates(df, idx):
+    """
+    Extracts a list of 3D coordinates of soma from a DataFrame starting at a
+    specified index.
+
+    Parameters
+    -----------
+    df : pandas.DataFrame
+        DataFrame containing a column of soma coordinates.
+    idx : int
+        Index in the DataFrame where the soma coordinates start.
+
+    Returns
+    --------
+    numpy.ndarray
+        Array of 3D coordinates.
+
+    """
+    # May want to add condition that soma must have been completed
+    xyz_list = list()
+    while type(df["Horta Coordinates"][idx]) is str:
+        item = df["Horta Coordinates"][idx]
+        if "[" in item and "]" in item:
+            xyz = xyz_from_str(item)
+            xyz_list.append(xyz)
+            assert len(xyz) == 3, "Coordinate is not 3D!"
+        idx += 1
+    return np.array(xyz_list)
+
+
+def xyz_from_str(xyz_str):
+    """
+    Converts a string representation of 3D coordinates into a list of floats.
+
+    Parameters
+    -----------
+    xyz_str : str
+        A string containing 3D coordinates in the format "[x, y, z]". Square
+        brackets are optional, but values must be comma-separated.
+
+    Returns
+    --------
+    Tuple[float]
+        3D Coordinate from the given string.
+
+    """
+    xyz_str = xyz_str.replace("[", "")
+    xyz_str = xyz_str.replace("]", "")
+    return tuple([float(x) for x in xyz_str.split(",")])
+
+
 # --- swc utils ---
 def write_points(output_dir, points, color=None, prefix=""):
+    """
+    Writes a list of 3D points to individual SWC files in the specified
+    directory.
+
+    Parameters
+    -----------
+    output_dir : str
+        Directory where the SWC files will be saved.
+    points : list
+        A list of 3D points to be saved.
+    color : str, optional
+        The color to associate with the points in the SWC files. The default
+        is None.
+    prefix : str, optional
+        String that is prefixed to the filenames of the SWC files. Default is
+        an empty string.
+
+    Returns
+    --------
+    None
+
+    """
     mkdir(output_dir, delete=True)
     with ThreadPoolExecutor() as executor:
         # Assign Threads
