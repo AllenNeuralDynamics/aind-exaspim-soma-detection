@@ -60,18 +60,37 @@ def generate_proposals(
 
 
 def detect_blobs(img_patch, bright_threshold, LoG_sigma):
+    """
+    Detects blob-like structures in a given image patch using the Laplacian
+    of Gaussian (LoG) method and filters them based on brightness.
+
+    Parameters:
+    ----------
+    img_patch : numpy.ndarray
+        2D grayscale image patch for blob detection.
+    bright_threshold : float
+        Minimum brightness required for detected blobs.
+    LoG_sigma : float
+        Standard deviation of the Gaussian kernel for the LoG operation.
+
+    Returns:
+    -------
+    List[tuple]
+        Coordinates of detected blobs.
+
+    """
     # Preprocess image
     smoothed = gaussian_filter(img_patch, sigma=0.5)
     LoG = gaussian_laplace(smoothed, LoG_sigma)
     max_LoG = maximum_filter(LoG, 6)
 
     # Detect local maximas
-    peaks = list()
+    blobs = list()
     for peak in peak_local_max(max_LoG, min_distance=6):
         peak = tuple([int(x) for x in peak])
         if LoG[peak] > 0:
-            peaks.append(peak)
-    return adjust_by_brightness(img_patch, peaks, bright_threshold)
+            blobs.append(peak)
+    return adjust_by_brightness(img_patch, blobs, bright_threshold)
 
 
 def filter_proposals(img_patch, proposals, margin, radius=6):
