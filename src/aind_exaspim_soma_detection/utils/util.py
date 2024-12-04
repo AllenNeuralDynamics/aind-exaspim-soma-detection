@@ -166,7 +166,7 @@ def write_points(output_dir, points, color=None, prefix=""):
             filename = prefix + str(i + 1) + ".swc"
             path = os.path.join(output_dir, filename)
             threads.append(
-                executor.submit(save_point, path, xyz, 10, color=color)
+                executor.submit(save_point, path, xyz, 20, color=color)
             )
 
 
