@@ -6,6 +6,16 @@ Created on Fri Nov 22 12:00:00 2024
 
 Code that generates soma proposals.
 
+    Soma Proposal Generation Algorithm
+        1. Detect initial proposals - detect_blobs()
+            a. Smooth image with Gaussian filter to reduce false positives.
+            b. Laplacian of Gaussian to enhance regions where the intensity
+               changes dramatically (i.e. higher gradient).
+            c. Apply non-linear maximum filter over result from Step 1b, then
+               generate initial set of proposals by detecting local maximas.
+            d. Adjust each proposal by moving it to the brightest voxel in a
+               small neighborhood about the initial proposal.
+
 """
 
 import numpy as np
@@ -16,9 +26,8 @@ from skimage.feature import peak_local_max
 
 from aind_exaspim_soma_detection.utils import img_util
 
-BRIGHT_THRESHOLD = 160
+BRIGHT_THRESHOLD = 150
 LOG_SIGMA = 5
-LOG_THRESHOLD = 5
 
 
 # --- Core Routines ---
@@ -30,7 +39,6 @@ def generate_proposals(
     downsample_factor,
     bright_threshold=BRIGHT_THRESHOLD,
     LoG_sigma=LOG_SIGMA,
-    LoG_threshold=LOG_THRESHOLD,
 ):
     # Read patch
     img_patch = get_patch(img, offset, window_size, from_center=False)
@@ -38,38 +46,62 @@ def generate_proposals(
         return list()
 
     # Generate initial proposals
-    centers = detect_blobs(
-        img_patch, bright_threshold, LoG_sigma, LoG_threshold
-    )
+    proposals = detect_blobs(img_patch, bright_threshold, LoG_sigma)
 
-    # Filter candidates + convert coordinates
-    physical_centers = list()
-    for voxel in filter_centers(img_patch, centers, margin):
-        physical_centers.append(
+    # Filter proposals + convert coordinates
+    filtered_proposals = list()
+    for voxel in filter_centers(img_patch, proposals, margin):
+        filtered_proposals.append(
             img_util.local_to_physical(voxel[::-1], offset, downsample_factor)
         )
-    return physical_centers
+    return filtered_proposals
 
 
-def detect_blobs(img_patch, bright_threshold, LoG_sigma, LoG_threshold):
+def detect_blobs(img_patch, bright_threshold, LoG_sigma):
     # Preprocess image
     smoothed = gaussian_filter(img_patch, sigma=0.5)
     LoG = gaussian_laplace(smoothed, LoG_sigma)
     max_LoG = maximum_filter(LoG, 6)
 
-    # Detect local peaks
+    # Detect local maximas
     peaks = list()
     for peak in peak_local_max(max_LoG, min_distance=6):
         peak = tuple([int(x) for x in peak])
-        if LoG[peak] > LoG_threshold:
+        if LoG[peak] > 0:
             peaks.append(peak)
-    return adjust_centers_by_brightness(img_patch, peaks, bright_threshold)
+    return adjust_by_brightness(img_patch, peaks, bright_threshold)
 
 
-# --- Postprocess Centers ---
-def adjust_centers_by_brightness(img_patch, centers, bright_threshold, n=6):
+def filter_centers(img_patch, centers, margin, radius=6):
+    # Initializations
+    brightness = [img_patch[c] for c in centers]
+    if len(centers) > 0:
+        kdtree = KDTree(centers)
+    else:
+        return list()
+
+    # Main
+    filtered_centers = list()
+    visited = set()
+    for idx in np.argsort(brightness)[::-1]:
+        # Determine whether to visit center
+        inbounds_bool = is_inbounds(img_patch, centers[idx], margin)
+        not_visited_bool = centers[idx] not in visited
+        if inbounds_bool and not_visited_bool:
+            # Check whether to keep
+            center = tuple([int(v) for v in centers[idx]])
+            fit, params = gaussian_fitness(img_patch, center, radius=radius)
+            if fit > 0.8 and all(params[3:6] > 0.4):
+                center = [int(center[i] + params[i] - radius) for i in range(3)]
+                filtered_centers.append(tuple(center))
+                discard_nearby_centers(kdtree, visited, center)
+    return filtered_centers
+
+
+# --- Postprocess Proposals ---
+def adjust_by_brightness(img_patch, proposals, bright_threshold, n=6):
     """
-    Adjust centers in a 3D image to the location of the brightest voxel in a
+    Adjust proposals in a 3D image to the location of the brightest voxel in a
     local neighborhood.
 
     Parameters
@@ -77,8 +109,8 @@ def adjust_centers_by_brightness(img_patch, centers, bright_threshold, n=6):
     img_patch : np.ndarray
         A 3D image where voxel intensity values used to identify the brightest
         voxel in a neighborhood.
-    centers : list of tuples
-        A list of coordinates representing the initial centers to be adjusted.
+    proposals : list of tuples
+        A list of coordinates representing the initial proposals to be adjusted.
         Each coordinate is a tuple of integers (x, y, z).
     bright_threshold : int
         ...
@@ -90,20 +122,20 @@ def adjust_centers_by_brightness(img_patch, centers, bright_threshold, n=6):
     -------
     list of tuples
         Refined center coordinates where each center has been adjusted to the
-        brightest voxel in its neighborhood. Duplicate adjusted centers are
+        brightest voxel in its neighborhood. Duplicate adjusted proposals are
         removed.
 
     """
-    adjusted_centers = set()
-    for center in centers:
+    adjusted_proposals = set()
+    for center in proposals:
         try:
             voxel = tuple([int(c) for c in center])
             voxel = find_argmax_in_nbhd(img_patch, voxel, n)
             if img_patch[voxel] > bright_threshold:
-                adjusted_centers.add(tuple(voxel))
+                adjusted_proposals.add(tuple(voxel))
         except ValueError:
             pass
-    return list(adjusted_centers)
+    return list(adjusted_proposals)
 
 
 def find_argmax_in_nbhd(img_patch, voxel, n):
@@ -140,34 +172,7 @@ def find_argmax_in_nbhd(img_patch, voxel, n):
     return (argmax[0] + i_min, argmax[1] + j_min, argmax[2] + k_min)
 
 
-# --- Filtering ---
-def filter_centers(img_patch, centers, margin, radius=6):
-    # Initializations
-    brightness = [img_patch[c] for c in centers]
-    if len(centers) > 0:
-        kdtree = KDTree(centers)
-    else:
-        return list()
-
-    # Main
-    filtered_centers = list()
-    visited = set()
-    for idx in np.argsort(brightness)[::-1]:
-        # Determine whether to visit center
-        inbounds_bool = is_inbounds(img_patch, centers[idx], margin)
-        not_visited_bool = centers[idx] not in visited
-        if inbounds_bool and not_visited_bool:
-            # Check whether to keep
-            center = tuple([int(v) for v in centers[idx]])
-            fit, params = gaussian_fitness(img_patch, center, radius=radius)
-            feasible_params = all(params[3:6] > 0.55) and all(params[3:6] < 10)
-            if fit > 0.8 and feasible_params:
-                center = [int(center[i] + params[i] - radius) for i in range(3)]
-                filtered_centers.append(tuple(center))
-                discard_nearby_centers(kdtree, visited, center)
-    return filtered_centers
-
-
+# --- Filter Proposals ---
 def gaussian_fitness(img, voxel, radius):
     """
     Fits a 3D Gaussian to the neighborhood of a voxel in a 3D image.
@@ -270,7 +275,7 @@ def global_filtering(xyz_list):
         if xyz_query not in visited:
             # Search nbhd
             points = list()
-            idxs = kdtree.query_ball_point(xyz_query, 20)
+            idxs = kdtree.query_ball_point(xyz_query, 16)
             for xyz in map(tuple, kdtree.data[idxs]):
                 points.append(xyz)
                 visited.add(xyz)
@@ -283,7 +288,7 @@ def global_filtering(xyz_list):
 
 # --- utils ---
 def discard_nearby_centers(kdtree, visited, center):
-    idxs = kdtree.query_ball_point(center, 8)
+    idxs = kdtree.query_ball_point(center, 6)
     for voxel in kdtree.data[idxs]:
         visited.add(tuple([int(v) for v in voxel]))
 
