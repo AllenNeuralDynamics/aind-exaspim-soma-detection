@@ -61,11 +61,13 @@ def rmdir(path):
 
 
 # --- Extracting somas from smartsheets ---
-def extract_somas_from_smartsheet(path):
+def extract_somas_from_smartsheet(path, soma_status=None):
     # Initializations
     df = pd.read_excel(path, sheet_name="Neuron Reconstructions")
     n_somas = 0
     soma_coords = dict()
+    if type(soma_status) is str:
+        soma_status = soma_status.lower()
 
     # Parse dataframe
     idx = 0
@@ -73,7 +75,7 @@ def extract_somas_from_smartsheet(path):
         if type(df["Collection"][idx]) is str:
             if "spim" in df["Collection"][idx].lower():
                 brain_id = df["ID"][idx]
-                soma_coords[brain_id] = get_soma_coordinates(df, idx + 1)
+                soma_coords[brain_id] = get_soma_coords(df, idx + 1, soma_status)
                 n_somas += len(soma_coords[brain_id])
         idx += 1
 
@@ -83,7 +85,7 @@ def extract_somas_from_smartsheet(path):
     return soma_coords
 
 
-def get_soma_coordinates(df, idx):
+def get_soma_coords(df, idx, soma_status):
     """
     Extracts a list of 3D coordinates of soma from a DataFrame starting at a
     specified index.
@@ -94,6 +96,8 @@ def get_soma_coordinates(df, idx):
         DataFrame containing a column of soma coordinates.
     idx : int
         Index in the DataFrame where the soma coordinates start.
+    soma_status : str or None
+        ...
 
     Returns
     --------
@@ -101,14 +105,20 @@ def get_soma_coordinates(df, idx):
         Array of 3D coordinates.
 
     """
-    # May want to add condition that soma must have been completed
     xyz_list = list()
     while type(df["Horta Coordinates"][idx]) is str:
         item = df["Horta Coordinates"][idx]
         if "[" in item and "]" in item:
-            xyz = xyz_from_str(item)
-            xyz_list.append(xyz)
-            assert len(xyz) == 3, "Coordinate is not 3D!"
+            # Check status
+            is_status_str = type(df["Status 1"][idx]) is str
+            if soma_status is not None and is_status_str:
+                if df["Status 1"][idx].lower() not in soma_status:
+                    idx += 1
+                    continue                    
+
+            # Add coordinate
+            xyz_list.append(xyz_from_str(item))
+            assert len(xyz_list[-1]) == 3, "Coordinate is not 3D!"
         idx += 1
     return np.array(xyz_list)
 
