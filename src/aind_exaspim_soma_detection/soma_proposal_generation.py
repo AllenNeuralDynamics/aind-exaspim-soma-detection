@@ -16,6 +16,8 @@ Code that generates soma proposals.
             d. Adjust each proposal by moving it to the brightest voxel in a
                small neighborhood about the initial proposal.
 
+        2. Filter proposals - filter_proposals()
+
 """
 
 import numpy as np
@@ -50,7 +52,7 @@ def generate_proposals(
 
     # Filter proposals + convert coordinates
     filtered_proposals = list()
-    for voxel in filter_centers(img_patch, proposals, margin):
+    for voxel in filter_proposals(img_patch, proposals, margin):
         filtered_proposals.append(
             img_util.local_to_physical(voxel[::-1], offset, downsample_factor)
         )
@@ -72,30 +74,29 @@ def detect_blobs(img_patch, bright_threshold, LoG_sigma):
     return adjust_by_brightness(img_patch, peaks, bright_threshold)
 
 
-def filter_centers(img_patch, centers, margin, radius=6):
+def filter_proposals(img_patch, proposals, margin, radius=6):
     # Initializations
-    brightness = [img_patch[c] for c in centers]
-    if len(centers) > 0:
-        kdtree = KDTree(centers)
+    if len(proposals) > 0:
+        kdtree = KDTree(proposals)
     else:
         return list()
 
     # Main
-    filtered_centers = list()
+    filtered_proposals = list()
     visited = set()
-    for idx in np.argsort(brightness)[::-1]:
-        # Determine whether to visit center
-        inbounds_bool = is_inbounds(img_patch, centers[idx], margin)
-        not_visited_bool = centers[idx] not in visited
+    for idx in np.argsort([img_patch[p] for p in proposals])[::-1]:
+        # Determine whether to visit proposal
+        inbounds_bool = is_inbounds(img_patch, proposals[idx], margin)
+        not_visited_bool = proposals[idx] not in visited
         if inbounds_bool and not_visited_bool:
-            # Check whether to keep
-            center = tuple([int(v) for v in centers[idx]])
-            fit, params = gaussian_fitness(img_patch, center, radius=radius)
+            # Check whether to filter
+            proposal = tuple([int(v) for v in proposals[idx]])
+            fit, params = gaussian_fitness(img_patch, proposal, radius=radius)
             if fit > 0.8 and all(params[3:6] > 0.4):
-                center = [int(center[i] + params[i] - radius) for i in range(3)]
-                filtered_centers.append(tuple(center))
-                discard_nearby_centers(kdtree, visited, center)
-    return filtered_centers
+                proposal = [int(proposal[i] + params[i] - radius) for i in range(3)]
+                filtered_proposals.append(tuple(proposal))
+                discard_nearby(kdtree, visited, proposal)
+    return filtered_proposals
 
 
 # --- Postprocess Proposals ---
@@ -127,9 +128,9 @@ def adjust_by_brightness(img_patch, proposals, bright_threshold, n=6):
 
     """
     adjusted_proposals = set()
-    for center in proposals:
+    for proposal in proposals:
         try:
-            voxel = tuple([int(c) for c in center])
+            voxel = tuple([int(p) for p in proposal])
             voxel = find_argmax_in_nbhd(img_patch, voxel, n)
             if img_patch[voxel] > bright_threshold:
                 adjusted_proposals.add(tuple(voxel))
@@ -206,11 +207,9 @@ def gaussian_fitness(img, voxel, radius):
     img_vals = patch.ravel()
 
     # Generate coordinates
-    x = np.linspace(0, patch.shape[0], patch.shape[0])
-    y = np.linspace(0, patch.shape[1], patch.shape[1])
-    z = np.linspace(0, patch.shape[2], patch.shape[2])
-    x, y, z = np.meshgrid(x, y, z, indexing='ij')
-    coords = (x.ravel(), y.ravel(), z.ravel())
+    xyz = [np.linspace(0, patch.shape[i], patch.shape[i]) for i in range(3)]
+    x, y, z = np.meshgrid(xyz[0], xyz[1], xyz[2], indexing='ij')
+    xyz = (x.ravel(), y.ravel(), z.ravel())
 
     # Fit Gaussian
     try:
@@ -219,8 +218,8 @@ def gaussian_fitness(img, voxel, radius):
         shape = patch.shape
         x0, y0, z0 = shape[0] // 2, shape[1] // 2, shape[2] // 2
         p0 = (x0, y0, z0, 2, 2, 2, amplitude, offset)
-        params, _ = curve_fit(gaussian_3d, coords, img_vals, p0=p0)
-        return fitness_quality(img_vals, coords, params), params
+        params, _ = curve_fit(gaussian_3d, xyz, img_vals, p0=p0)
+        return fitness_quality(img_vals, xyz, params), params
     except RuntimeError:
         return 0, np.zeros((9))
 
@@ -287,8 +286,8 @@ def global_filtering(xyz_list):
 
 
 # --- utils ---
-def discard_nearby_centers(kdtree, visited, center):
-    idxs = kdtree.query_ball_point(center, 6)
+def discard_nearby(kdtree, visited, proposal):
+    idxs = kdtree.query_ball_point(proposal, 6)
     for voxel in kdtree.data[idxs]:
         visited.add(tuple([int(v) for v in voxel]))
 
