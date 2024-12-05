@@ -20,11 +20,14 @@ Code that generates soma proposals.
 
 """
 
-import numpy as np
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.ndimage import gaussian_filter, gaussian_laplace, maximum_filter
 from scipy.optimize import curve_fit
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
+from tqdm import tqdm
+
+import numpy as np
 
 from aind_exaspim_soma_detection.utils import img_util
 
@@ -33,6 +36,49 @@ LOG_SIGMA = 5
 
 
 # --- Core Routines ---
+def run_on_whole_brain(
+    bucket_name,
+    prefix,
+    overlap,
+    window_size,
+    downsample_factor,
+    bright_threshold=BRIGHT_THRESHOLD,
+    LoG_sigma=LOG_SIGMA,
+):
+    # Initializations
+    img = img_util.open_img(bucket_name, prefix)
+    margin = np.min(overlap) // 4
+    offsets = img_util.sliding_window_coords_3d(img, window_size, overlap)
+    print("# Image Patches:", len(offsets))
+
+    # Generate proposals
+    with ThreadPoolExecutor() as executor:
+        # Assign threads
+        threads = list()
+        for offset in offsets:
+            threads.append(
+                executor.submit(
+                    generate_proposals,
+                    img,
+                    offset,
+                    margin,
+                    window_size,
+                    downsample_factor,
+                    bright_threshold,
+                    LoG_sigma,
+                )
+            )
+
+        # Process thread
+        proposals = list()
+        pbar = tqdm(total=len(threads))
+        for thread in as_completed(threads):
+            proposals.extend(thread.result())
+            pbar.update(1)
+
+    return global_filtering(proposals)
+
+
 def generate_proposals(
     img,
     offset,
@@ -195,7 +241,8 @@ def find_argmax_in_nbhd(img_patch, voxel, n):
 # --- Filter Proposals ---
 def gaussian_fitness(img, voxel, radius):
     """
-    Fits a 3D Gaussian to the neighborhood of a voxel in a 3D image.
+    Fits a 3D Gaussian to the neighborhood centered about a given voxel from
+    a 3D image.
 
     Parameters:
     -----------
