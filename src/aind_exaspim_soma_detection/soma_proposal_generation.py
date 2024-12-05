@@ -14,9 +14,21 @@ Code that generates soma proposals.
             c. Apply non-linear maximum filter over result from Step 1b, then
                generate initial set of proposals by detecting local maximas.
             d. Adjust each proposal by moving it to the brightest voxel in a
-               small neighborhood about the initial proposal.
+               small neighborhood centered the proposal. If the brightness at
+               this voxel is below a certain threshold, then the proposal is
+               is rejected.
 
         2. Filter proposals - filter_proposals()
+            a. Sort proposals by brightness (i.e. high to low), then iterate
+               over proposals and perform Steps 2b-2d.
+            b. Check whether proposal is outside of image margins and has not
+               been visited.
+            c. Fit Gaussian to neighborhood centered at proposal, then check
+               the fit quality by comparing Gaussian and image values. In
+               addition, we check that the estimated standard deviation is
+               above a threshold since there is a prior on the size of a soma.
+            d. If a proposal satisfies the criteria from Step 2c, then it is
+               kept and all proposals within a certain distance are discarded.
 
 """
 
@@ -75,7 +87,7 @@ def run_on_whole_brain(
         for thread in as_completed(threads):
             proposals.extend(thread.result())
             pbar.update(1)
-
+        pbar.update(1)
     return global_filtering(proposals)
 
 
@@ -154,11 +166,14 @@ def filter_proposals(img_patch, proposals, margin, radius=6):
         inbounds_bool = is_inbounds(img_patch, proposals[idx], margin)
         not_visited_bool = proposals[idx] not in visited
         if inbounds_bool and not_visited_bool:
-            # Check whether to filter
+            # Fit Gaussian
             proposal = tuple([int(v) for v in proposals[idx]])
             fit, params = gaussian_fitness(img_patch, proposal, radius=radius)
-            if fit > 0.8 and all(params[3:6] > 0.4):
-                proposal = [int(proposal[i] + params[i] - radius) for i in range(3)]
+            mean, std = params[0:3], params[3:6]
+
+            # Check whether to filter
+            if fit > 0.8 and all(std > 0.4):
+                proposal = [proposal[i] + mean[i] - radius for i in range(3)]
                 filtered_proposals.append(tuple(proposal))
                 discard_nearby(kdtree, visited, proposal)
     return filtered_proposals
