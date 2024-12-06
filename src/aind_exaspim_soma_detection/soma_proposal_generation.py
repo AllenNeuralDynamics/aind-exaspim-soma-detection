@@ -42,6 +42,7 @@ from tqdm import tqdm
 import numpy as np
 
 from aind_exaspim_soma_detection.utils import img_util
+from aind_exaspim_soma_detection.utils.img_util import get_patch
 
 BRIGHT_THRESHOLD = 150
 LOG_SIGMA = 5
@@ -49,18 +50,17 @@ LOG_SIGMA = 5
 
 # --- Core Routines ---
 def run_on_whole_brain(
-    bucket_name,
-    prefix,
+    img_prefix,
     overlap,
-    window_size,
+    patch_shape,
     downsample_factor,
     bright_threshold=BRIGHT_THRESHOLD,
     LoG_sigma=LOG_SIGMA,
 ):
     # Initializations
-    img = img_util.open_img(bucket_name, prefix)
+    img = img_util.open_img(img_prefix)
     margin = np.min(overlap) // 4
-    offsets = img_util.sliding_window_coords_3d(img, window_size, overlap)
+    offsets = img_util.sliding_window_coords_3d(img, patch_shape, overlap)
     print("# Image Patches:", len(offsets))
 
     # Generate proposals
@@ -74,7 +74,7 @@ def run_on_whole_brain(
                     img,
                     offset,
                     margin,
-                    window_size,
+                    patch_shape,
                     downsample_factor,
                     bright_threshold,
                     LoG_sigma,
@@ -95,13 +95,13 @@ def generate_proposals(
     img,
     offset,
     margin,
-    window_size,
+    patch_shape,
     downsample_factor,
     bright_threshold=BRIGHT_THRESHOLD,
     LoG_sigma=LOG_SIGMA,
 ):
     # Read patch
-    img_patch = get_patch(img, offset, window_size, from_center=False)
+    img_patch = get_patch(img, offset, patch_shape, from_center=False)
     if np.max(img_patch) < bright_threshold:
         return list()
 
@@ -387,11 +387,6 @@ def gaussian_3d(xyz, x0, y0, z0, sigma_x, sigma_y, sigma_z, amplitude, offset):
         + offset
     ).ravel()
     return value
-
-
-def get_patch(img, voxel, shape, from_center=True):
-    start, end = img_util.get_start_end(voxel, shape, from_center=from_center)
-    return img[0, 0, start[2]: end[2], start[1]: end[1], start[0]: end[0]]
 
 
 def is_inbounds(img, voxel, margin=16):
