@@ -16,15 +16,13 @@ import zarr
 ANISOTROPY = [0.748, 0.748, 1.0]
 
 
-def open_img(bucket, prefix):
+def open_img(s3_prefix):
     """
     Opens an image stored in an S3 bucket as a Zarr array.
 
     Parameters:
     -----------
-    bucket : str
-        Name of the S3 bucket containing the image data.
-    prefix : str
+    s3_prefix : str
         The prefix (or path) within the S3 bucket where the image is stored.
 
     Returns:
@@ -33,10 +31,13 @@ def open_img(bucket, prefix):
         A Zarr object representing the image data.
 
     """
-    fs = s3fs.S3FileSystem()
-    s3_url = f"s3://{bucket}/{prefix}"
-    store = s3fs.S3Map(root=s3_url, s3=fs)
+    store = s3fs.S3Map(root=s3_prefix, s3=s3fs.S3FileSystem())
     return zarr.open(store, mode='r')
+
+
+def get_patch(img, voxel, shape, from_center=True):
+    start, end = get_start_end(voxel, shape, from_center=from_center)
+    return img[0, 0, start[2]: end[2], start[1]: end[1], start[0]: end[0]]
 
 
 def sliding_window_coords_3d(img, window_size, overlap):

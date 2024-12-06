@@ -8,14 +8,15 @@ Miscellaneous helper routines.
 
 """
 
-import os
-import shutil
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import boto3
+import json
 import numpy as np
+import os
 import pandas as pd
+import shutil
 
 
 # --- os utils ---
@@ -74,7 +75,7 @@ def extract_somas_from_smartsheet(path, soma_status=None):
     while idx < len(df["Collection"]):
         if type(df["Collection"][idx]) is str:
             if "spim" in df["Collection"][idx].lower():
-                brain_id = df["ID"][idx]
+                brain_id = str(df["ID"][idx])
                 soma_coords[brain_id] = get_soma_coords(df, idx + 1, soma_status)
                 n_somas += len(soma_coords[brain_id])
         idx += 1
@@ -341,70 +342,7 @@ def write_to_s3(local_path, bucket_name, prefix):
     s3.upload_file(local_path, bucket_name, prefix)
 
 
-def find_img_prefix(bucket_name, prefixes, sample_id):
-    cur_prefix = None
-    cur_date = None
-    for prefix in prefixes:
-        # Check if prefix is valid
-        if str(sample_id) in prefix and "fusion" in prefix:
-            # Check if prefix has fused image
-            if is_file_in_prefix(bucket_name, prefix, "fused.zarr"):
-                # Check if prefix is most recent
-                date = get_upload_date(prefix)
-                if cur_prefix is None:
-                    cur_prefix = prefix
-                    cur_date = date
-                elif date == most_recent_date(date, cur_date):
-                    cur_prefix = prefix
-                    cur_date = date
-    return cur_prefix + "fused.zarr/" if cur_prefix is not None else cur_prefix
-
-
 # --- Miscellaneous ---
-def get_upload_date(prefix):
-    """
-    Extracts the upload date from an S3 prefix string.
-
-    Parameters
-    -----------
-    prefix : str
-        S3 prefix (path) containing the upload date in the format
-        "<name>/fusion_<date>/".
-
-    Returns
-    --------
-    str
-        Extracted date string without slashes.
-
-    """
-    date = prefix.split("fusion_")[-1]
-    return date.replace("/", "")
-
-
-def most_recent_date(date1_str, date2_str, date_format="%Y-%m-%d_%H-%M-%S"):
-    """
-    Compares two date strings and determines which one is more recent.
-
-    Parameters
-    -----------
-    date1_str : str
-        First date string to compare.
-    date2_str : str
-        Second date string to compare.
-    
-    date_format : str, optional
-        The format in which the dates are provided. The default is
-        "%Y-%m-%d %H:%M:%S".
-    
-    Returns
-    --------
-    str
-       More recent data in the same given format.
-
-    """
-    try:
-        date1 = datetime.strptime(date1_str, date_format)
-        date2 = datetime.strptime(date2_str, date_format)
-        return date1_str if date1 > date2 else date2_str
-    except ValueError:
-        return ""
+def read_json(path):
+    with open(path, "r") as file:
+        return json.load(file)
