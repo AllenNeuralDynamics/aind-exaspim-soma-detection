@@ -9,7 +9,6 @@ Miscellaneous helper routines.
 """
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 
 import boto3
 import json
@@ -63,27 +62,45 @@ def rmdir(path):
 
 # --- Extracting somas from smartsheets ---
 def extract_somas_from_smartsheet(path, soma_status=None):
+    """
+    Extracts soma coordinates from the AIND neuron reconstructions Smartsheet
+    which is assumed to be stored locally as an Excel file.
+
+    Parameters
+    ----------
+    path : str
+        Path to the Smartsheet Excel file. Note that this file must contain a
+        sheet named "Neuron Reconstructions".
+    soma_status : str, optional
+        Specifies the filter condition for somas based on their status. If
+        provided, filters soma coordinates that match the specified status
+        (case-insensitive). The default is None, which includes all soma
+
+    Returns
+    -------
+    Dict[(str, list)]
+        Dictionary where the keys are brain IDs and values are lists of soma
+        coordinates extracted from the sheet.
+
+    """
     # Initializations
     df = pd.read_excel(path, sheet_name="Neuron Reconstructions")
     n_somas = 0
-    soma_coords = dict()
+    somas = dict()
     if type(soma_status) is str:
         soma_status = soma_status.lower()
 
     # Parse dataframe
     idx = 0
     while idx < len(df["Collection"]):
-        if type(df["Collection"][idx]) is str:
-            if "spim" in df["Collection"][idx].lower():
-                brain_id = str(df["ID"][idx])
-                soma_coords[brain_id] = get_soma_coords(df, idx + 1, soma_status)
-                n_somas += len(soma_coords[brain_id])
+        microscope = df["Collection"][idx]
+        if type(microscope) is str:
+            brain_id = str(df["ID"][idx])
+            if "spim" in microscope.lower() and brain_id != "609281":
+                somas[brain_id] = get_soma_coords(df, idx + 1, soma_status)
+                n_somas += len(somas[brain_id])
         idx += 1
-
-    # Report Results
-    print("# Whole Brain Samples:", len(soma_coords))
-    print("# Somas:", n_somas)
-    return soma_coords
+    return somas
 
 
 def get_soma_coords(df, idx, soma_status):
@@ -115,7 +132,7 @@ def get_soma_coords(df, idx, soma_status):
             if soma_status is not None and is_status_str:
                 if df["Status 1"][idx].lower() not in soma_status:
                     idx += 1
-                    continue                    
+                    continue
 
             # Add coordinate
             xyz_list.append(xyz_from_str(item))
@@ -238,11 +255,13 @@ def list_s3_prefixes(bucket_name, prefix):
 
     # Call the list_objects_v2 API
     s3 = boto3.client("s3")
-    response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix, Delimiter="/")
-    subprefixes = []
+    response = s3.list_objects_v2(
+        Bucket=bucket_name, Prefix=prefix, Delimiter="/"
+    )
     if "CommonPrefixes" in response:
-        subprefixes = [cp["Prefix"] for cp in response["CommonPrefixes"]]
-    return subprefixes
+        return [cp["Prefix"] for cp in response["CommonPrefixes"]]
+    else:
+        return list()
 
 
 def list_s3_bucket_prefixes(bucket_name, keyword=None):
@@ -265,7 +284,7 @@ def list_s3_bucket_prefixes(bucket_name, keyword=None):
 
     """
     # Initializations
-    prefixes = []
+    prefixes = list()
     continuation_token = None
     s3 = boto3.client("s3")
 
@@ -313,7 +332,6 @@ def is_file_in_prefix(bucket_name, prefix, filename):
         otherwise "False".
 
     """
-    
     for sub_prefix in list_s3_prefixes(bucket_name, prefix):
         if filename in sub_prefix:
             return True

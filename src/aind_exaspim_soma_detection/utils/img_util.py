@@ -32,7 +32,7 @@ def open_img(s3_prefix):
 
     """
     store = s3fs.S3Map(root=s3_prefix, s3=s3fs.S3FileSystem())
-    return zarr.open(store, mode='r')
+    return zarr.open(store, mode="r")
 
 
 def get_patch(img, voxel, shape, from_center=True):
@@ -107,7 +107,7 @@ def to_physical(voxel):
     return tuple([voxel[i] * ANISOTROPY[i] for i in range(3)])
 
 
-def to_voxels(xyz, downsample_factor=0):
+def to_voxels(xyz, multiscale=0):
     """
     Converts given point from physical to voxel coordinates.
 
@@ -115,9 +115,9 @@ def to_voxels(xyz, downsample_factor=0):
     ----------
     xyz : numpy.ndarray
         xyz point to be converted to voxel coordinates.
-    downsample_factor : int, optional
-        Downsampling factor that accounts for which level in the image pyramid
-        the voxel coordinates must index into. The default is 0.
+    multiscale : int, optional
+        Level in the image pyramid that the voxel coordinate must index into.
+        The default is 0.
 
     Returns
     -------
@@ -125,14 +125,14 @@ def to_voxels(xyz, downsample_factor=0):
         Coordinates converted to voxels.
 
     """
-    downsample_factor = 1.0 / 2**downsample_factor
-    voxel = downsample_factor * (xyz / np.array(ANISOTROPY))
+    multiscale = 1.0 / 2**multiscale
+    voxel = multiscale * (xyz / np.array(ANISOTROPY))
     return np.round(voxel).astype(int)
 
 
-def local_to_physical(local_voxel, offset, downsample_factor=0):
+def local_to_physical(local_voxel, offset, multiscale=0):
     global_voxel = np.array([v + o for v, o in zip(local_voxel, offset)])
-    return to_physical(global_voxel * 2**downsample_factor)
+    return to_physical(global_voxel * 2**multiscale)
 
 
 # --- visualizations ---
