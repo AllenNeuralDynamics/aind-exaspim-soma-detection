@@ -53,7 +53,7 @@ def run_on_whole_brain(
     img_prefix,
     overlap,
     patch_shape,
-    downsample_factor,
+    multiscale,
     bright_threshold=BRIGHT_THRESHOLD,
     LoG_sigma=LOG_SIGMA,
 ):
@@ -75,7 +75,7 @@ def run_on_whole_brain(
                     offset,
                     margin,
                     patch_shape,
-                    downsample_factor,
+                    multiscale,
                     bright_threshold,
                     LoG_sigma,
                 )
@@ -96,7 +96,7 @@ def generate_proposals(
     offset,
     margin,
     patch_shape,
-    downsample_factor,
+    multiscale,
     bright_threshold=BRIGHT_THRESHOLD,
     LoG_sigma=LOG_SIGMA,
 ):
@@ -112,7 +112,7 @@ def generate_proposals(
     filtered_proposals = list()
     for voxel in filter_proposals(img_patch, proposals, margin):
         filtered_proposals.append(
-            img_util.local_to_physical(voxel[::-1], offset, downsample_factor)
+            img_util.local_to_physical(voxel[::-1], offset, multiscale)
         )
     return filtered_proposals
 
@@ -172,7 +172,8 @@ def filter_proposals(img_patch, proposals, margin, radius=6):
             mean, std = params[0:3], params[3:6]
 
             # Check whether to filter
-            if fit > 0.8 and all(std > 0.4):
+            feasible_std = all(std > 0.4) and np.mean(std) > 0.6
+            if fit > 0.8 and feasible_std:
                 proposal = [proposal[i] + mean[i] - radius for i in range(3)]
                 filtered_proposals.append(tuple(proposal))
                 discard_nearby(kdtree, visited, proposal)
@@ -191,7 +192,7 @@ def adjust_by_brightness(img_patch, proposals, bright_threshold, n=6):
         A 3D image where voxel intensity values used to identify the brightest
         voxel in a neighborhood.
     proposals : list of tuples
-        A list of coordinates representing the initial proposals to be adjusted.
+        List of coordinates representing the initial proposals to be adjusted.
         Each coordinate is a tuple of integers (x, y, z).
     bright_threshold : int
         ...
@@ -289,7 +290,7 @@ def gaussian_fitness(img, voxel, radius):
 
     # Generate coordinates
     xyz = [np.linspace(0, patch.shape[i], patch.shape[i]) for i in range(3)]
-    x, y, z = np.meshgrid(xyz[0], xyz[1], xyz[2], indexing='ij')
+    x, y, z = np.meshgrid(xyz[0], xyz[1], xyz[2], indexing="ij")
     xyz = (x.ravel(), y.ravel(), z.ravel())
 
     # Fit Gaussian
