@@ -60,6 +60,93 @@ def rmdir(path):
         shutil.rmtree(path)
 
 
+def list_subdirectory_names(directory_path):
+    """
+    Lists the names of all subdirectories in the given directory.
+
+    Parameters
+    ----------
+    directory_path : str
+        Path to the directory to search.
+
+    Returns
+    -------
+    List[str]
+        List of the names of subdirectories.
+
+    """
+    subdir_names = list()
+    for d in os.listdir(directory_path):
+        path = os.path.join(directory_path, d)
+        if os.path.isdir(path) and not d.startswith("."):
+            subdir_names.append(d)
+    return subdir_names
+
+
+def list_paths(directory, extension=""):
+    """
+    Lists all paths within "directory" that end with "extension" if provided.
+
+    Parameters
+    ----------
+    directory : str
+        Directory to be searched.
+    extension : str, optional
+        If provided, only paths of files with the extension are returned. The
+        default is an empty string.
+
+    Returns
+    -------
+    list[str]
+        List of all paths within "directory".
+
+    """
+    paths = list()
+    for f in os.listdir(directory):
+        if f.endswith(extension):
+            paths.append(os.path.join(directory, f))
+    return paths
+
+
+# --- IO utils ---
+def read_txt(path):
+    """
+    Reads txt file stored at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path where txt file is stored.
+
+    Returns
+    -------
+    str
+        Contents of txt file.
+
+    """
+    with open(path, "r") as f:
+        return f.read().splitlines()
+
+
+def read_json(path):
+    """
+    Reads json file stored at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path where json file is stored.
+
+    Returns
+    -------
+    str
+        Contents of json file.
+
+    """
+    with open(path, "r") as file:
+        return json.load(file)
+
+
 # --- Extracting somas from smartsheets ---
 def extract_somas_from_smartsheet(path, soma_status=None):
     """
@@ -163,6 +250,55 @@ def xyz_from_str(xyz_str):
 
 
 # --- swc utils ---
+def read_swc_dir(swc_dir):
+    """
+    Reads all swc files in a given directory and returns the content. Note
+    that each swc file is assumed to contain a single point.
+
+    Parameters
+    ----------
+    swc_dir : str
+        Path to the directory containing swc files.
+
+    Returns
+    -------
+    list
+        xyz coordinates read from swc files.
+
+    """
+    return [read_swc(path) for path in list_paths(swc_dir, extension=".swc")]
+
+
+def read_swc(path):
+    """
+    Processes lines of text from a content source, extracts an offset value
+    and returns the remaining content starting from the line immediately after
+    the last commented line.
+
+    Parameters
+    ----------
+    path : str
+        Path to an swc file.
+
+    Returns
+    -------
+    List[float]
+        xyz coordinate stored in swc file.
+
+    """
+    # Parse commented section
+    offset = [0.0, 0.0, 0.0]
+    for i, line in enumerate(read_txt(path)):
+        if line.startswith("# OFFSET"):
+            offset = [float(val) for val in line.split()[2:5]]
+        if not line.startswith("#"):
+            break
+
+    # Extract xyz coordinate
+    xyz_str = line.split()[2:5]
+    return [float(xyz_str[i]) + offset[i] for i in range(3)]
+
+
 def write_points(output_dir, points, color=None, prefix=""):
     """
     Writes a list of 3D points to individual SWC files in the specified
@@ -194,11 +330,11 @@ def write_points(output_dir, points, color=None, prefix=""):
             filename = prefix + str(i + 1) + ".swc"
             path = os.path.join(output_dir, filename)
             threads.append(
-                executor.submit(save_point, path, xyz, 20, color=color)
+                executor.submit(write_point, path, xyz, 20, color=color)
             )
 
 
-def save_point(path, xyz, radius=5, color=None):
+def write_point(path, xyz, radius=5, color=None):
     """
     Writes an swc file.
 
@@ -358,9 +494,3 @@ def write_to_s3(local_path, bucket_name, prefix):
     """
     s3 = boto3.client("s3")
     s3.upload_file(local_path, bucket_name, prefix)
-
-
-# --- Miscellaneous ---
-def read_json(path):
-    with open(path, "r") as file:
-        return json.load(file)
