@@ -1,9 +1,10 @@
 """
-Created on Mon Dec 5 14:00:00 2024
+Created on Thu Dec 5 14:00:00 2024
 
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
+Routines for loading data and applying data augmentation (if applicable).
 
 """
 
@@ -37,6 +38,7 @@ class SomaDataset(Dataset):
         # Initialize class attributes
         self.examples = dict()  # key: (brain_id, voxel), value: label
         self.imgs = dict()  # key: brain_id, value: image
+        self.img_paths = dict()
         self.patch_shape = patch_shape
 
         # Data augmentation
@@ -62,12 +64,12 @@ class SomaDataset(Dataset):
         Returns
         -------
         int
-            Number of examples in dataset.
+            Number of examples in the dataset.
 
         """
         return len(self.examples)
 
-    def n_positive_examples(self):
+    def n_positives(self):
         """
         Counts the number of positive examples in the dataset.
 
@@ -78,12 +80,12 @@ class SomaDataset(Dataset):
         Returns
         -------
         int
-            Number of positive examples in dataset.
+            Number of positive examples in the dataset.
 
         """
-        return np.sum([1 for val in self.examples.values() if val])
+        return len(self.get_positives())
 
-    def n_negative_examples(self):
+    def n_negatives(self):
         """
         Counts the number of negative examples in the dataset.
 
@@ -94,10 +96,42 @@ class SomaDataset(Dataset):
         Returns
         -------
         int
-            Number of negative examples in dataset.
+            Number of negative examples in the dataset.
 
         """
-        return np.sum([1 for val in self.examples.values() if not val])
+        return len(self.get_negatives())
+
+    def get_positives(self):
+        """
+        Gets all positive examples in the dataset.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        dict
+            Positive examples in dataset.
+
+        """
+        return dict({k: v for k, v in self.examples.items() if v})
+
+    def get_negatives(self):
+        """
+        Gets all negative examples in the dataset.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        dict
+            Negetaive examples in dataset.
+
+        """
+        return dict({k: v for k, v in self.examples.items() if not v})
 
     def __getitem__(self, key):
         brain_id, voxel = key
@@ -110,6 +144,7 @@ class SomaDataset(Dataset):
         # Load image
         if brain_id not in self.imgs:
             self.imgs[brain_id] = img_util.open_img(img_prefix)
+            self.img_paths[brain_id] = img_prefix
 
         # Check if labels are valid
         if labels is not None:
