@@ -9,6 +9,7 @@ Miscellaneous helper routines.
 """
 
 from concurrent.futures import ThreadPoolExecutor
+from random import sample
 
 import boto3
 import json
@@ -494,3 +495,22 @@ def write_to_s3(local_path, bucket_name, prefix):
     """
     s3 = boto3.client("s3")
     s3.upload_file(local_path, bucket_name, prefix)
+
+
+# --- Miscellaneous ---
+def sample_once(my_container):
+    """
+    Samples a single element from "my_container".
+
+    Parameters
+    ----------
+    my_container : container
+        Container to be sampled from.
+
+    Returns
+    -------
+    sample
+
+    """
+    return sample(my_container, 1)[0]
+
