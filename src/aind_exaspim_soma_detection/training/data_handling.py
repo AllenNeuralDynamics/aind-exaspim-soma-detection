@@ -7,9 +7,14 @@ Created on Mon Dec 5 14:00:00 2024
 
 """
 
+from scipy.ndimage import rotate
 from torch.utils.data import Dataset
 
+import numpy as np
 import os
+import random
+import torch
+import torchvision.transforms as transforms
 
 from aind_exaspim_soma_detection.utils import img_util, util
 
@@ -28,15 +33,27 @@ class SomaDataset(Dataset):
 
     """
 
-    def __init__(self, patch_shape):
+    def __init__(self, patch_shape, transform=False):
         # Initialize class attributes
-        self.examples = dict()  # keys: (brain_id, voxel), values: label
-        self.imgs = dict()  # keys: brain_id, values: image
+        self.examples = dict()  # key: (brain_id, voxel), value: label
+        self.imgs = dict()  # key: brain_id, value: image
         self.patch_shape = patch_shape
 
-    def __len__(self):
+        # Data augmentation
+        if transform:
+            self.transform = transforms.Compose([
+                RandomFlip3D(),
+                RandomNoise3D(),
+                RandomRotation3D(angles=(-20, 20)),
+                RandomContrast3D(factor_range=(0.7, 1.3)),
+                lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(0)
+            ])
+        else:
+            self.transform = transform
+
+    def n_examples(self):
         """
-        Gets the number of examples in the dataset.
+        Counts the number of examples in the dataset.
 
         Parameters
         ----------
@@ -51,34 +68,130 @@ class SomaDataset(Dataset):
         return len(self.examples)
 
     def n_positive_examples(self):
-        pass
+        """
+        Counts the number of positive examples in the dataset.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Number of positive examples in dataset.
+
+        """
+        return np.sum([1 for val in self.examples.values() if val])
 
     def n_negative_examples(self):
-        pass
+        """
+        Counts the number of negative examples in the dataset.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Number of negative examples in dataset.
+
+        """
+        return np.sum([1 for val in self.examples.values() if not val])
 
     def __getitem__(self, key):
         brain_id, voxel = key
-        return img_util.get_patch(self.imgs[brain_id], voxel, self.patch_shape)
+        img_patch = img_util.get_patch(
+            self.imgs[brain_id], voxel, self.patch_shape
+        )
+        return img_patch / 2 ** 15
 
     def ingest_examples(self, brain_id, img_prefix, proposals, labels=None):
         # Load image
-        self.imgs[brain_id] = img_util.open_img(img_prefix)
+        if brain_id not in self.imgs:
+            self.imgs[brain_id] = img_util.open_img(img_prefix)
 
         # Check if labels are valid
         if labels is not None:
-            assert len(proposals) != len(labels), "#proposals != #labels"
+            assert len(proposals) == len(labels), "#proposals != #labels"
 
         # Load proposals
         for i, voxel in enumerate(proposals):
             key = (brain_id, tuple(voxel))
             self.examples[key] = labels[i] if labels else None
 
+    def visualize_example(self, key):
+        img_patch = self.__getitem__(key)
+        img_util.plot_mips(img_patch, clip_bool=True)
 
-# --- Custom Data Loader ---
-class SomaDataLoader:
-    def __init__(self, apply_augmentation=False):
-        # Initialize class attributes
-        self.apply_augmentation = apply_augmentation
+    def visualize_augmented_example(self, key):
+        # Get image patch
+        img_patch = self.__getitem__(key)
+        img_util.plot_mips(img_patch, clip_bool=True)
+
+        # Apply transforms
+        img_patch = np.array(self.transform(img_patch))
+        img_util.plot_mips(img_patch[0, ...], clip_bool=True)
+
+
+# --- Data Augmentation ---
+class RandomFlip3D:
+    """
+    Randomly flip a 3D image along one or more axes.
+
+    """
+    def __init__(self, axes=(0, 1, 2)):
+        self.axes = axes
+
+    def __call__(self, img):
+        for axis in self.axes:
+            if random.random() > 0.5:
+                img = np.flip(img, axis=axis)
+        return img
+
+
+class RandomNoise3D:
+    """
+    Adds random Gaussian noise to a 3D image.
+
+    """
+    def __init__(self, mean=0.0, std=0.0001):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, img):
+        noise = np.random.normal(self.mean, self.std, img.shape)
+        return img + noise
+
+
+class RandomRotation3D:
+    """
+    Applies random rotation to a 3D image along a randomly chosen axis.
+
+    """
+    def __init__(self, angles=(-20, 20), axes=((0, 1), (0, 2), (1, 2))):
+        self.angles = angles
+        self.axes = axes
+
+    def __call__(self, img):
+        for _ in range(2):
+            angle = random.uniform(*self.angles)
+            axis = random.choice(self.axes)
+            img = rotate(img, angle, axes=axis, reshape=False, order=1)
+        return img
+
+
+class RandomContrast3D:
+    """
+    Adjusts the contrast of a 3D image by scaling voxel intensities.
+
+    """
+    def __init__(self, factor_range=(0.7, 1.3)):
+        self.factor_range = factor_range
+
+    def __call__(self, img):
+        factor = random.uniform(*self.factor_range)
+        return np.clip(img * factor, img.min(), img.max())
 
 
 # --- Fetch Training Data ---
