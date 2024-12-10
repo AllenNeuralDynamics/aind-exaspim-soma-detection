@@ -43,13 +43,17 @@ class SomaDataset(Dataset):
 
         # Data augmentation
         if transform:
-            self.transform = transforms.Compose([
-                RandomFlip3D(),
-                RandomNoise3D(),
-                RandomRotation3D(angles=(-20, 20)),
-                RandomContrast3D(factor_range=(0.7, 1.3)),
-                lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(0)
-            ])
+            self.transform = transforms.Compose(
+                [
+                    RandomFlip3D(),
+                    RandomNoise3D(),
+                    RandomRotation3D(angles=(-20, 20)),
+                    RandomContrast3D(factor_range=(0.7, 1.3)),
+                    lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(
+                        0
+                    ),
+                ]
+            )
         else:
             self.transform = transform
 
@@ -138,7 +142,7 @@ class SomaDataset(Dataset):
         img_patch = img_util.get_patch(
             self.imgs[brain_id], voxel, self.patch_shape
         )
-        return img_patch / 2 ** 15
+        return img_patch / 2**15
 
     def ingest_examples(self, brain_id, img_prefix, proposals, labels=None):
         # Load image
@@ -175,6 +179,7 @@ class RandomFlip3D:
     Randomly flip a 3D image along one or more axes.
 
     """
+
     def __init__(self, axes=(0, 1, 2)):
         self.axes = axes
 
@@ -190,6 +195,7 @@ class RandomNoise3D:
     Adds random Gaussian noise to a 3D image.
 
     """
+
     def __init__(self, mean=0.0, std=0.0001):
         self.mean = mean
         self.std = std
@@ -204,6 +210,7 @@ class RandomRotation3D:
     Applies random rotation to a 3D image along a randomly chosen axis.
 
     """
+
     def __init__(self, angles=(-20, 20), axes=((0, 1), (0, 2), (1, 2))):
         self.angles = angles
         self.axes = axes
@@ -221,6 +228,7 @@ class RandomContrast3D:
     Adjusts the contrast of a 3D image by scaling voxel intensities.
 
     """
+
     def __init__(self, factor_range=(0.7, 1.3)):
         self.factor_range = factor_range
 
