@@ -13,11 +13,14 @@ import torch
 import torch.nn as nn
 
 
-class Fast3dCNN(nn.Module):
+class FastCNN3d(nn.Module):
+    """
+    Fast 3d convolutional neural network that utilizes 2.5d convolutional
+    layers to improve the computational complexity.
+    """
     def __init__(self):
         """
-        Constructs a fast 3d convolutional neural network that utilizes 2.5d
-        convolutional layers to improve the computational complexity.
+        Constructs the neural network architecture.
 
         Parameters
         ----------
@@ -33,30 +36,30 @@ class Fast3dCNN(nn.Module):
         # Convolutional Layer 1
         self.conv1 = nn.Sequential(
             FastConvLayer(1, 32),
-            nn.BatchNorm2d(32),
+            nn.BatchNorm3d(32),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
         # Convolutional Layer 2
-        self.conv1 = nn.Sequential(
+        self.conv2 = nn.Sequential(
             FastConvLayer(32, 64),
-            nn.BatchNorm2d(64),
+            nn.BatchNorm3d(64),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
         # Convolutional Layer 3
-        self.conv1 = nn.Sequential(
+        self.conv3 = nn.Sequential(
             FastConvLayer(64, 128),
-            nn.BatchNorm2d(128),
+            nn.BatchNorm3d(128),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
         # Final fully connected layers
         self.output = nn.Sequential(
-            nn.Linear(128, 256),
+            nn.Linear(128 * 8 ** 3, 256),
             nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(256, 1),
@@ -83,8 +86,9 @@ class Fast3dCNN(nn.Module):
         x = self.conv3(x)
 
         # Output layer
+        x = torch.flatten(x, start_dim=1)
         x = self.output(x)
-        return output
+        return x
 
 
 class FastConvLayer(nn.Module):
@@ -132,30 +136,23 @@ class FastConvLayer(nn.Module):
         -------
         torch.Tensor
             Output of shape (batch_size, out_channels, height, width, depth).
-
         """
         B, C, D, H, W = x.shape
 
         # Process XY slices
-        xy_slices = x.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
-        xy_features = self.conv_xy(xy_slices)
-        xy_features = xy_features.reshape(B, D, -1, H, W).permute(
-            0, 2, 1, 3, 4
-        )
+        xy_slices = x.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)        
+        xy_features = self.conv_xy(xy_slices).reshape(B, D, -1, H, W)
+        xy_features = xy_features.permute(0, 2, 1, 3, 4)
 
         # Process XZ slices
         xz_slices = x.permute(0, 3, 1, 2, 4).reshape(B * H, C, D, W)
-        xz_features = self.conv_xz(xz_slices)
-        xz_features = xz_features.reshape(B, H, -1, D, W).permute(
-            0, 2, 3, 1, 4
-        )
+        xz_features = self.conv_xz(xz_slices).reshape(B, H, -1, D, W)
+        xz_features = xz_features.permute(0, 2, 3, 1, 4)
 
         # Process YZ slices
         yz_slices = x.permute(0, 4, 1, 2, 3).reshape(B * W, C, D, H)
-        yz_features = self.conv_yz(yz_slices)
-        yz_features = yz_features.reshape(B, W, -1, D, H).permute(
-            0, 2, 3, 4, 1
-        )
+        yz_features = self.conv_yz(yz_slices).reshape(B, W, -1, D, H)
+        yz_features = yz_features.permute(0, 2, 3, 4, 1)
 
         # Fuse features using 3D convolution
         combined = torch.cat([xy_features, xz_features, yz_features], dim=1)

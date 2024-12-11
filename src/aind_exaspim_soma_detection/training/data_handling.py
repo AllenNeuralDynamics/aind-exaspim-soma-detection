@@ -8,6 +8,7 @@ Routines for loading data and applying data augmentation (if applicable).
 
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.ndimage import rotate
 from torch.utils.data import Dataset
 
@@ -137,12 +138,15 @@ class SomaDataset(Dataset):
         """
         return dict({k: v for k, v in self.examples.items() if not v})
 
+    def __len__(self):
+        return len(self.examples)
+
     def __getitem__(self, key):
         brain_id, voxel = key
         img_patch = img_util.get_patch(
             self.imgs[brain_id], voxel, self.patch_shape
         )
-        return img_patch / 2**15
+        return img_patch / 2 ** 15, self.examples[key]
 
     def ingest_examples(self, brain_id, img_prefix, proposals, labels=None):
         # Load image
@@ -160,12 +164,12 @@ class SomaDataset(Dataset):
             self.examples[key] = labels[i] if labels else None
 
     def visualize_example(self, key):
-        img_patch = self.__getitem__(key)
+        img_patch, _ = self.__getitem__(key)
         img_util.plot_mips(img_patch, clip_bool=True)
 
     def visualize_augmented_example(self, key):
         # Get image patch
-        img_patch = self.__getitem__(key)
+        img_patch, _ = self.__getitem__(key)
         img_util.plot_mips(img_patch, clip_bool=True)
 
         # Apply transforms
@@ -235,6 +239,82 @@ class RandomContrast3D:
     def __call__(self, img):
         factor = random.uniform(*self.factor_range)
         return np.clip(img * factor, img.min(), img.max())
+
+
+# --- Custom Dataloader ---
+class MultiThreadedDataLoader:
+    """
+    DataLoader that uses multithreading to fetch image patches from the cloud
+    to form batches.
+
+    """
+
+    def __init__(self, dataset, batch_size):
+        """
+        Constructs a multithreaded data loading object.
+
+        Parameters
+        ----------
+        dataset : Dataset.SomaDataset
+            Instance of custom dataset.
+        batch_size : int
+            Number of samples per batch.
+
+        Returns
+        -------
+        None
+
+        """
+        self.dataset = dataset
+        self.batch_size = batch_size
+
+    def __iter__(self):
+        return self.DataLoaderIterator(self)
+
+    class DataLoaderIterator:
+        def __init__(self, dataloader):
+            self.dataloader = dataloader
+            self.dataset = dataloader.dataset
+            self.batch_size = dataloader.batch_size
+            self.keys = list(self.dataset.examples.keys())
+            np.random.shuffle(self.keys)
+            self.current_index = 0
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            # Check whether to stop
+            if self.current_index >= len(self.keys):
+                raise StopIteration
+
+            # Get the next batch of keys
+            batch_keys = self.keys[
+                self.current_index : self.current_index
+                + self.dataloader.batch_size
+            ]
+            self.current_index += self.dataloader.batch_size
+
+            # Load image patches
+            with ThreadPoolExecutor() as executor:
+                # Assign threads
+                threads = {
+                    executor.submit(self.dataset.__getitem__, idx): idx
+                    for idx in batch_keys
+                }
+
+                # Process results
+                patches = list()
+                labels = list()
+                for thread in as_completed(threads):
+                    patch, label = thread.result()
+                    patches.append(torch.tensor(patch, dtype=torch.float))
+                    labels.append(torch.tensor(label, dtype=torch.float))
+
+            # Reformat inputs
+            patches = torch.unsqueeze(torch.stack(patches), dim=1)
+            labels = torch.unsqueeze(torch.stack(labels), dim=1)
+            return patches, labels
 
 
 # --- Fetch Training Data ---
