@@ -48,7 +48,7 @@ class SomaDataset(Dataset):
                 [
                     RandomFlip3D(),
                     RandomNoise3D(),
-                    RandomRotation3D(angles=(-20, 20)),
+                    RandomRotation3D(angles=(-30, 30)),
                     RandomContrast3D(factor_range=(0.7, 1.3)),
                     lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(
                         0
@@ -200,7 +200,7 @@ class RandomNoise3D:
 
     """
 
-    def __init__(self, mean=0.0, std=0.0001):
+    def __init__(self, mean=0.0, std=0.001):
         self.mean = mean
         self.std = std
 

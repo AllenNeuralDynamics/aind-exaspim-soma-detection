@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 
-class FastCNN3d(nn.Module):
+class Fast3dCNN(nn.Module):
     """
     Fast 3d convolutional neural network that utilizes 2.5d convolutional
     layers to improve the computational complexity.
@@ -34,7 +34,7 @@ class FastCNN3d(nn.Module):
         super(Fast3dCNN, self).__init__()
 
         # Convolutional Layer 1
-        self.conv1 = nn.Sequential(
+        self.layer1 = nn.Sequential(
             FastConvLayer(1, 32),
             nn.BatchNorm3d(32),
             nn.ReLU(),
@@ -42,7 +42,7 @@ class FastCNN3d(nn.Module):
         )
 
         # Convolutional Layer 2
-        self.conv2 = nn.Sequential(
+        self.layer2 = nn.Sequential(
             FastConvLayer(32, 64),
             nn.BatchNorm3d(64),
             nn.ReLU(),
@@ -50,7 +50,7 @@ class FastCNN3d(nn.Module):
         )
 
         # Convolutional Layer 3
-        self.conv3 = nn.Sequential(
+        self.layer3 = nn.Sequential(
             FastConvLayer(64, 128),
             nn.BatchNorm3d(128),
             nn.ReLU(),
@@ -81,9 +81,9 @@ class FastCNN3d(nn.Module):
 
         """
         # Convolutional Layers
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
 
         # Output layer
         x = torch.flatten(x, start_dim=1)
@@ -115,13 +115,8 @@ class FastConvLayer(nn.Module):
         """
         super(FastConvLayer, self).__init__()
 
-        # Convolutions for each plane
-        self.conv_xy = nn.Conv2d(in_channels, in_channels, 3, padding=1)
-        self.conv_xz = nn.Conv2d(in_channels, in_channels, 3, padding=1)
-        self.conv_yz = nn.Conv2d(in_channels, in_channels, 3, padding=1)
-
-        # Fusion layer to combine features
-        self.conv_xyz = nn.Conv3d(3 * in_channels, out_channels, 3, padding=1)
+        self.conv_2d = nn.Conv2d(in_channels, in_channels, 3, padding=1)
+        self.conv_3d = nn.Conv3d(3 * in_channels, out_channels, 3, padding=1)
 
     def forward(self, x):
         """
@@ -141,20 +136,20 @@ class FastConvLayer(nn.Module):
 
         # Process XY slices
         xy_slices = x.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)        
-        xy_features = self.conv_xy(xy_slices).reshape(B, D, -1, H, W)
+        xy_features = self.conv_2d(xy_slices).reshape(B, D, -1, H, W)
         xy_features = xy_features.permute(0, 2, 1, 3, 4)
 
         # Process XZ slices
         xz_slices = x.permute(0, 3, 1, 2, 4).reshape(B * H, C, D, W)
-        xz_features = self.conv_xz(xz_slices).reshape(B, H, -1, D, W)
+        xz_features = self.conv_2d(xz_slices).reshape(B, H, -1, D, W)
         xz_features = xz_features.permute(0, 2, 3, 1, 4)
 
         # Process YZ slices
         yz_slices = x.permute(0, 4, 1, 2, 3).reshape(B * W, C, D, H)
-        yz_features = self.conv_yz(yz_slices).reshape(B, W, -1, D, H)
+        yz_features = self.conv_2d(yz_slices).reshape(B, W, -1, D, H)
         yz_features = yz_features.permute(0, 2, 3, 4, 1)
 
         # Fuse features using 3D convolution
         combined = torch.cat([xy_features, xz_features, yz_features], dim=1)
-        output = self.conv_xyz(combined)
+        output = self.conv_3d(combined)
         return output
