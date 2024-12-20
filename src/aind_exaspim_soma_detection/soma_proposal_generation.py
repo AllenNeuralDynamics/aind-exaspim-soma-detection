@@ -144,7 +144,7 @@ def detect_blobs(img_patch, bright_threshold, LoG_sigma):
 
     # Detect local maximas
     blobs = list()
-    for peak in peak_local_max(max_LoG, min_distance=6):
+    for peak in peak_local_max(max_LoG, min_distance=5):
         peak = tuple([int(x) for x in peak])
         if LoG[peak] > 0:
             blobs.append(peak)
@@ -172,8 +172,8 @@ def filter_proposals(img_patch, proposals, margin, radius=6):
             mean, std = params[0:3], params[3:6]
 
             # Check whether to filter
-            feasible_std = all(std > 0.4) and np.mean(std) > 0.6
-            if fit > 0.8 and feasible_std:
+            feasible_range = all(std > 0.4) and all(std < 10)
+            if fit > 0.7 and (feasible_range and np.mean(std) > 0.65):
                 proposal = [proposal[i] + mean[i] - radius for i in range(3)]
                 filtered_proposals.append(tuple(proposal))
                 discard_nearby(kdtree, visited, proposal)
@@ -356,7 +356,7 @@ def global_filtering(xyz_list):
         if xyz_query not in visited:
             # Search nbhd
             points = list()
-            idxs = kdtree.query_ball_point(xyz_query, 16)
+            idxs = kdtree.query_ball_point(xyz_query, 20)
             for xyz in map(tuple, kdtree.data[idxs]):
                 points.append(xyz)
                 visited.add(xyz)
