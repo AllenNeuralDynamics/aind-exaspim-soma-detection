@@ -513,4 +513,3 @@ def sample_once(my_container):
 
     """
     return sample(my_container, 1)[0]
-

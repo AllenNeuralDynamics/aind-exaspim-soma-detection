@@ -37,7 +37,7 @@ def open_img(s3_prefix):
 
 def get_patch(img, voxel, shape, from_center=True):
     start, end = get_start_end(voxel, shape, from_center=from_center)
-    return img[0, 0, start[2]: end[2], start[1]: end[1], start[0]: end[0]]
+    return img[0, 0, start[2] : end[2], start[1] : end[1], start[0] : end[0]]
 
 
 def sliding_window_coords_3d(img, window_size, overlap):
