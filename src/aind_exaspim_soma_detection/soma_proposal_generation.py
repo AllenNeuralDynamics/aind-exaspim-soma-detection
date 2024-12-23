@@ -44,8 +44,8 @@ import numpy as np
 from aind_exaspim_soma_detection.utils import img_util
 from aind_exaspim_soma_detection.utils.img_util import get_patch
 
-BRIGHT_THRESHOLD = 150
-LOG_SIGMA = 5
+BRIGHT_THRESHOLD = 160
+LOG_SIGMA = 3
 
 
 # --- Core Routines ---
@@ -138,20 +138,20 @@ def detect_blobs(img_patch, bright_threshold, LoG_sigma):
 
     """
     # Preprocess image
-    smoothed = gaussian_filter(img_patch, sigma=0.5)
-    LoG = gaussian_laplace(smoothed, LoG_sigma)
-    max_LoG = maximum_filter(LoG, 6)
+    LoG = gaussian_laplace(
+        gaussian_filter(img_patch, sigma=0.5), LoG_sigma
+    )
 
     # Detect local maximas
     blobs = list()
-    for peak in peak_local_max(max_LoG, min_distance=5):
+    for peak in peak_local_max(maximum_filter(LoG, 5), min_distance=5):
         peak = tuple([int(x) for x in peak])
-        if LoG[peak] > 0:
+        if LoG[peak] > 1000:
             blobs.append(peak)
     return adjust_by_brightness(img_patch, blobs, bright_threshold)
 
 
-def filter_proposals(img_patch, proposals, margin, radius=6):
+def filter_proposals(img_patch, proposals, margin, radius=5):
     # Initializations
     if len(proposals) > 0:
         kdtree = KDTree(proposals)
@@ -162,26 +162,30 @@ def filter_proposals(img_patch, proposals, margin, radius=6):
     filtered_proposals = list()
     visited = set()
     for idx in np.argsort([img_patch[p] for p in proposals])[::-1]:
-        # Determine whether to visit proposal
-        inbounds_bool = is_inbounds(img_patch, proposals[idx], margin)
-        not_visited_bool = proposals[idx] not in visited
-        if inbounds_bool and not_visited_bool:
-            # Fit Gaussian
-            proposal = tuple([int(v) for v in proposals[idx]])
-            fit, params = gaussian_fitness(img_patch, proposal, radius=radius)
-            mean, std = params[0:3], params[3:6]
+        # Determine if proposal has been visited
+        if proposals[idx] in visited:
+            continue
 
-            # Check whether to filter
-            feasible_range = all(std > 0.4) and all(std < 10)
-            if fit > 0.7 and (feasible_range and np.mean(std) > 0.65):
-                proposal = [proposal[i] + mean[i] - radius for i in range(3)]
-                filtered_proposals.append(tuple(proposal))
-                discard_nearby(kdtree, visited, proposal)
+        # Determine if proposal is in bounds
+        proposal = tuple([int(v) for v in proposals[idx]])
+        if not spg.is_inbounds(img_patch, proposal, margin):
+            continue
+
+        # Fit Gaussian
+        fit, params = spg.gaussian_fitness(img_patch, proposal, radius=radius)
+        mean, std = params[0:3], params[3:6]
+
+        # Check whether to filter
+        feasible_range = all(std > 0.4) and all(std < 10)
+        if fit > 0.7 and (feasible_range and np.mean(std) > 0.65):
+            proposal = [proposal[i] + mean[i] - radius for i in range(3)]
+            filtered_proposals.append(proposal)
+            discard_nearby(kdtree, visited, proposal)
     return filtered_proposals
 
 
 # --- Postprocess Proposals ---
-def adjust_by_brightness(img_patch, proposals, bright_threshold, n=6):
+def adjust_by_brightness(img_patch, proposals, bright_threshold, n=5):
     """
     Adjust proposals in a 3D image to the location of the brightest voxel in a
     local neighborhood.
@@ -295,13 +299,17 @@ def gaussian_fitness(img, voxel, radius):
 
     # Fit Gaussian
     try:
+        # Initialize guess for parameters
         amplitude = np.max(patch)
         offset = np.min(patch)
         shape = patch.shape
         x0, y0, z0 = shape[0] // 2, shape[1] // 2, shape[2] // 2
         p0 = (x0, y0, z0, 2, 2, 2, amplitude, offset)
+
+        # Fit
         params, _ = curve_fit(gaussian_3d, xyz, img_vals, p0=p0)
-        return fitness_quality(img_vals, xyz, params), params
+        fitness_score = fitness_quality(img_vals, xyz, params)
+        return fitness_score, params
     except RuntimeError:
         return 0, np.zeros((9))
 
