@@ -146,7 +146,7 @@ class SomaDataset(Dataset):
         img_patch = img_util.get_patch(
             self.imgs[brain_id], voxel, self.patch_shape
         )
-        return img_patch / 2 ** 15, self.examples[key]
+        return img_patch / 2**15, self.examples[key]
 
     def ingest_examples(self, brain_id, img_prefix, proposals, labels=None):
         # Load image

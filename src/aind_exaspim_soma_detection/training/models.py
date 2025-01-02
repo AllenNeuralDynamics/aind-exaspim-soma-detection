@@ -18,6 +18,7 @@ class Fast3dCNN(nn.Module):
     Fast 3d convolutional neural network that utilizes 2.5d convolutional
     layers to improve the computational complexity.
     """
+
     def __init__(self):
         """
         Constructs the neural network architecture.
@@ -59,7 +60,7 @@ class Fast3dCNN(nn.Module):
 
         # Final fully connected layers
         self.output = nn.Sequential(
-            nn.Linear(128 * 8 ** 3, 256),
+            nn.Linear(128 * 8**3, 256),
             nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(256, 1),
@@ -135,7 +136,7 @@ class FastConvLayer(nn.Module):
         B, C, D, H, W = x.shape
 
         # Process XY slices
-        xy_slices = x.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)        
+        xy_slices = x.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
         xy_features = self.conv_2d(xy_slices).reshape(B, D, -1, H, W)
         xy_features = xy_features.permute(0, 2, 1, 3, 4)
 
