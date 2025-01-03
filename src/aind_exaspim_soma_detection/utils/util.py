@@ -148,7 +148,27 @@ def read_json(path):
         return json.load(file)
 
 
-# --- Extracting somas from smartsheets ---
+def write_list_to_file(path, my_list):
+    """
+    Writes each item in a list to a text file, with each item on a new line.
+
+    Parameters
+    ----------
+    path : str
+        Path where text file is to be written.
+    my_list
+        The list of items to write to the file.
+
+    Returns
+    -------
+    None
+
+    """
+    with open(path, 'w') as file:
+        for item in my_list:
+            file.write(f"{item}\n")
+
+# --- Extract Smartsheet Somas ---
 def extract_somas_from_smartsheet(path, soma_status=None):
     """
     Extracts soma coordinates from the AIND neuron reconstructions Smartsheet
