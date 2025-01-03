@@ -79,7 +79,7 @@ def run_on_whole_brain(
             proposals.extend(thread.result())
             pbar.update(1)
         pbar.update(1)
-    return global_filtering(proposals)
+    return spatial_filtering(proposals, 20)
 
 
 def generate_proposals(
@@ -131,10 +131,12 @@ def generate_proposals(
 
     # Filter initial proposals + convert coordinates
     filtered_proposals = list()
-    for voxel in filter_proposals(img_patch, proposals):
-        filtered_proposals.append(
-            img_util.local_to_physical(voxel[::-1], offset, multiscale)
-        )
+    if len(proposals) > 0:
+        proposals = spatial_filtering(proposals, 5)
+        for voxel in filter_proposals(img_patch, proposals):
+            filtered_proposals.append(
+                img_util.local_to_physical(voxel[::-1], offset, multiscale)
+            )
     return filtered_proposals
 
 
@@ -352,7 +354,7 @@ def fitness_quality(img_patch, voxels, params):
     return np.corrcoef(actual, fitted)[0, 1]
 
 
-def global_filtering(xyz_list):
+def spatial_filtering(xyz_list, dist):
     """
     Filters a list of 3D points by merging nearby points based on a given
     distance threshold.
@@ -375,7 +377,7 @@ def global_filtering(xyz_list):
         if xyz_query not in visited:
             # Search nbhd
             points = list()
-            idxs = kdtree.query_ball_point(xyz_query, 24)
+            idxs = kdtree.query_ball_point(xyz_query, dist)
             for xyz in map(tuple, kdtree.data[idxs]):
                 points.append(xyz)
                 visited.add(xyz)
