@@ -27,8 +27,8 @@ def open_img(s3_prefix):
 
     Returns:
     --------
-    zarr.core.Array or zarr.hierarchy.Group
-        A Zarr object representing the image data.
+    zarr.core.Array
+        A Zarr object representing an image.
 
     """
     store = s3fs.S3Map(root=s3_prefix, s3=s3fs.S3FileSystem())
@@ -36,18 +36,40 @@ def open_img(s3_prefix):
 
 
 def get_patch(img, voxel, shape, from_center=True):
+    """
+    Extracts a patch from an image based on the given voxel coordinate and
+    patch shape.
+
+    Parameters
+    ----------
+    img : zarr.core.Array
+         A Zarr object representing an image.
+    voxel : Tuple[int]
+        Voxel coordinate used to extract patch.
+    shape : Tuple[int]
+        Dimensions of the patch to extract.
+    from_center : bool, optional
+        Indicates whether the given voxel is the center or top, left, front
+        corner of the patch to be extracted.
+
+    Returns
+    -------
+    numpy.ndarray
+        Patch extracted from the given image.
+
+    """
     start, end = get_start_end(voxel, shape, from_center=from_center)
-    return img[0, 0, start[2] : end[2], start[1] : end[1], start[0] : end[0]]
+    return img[0, 0, start[2]: end[2], start[1]: end[1], start[0]: end[0]]
 
 
 def sliding_window_coords_3d(img, window_size, overlap):
-    # Calculate the stride based on the overlap and window size
+    # Calculate stride based on the overlap and window size
     stride = tuple(w - o for w, o in zip(window_size, overlap))
+    z_stride, y_stride, x_stride = stride
 
-    # Get dimensions of the  and window
+    # Get dimensions of the window
     _, _, z_dim, y_dim, x_dim = img.shape
     z_win, y_win, x_win = window_size
-    z_stride, y_stride, x_stride = stride
 
     # Loop over the  with the sliding window
     coords = []
@@ -60,23 +82,23 @@ def sliding_window_coords_3d(img, window_size, overlap):
 
 def get_start_end(voxel, shape, from_center=True):
     """
-    Gets the start and end indices of the chunk to be read.
+    Gets the start and end indices of the image patch to be read.
 
     Parameters
     ----------
     voxel : tuple
         Voxel coordinate that specifies either the center or top, left, front
-        corner of the chunk to be read.
+        corner of the patch to be read.
     shape : tuple
-        Shape (dimensions) of the chunk to be read.
+        Shape (dimensions) of the patch to be read.
     from_center : bool, optional
         Indication of whether the provided coordinates represent the center of
-        the chunk or the starting point. The default is True.
+        the patch or the starting point. The default is True.
 
     Return
     ------
-    tuple[list[int]]
-        Start and end indices of the chunk to be read.
+    Tuple[List[int]]
+        Start and end indices of the image patch to be read.
 
     """
     if from_center:
@@ -91,7 +113,7 @@ def get_start_end(voxel, shape, from_center=True):
 # --- coordinate conversions ---
 def to_physical(voxel):
     """
-    Converts coordinates from voxels to physical.
+    Converts the given coordinate from voxels to physical space.
 
     Parameters
     ----------
@@ -100,7 +122,7 @@ def to_physical(voxel):
 
     Returns
     -------
-    tuple
+    Tuple[int]
         Physical coordinates of "voxel".
 
     """
@@ -109,7 +131,7 @@ def to_physical(voxel):
 
 def to_voxels(xyz, multiscale=0):
     """
-    Converts given point from physical to voxel coordinates.
+    Converts the given coordinate from physical to voxel space.
 
     Parameters
     ----------
@@ -122,7 +144,7 @@ def to_voxels(xyz, multiscale=0):
     Returns
     -------
     numpy.ndarray
-        Coordinates converted to voxels.
+        Coordinate converted to voxels.
 
     """
     multiscale = 1.0 / 2**multiscale
