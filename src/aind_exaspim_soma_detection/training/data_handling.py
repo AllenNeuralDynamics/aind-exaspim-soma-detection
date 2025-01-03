@@ -290,7 +290,7 @@ class MultiThreadedDataLoader:
 
             # Get the next batch of keys
             batch_keys = self.keys[
-                self.current_index : self.current_index
+                self.current_index: self.current_index
                 + self.dataloader.batch_size
             ]
             self.current_index += self.dataloader.batch_size
