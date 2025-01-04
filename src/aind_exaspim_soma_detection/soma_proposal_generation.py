@@ -7,7 +7,7 @@ Created on Fri Nov 22 12:00:00 2024
 Code that generates soma proposals.
 
     Soma Proposal Generation Algorithm
-        1. Detect Initial Proposals - detect_blobs()
+        1. Generate Initial Proposals - detect_blobs()
             a. Smooth image with Gaussian filter to reduce false positives.
             b. Laplacian of Gaussian (LoG) to enhance regions where the
                intensity changes dramatically (i.e. higher gradient), then
@@ -134,8 +134,7 @@ def generate_proposals(
     multiscale : int
         Level in the image pyramid that the voxel coordinate must index into.
     bright_threshold : int, optional
-        Minimum brightness required for image patch. the default is the global
-        variable "BRIGHT_THRESHOLD".
+        Minimum brightness required for image patch. The default is 160.
 
     Returns
     -------
@@ -405,7 +404,8 @@ def gaussian_fitness_filtering(img_patch, proposals, r=4):
 
 def gaussian_fitness(img_patch):
     """
-    Fits a 3D Gaussian to an image patch.
+    Fits a 3D Gaussian to an image patch and computes a score that represents
+    how well the fitted Gaussian approximates the image patch.
 
     Parameters
     ----------
@@ -415,7 +415,7 @@ def gaussian_fitness(img_patch):
     Returns
     -------
     tuple
-        Fitness score and parameters of fitted Gaussian.
+        Fitness score and parameters of the fitted Gaussian.
 
     """
     # Generate coordinates
