@@ -110,7 +110,7 @@ def get_start_end(voxel, shape, from_center=True):
     return start, end
 
 
-# --- coordinate conversions ---
+# --- Coordinate Conversions ---
 def to_physical(voxel):
     """
     Converts the given coordinate from voxels to physical space.
@@ -157,8 +157,23 @@ def local_to_physical(local_voxel, offset, multiscale=0):
     return to_physical(global_voxel * 2**multiscale)
 
 
-# --- visualizations ---
+# --- Visualizations ---
 def plot_mips(img, prefix="", clip_bool=False):
+    """
+    Plots the Maximum Intensity Projections (MIPs) of a 3D image along the XY,
+    XZ, and YZ axes.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Input 3D image to generate MIPs from. Typically, this can be a volume or multi-slice image.
+        prefix (str, optional): A string to be added as a prefix to the titles of the MIP plots. Default is an empty string.
+        clip_bool (bool, optional): If True, the function applies clipping to the image before generating MIPs (based on the 99th percentile of the image values). If False, no clipping is performed. Default is False.
+
+    Returns:
+        None: The function displays the MIP plots for the XY, XZ, and YZ planes using Matplotlib.
+
+    """
     fig, axs = plt.subplots(1, 3, figsize=(10, 4))
     axs_names = ["XY", "XZ", "YZ"]
     for i in range(3):
@@ -208,18 +223,18 @@ def get_mip(img, axis=0, clip_bool=False):
     Parameters
     ----------
     img : np.ndarray
-        Input image that MIP is computed from.
+        Input image to generate MIPs from.
     axis : int, optional
         The axis along which to compute the maximum intensity projection. The
         default is 0.
     clip_bool : bool, optional
         If True, the resulting MIP will be clipped to the range [0, 1] during
-        rescaling. If False, no clipping is applied. Defaults to False.
+        rescaling. If False, no clipping is applied. The default is False.
 
     Returns
     -------
     np.ndarray
-        The Maximum Intensity Projection (MIP) along the specified axis, after
+        Maximum Intensity Projection (MIP) along the specified axis, after
         rescaling.
 
     """
