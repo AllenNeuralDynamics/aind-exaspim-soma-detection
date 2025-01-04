@@ -11,6 +11,7 @@ Miscellaneous helper routines.
 from concurrent.futures import ThreadPoolExecutor
 from random import sample
 
+import ast
 import boto3
 import json
 import numpy as np
@@ -168,6 +169,7 @@ def write_list_to_file(path, my_list):
         for item in my_list:
             file.write(f"{item}\n")
 
+
 # --- Extract Smartsheet Somas ---
 def extract_somas_from_smartsheet(path, soma_status=None):
     """
@@ -243,31 +245,10 @@ def get_soma_coords(df, idx, soma_status):
                     continue
 
             # Add coordinate
-            xyz_list.append(xyz_from_str(item))
+            xyz_list.append(tuple(ast.literal_eval(item)))
             assert len(xyz_list[-1]) == 3, "Coordinate is not 3D!"
         idx += 1
     return np.array(xyz_list)
-
-
-def xyz_from_str(xyz_str):
-    """
-    Converts a string representation of 3D coordinates into a list of floats.
-
-    Parameters
-    -----------
-    xyz_str : str
-        A string containing 3D coordinates in the format "[x, y, z]". Square
-        brackets are optional, but values must be comma-separated.
-
-    Returns
-    --------
-    Tuple[float]
-        3D Coordinate from the given string.
-
-    """
-    xyz_str = xyz_str.replace("[", "")
-    xyz_str = xyz_str.replace("]", "")
-    return tuple([float(x) for x in xyz_str.split(",")])
 
 
 # --- swc utils ---
