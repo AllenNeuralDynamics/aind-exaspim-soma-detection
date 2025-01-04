@@ -171,19 +171,85 @@ def plot_mips(img, prefix="", clip_bool=False):
 
 
 def rescale(img, clip_bool=True):
+    """
+    Rescales the input image to a [0, 65535] intensity range, with optional
+    clipping of extreme values.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Input image.
+    clip_bool : bool, optiona
+        If True, the function clips the voxel values to the range [0, 99th
+        percentile of image values]. If False, no clipping is applied. The
+        default is True.
+
+    Returns
+    -------
+    np.ndarray
+        Rescaled image.
+
+    """
+    # Clip image
     if clip_bool:
         img = np.clip(img, 0, np.percentile(img, 99))
+
+    # Rescale image
     img -= np.min(img)
     img = (2**16 - 1) * (img / np.max(img))
-    return (img).astype(np.uint16)
+    return img.astype(np.uint16)
 
 
 def get_mip(img, axis=0, clip_bool=False):
+    """
+    Computes the Maximum Intensity Projection (MIP) along a specified axis and
+    rescales the resulting image.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Input image that MIP is computed from.
+    axis : int, optional
+        The axis along which to compute the maximum intensity projection. The
+        default is 0.
+    clip_bool : bool, optional
+        If True, the resulting MIP will be clipped to the range [0, 1] during
+        rescaling. If False, no clipping is applied. Defaults to False.
+
+    Returns
+    -------
+    np.ndarray
+        The Maximum Intensity Projection (MIP) along the specified axis, after
+        rescaling.
+
+    """
     mip = np.max(img, axis=axis)
     mip = rescale(mip, clip_bool=clip_bool)
     return mip
 
 
-def mark_voxel(img, voxel, value=1):
-    img[voxel] = value
-    return img
+def get_detections_img(shape, voxels):
+    """
+    Converts a list of voxel coordinates into a binary detection image, where
+    detected voxels are marked.
+
+    Parameters
+    ----------
+    shape : Tuple[int]
+        The shape of the output detection image.
+    voxels : List[Tuple[int]
+        List of voxel coordinates to be marked as detected in the output
+        image.
+
+    Returns
+    -------
+    np.ndarray
+        A binary detection image, where each voxel in "voxels" is marked with
+        1 and all other positions are set to 0.
+
+    """
+    detections_img = np.zeros(shape)
+    for voxel in voxels:
+        voxel = tuple([int(v) for v in voxel])
+        detections_img[voxel] = 1
+    return detections_img
