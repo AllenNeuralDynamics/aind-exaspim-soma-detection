@@ -122,7 +122,7 @@ def generate_proposals(
     Parameters
     ----------
     img : zarr.core.Array
-        A 3D array representing a 3D image of a whole brain.
+        Array representing a 3D image of a whole brain.
     offset : Tuple[int]
         The offset of the image patch to be extracted from "img". Note that
         proposals will be generated within this image patch.
