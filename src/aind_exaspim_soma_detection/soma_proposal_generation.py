@@ -297,7 +297,7 @@ def filter_proposals(img_patch, proposals, max_proposals=10, radius=5):
 
 def spatial_filtering(proposals, radius):
     """
-    Filters a list of proposals by merging nearby points based on a given
+    Filters a list of proposals by merging nearby proposals based on a given
     distance threshold.
 
     Parameters
@@ -305,7 +305,7 @@ def spatial_filtering(proposals, radius):
     proposals : List[Tuple[float]]
         List of coordinates that represent the location of proposals.
     radius : float
-        Distance that is used to find points to be filtered out.
+        Distance that is used to find nearby proposals to be merged.
 
     Returns
     -------
@@ -326,7 +326,7 @@ def spatial_filtering(proposals, radius):
                     nbs.append(coord)
                     visited.add(coord)
 
-                # Generate point to add
+                # Generate coordinate to add
                 nbs = np.vstack(nbs)
                 filtered_proposals.append(tuple(np.mean(nbs, axis=0)))
     return filtered_proposals
