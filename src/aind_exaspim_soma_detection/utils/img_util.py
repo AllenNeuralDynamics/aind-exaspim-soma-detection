@@ -16,14 +16,14 @@ import zarr
 ANISOTROPY = [0.748, 0.748, 1.0]
 
 
-def open_img(s3_prefix):
+def open_img(prefix):
     """
     Opens an image stored in an S3 bucket as a Zarr array.
 
     Parameters:
     -----------
-    s3_prefix : str
-        The prefix (or path) within the S3 bucket where the image is stored.
+    prefix : str
+        Prefix (or path) within the S3 bucket where the image is stored.
 
     Returns:
     --------
@@ -31,7 +31,7 @@ def open_img(s3_prefix):
         A Zarr object representing an image.
 
     """
-    store = s3fs.S3Map(root=s3_prefix, s3=s3fs.S3FileSystem())
+    store = s3fs.S3Map(root=prefix, s3=s3fs.S3FileSystem())
     return zarr.open(store, mode="r")
 
 
@@ -62,14 +62,34 @@ def get_patch(img, voxel, shape, from_center=True):
     return img[0, 0, start[2]: end[2], start[1]: end[1], start[0]: end[0]]
 
 
-def sliding_window_coords_3d(img, window_size, overlap):
+def sliding_window_coords_3d(img, window_shape, overlap):
+    """
+    Generates a list of 3D coordinates representing the front-top-left corner
+    of each sliding window over a 3D image, given a specified window size and
+    overlap between adjacent windows.
+
+    Parameters
+    ----------
+    img : zarr.core.Array
+        Input 3D image.
+    window_shape : Tuple[int]
+        Shape of the sliding window.
+    overlap : Tuple[int]
+        Overlap between adjacent sliding windows.
+
+    Returns
+    -------
+    List[Tuple[int]]
+        List of 3D voxel coordinates that represent the front-top-left corner.
+
+    """
     # Calculate stride based on the overlap and window size
-    stride = tuple(w - o for w, o in zip(window_size, overlap))
+    stride = tuple(w - o for w, o in zip(window_shape, overlap))
     z_stride, y_stride, x_stride = stride
 
     # Get dimensions of the window
     _, _, z_dim, y_dim, x_dim = img.shape
-    z_win, y_win, x_win = window_size
+    z_win, y_win, x_win = window_shape
 
     # Loop over the  with the sliding window
     coords = []
@@ -87,13 +107,13 @@ def get_start_end(voxel, shape, from_center=True):
     Parameters
     ----------
     voxel : tuple
-        Voxel coordinate that specifies either the center or top, left, front
+        Voxel coordinate that specifies either the center or front-top-left
         corner of the patch to be read.
     shape : tuple
         Shape (dimensions) of the patch to be read.
     from_center : bool, optional
         Indication of whether the provided coordinates represent the center of
-        the patch or the starting point. The default is True.
+        the patch or the front-top-left corner. The default is True.
 
     Return
     ------
@@ -147,12 +167,33 @@ def to_voxels(xyz, multiscale=0):
         Coordinate converted to voxels.
 
     """
-    multiscale = 1.0 / 2**multiscale
-    voxel = multiscale * (xyz / np.array(ANISOTROPY))
+    scaling_factor = 1.0 / 2 ** multiscale
+    voxel = scaling_factor * (xyz / np.array(ANISOTROPY))
     return np.round(voxel).astype(int)
 
 
 def local_to_physical(local_voxel, offset, multiscale=0):
+    """
+    Converts a local voxel coordinate to a physical coordinate in global
+    space.
+
+    Parameters
+    ----------
+    local_voxel : Tuple[int]
+        Local voxel coordinate in an image patch.
+    offset : Tuple[int]
+        Offset from the local coordinate system to the global coordinate
+        system.
+    multiscale : int, optional
+        Level in the image pyramid that the voxel coordinate must index into.
+        The default is 0.
+
+    Returns
+    -------
+    numpy.ndarray
+        Physical coordinate.
+
+    """
     global_voxel = np.array([v + o for v, o in zip(local_voxel, offset)])
     return to_physical(global_voxel * 2**multiscale)
 
@@ -165,7 +206,7 @@ def plot_mips(img, prefix="", clip_bool=False):
 
     Parameters
     ----------
-    img : np.ndarray
+    img : numpy.ndarray
         Input 3D image to generate MIPs from.
     prefix : str, optional
         String to be added as a prefix to the titles of the MIP plots. The
@@ -197,15 +238,15 @@ def rescale(img, clip_bool=True):
 
     Parameters
     ----------
-    img : np.ndarray
+    img : numpy.ndarray
         Input image.
-    clip_bool : bool, optiona
+    clip_bool : bool, optional
         If True, the resulting MIP will be clipped to the range [0, 1] during
         rescaling. If False, no clipping is applied. The default is False.
 
     Returns
     -------
-    np.ndarray
+    numpy.ndarray
         Rescaled image.
 
     """
@@ -226,7 +267,7 @@ def get_mip(img, axis=0, clip_bool=False):
 
     Parameters
     ----------
-    img : np.ndarray
+    img : numpy.ndarray
         Input image to generate MIPs from.
     axis : int, optional
         The axis along which to compute the maximum intensity projection. The
@@ -237,7 +278,7 @@ def get_mip(img, axis=0, clip_bool=False):
 
     Returns
     -------
-    np.ndarray
+    numpy.ndarray
         Maximum Intensity Projection (MIP) along the specified axis, after
         rescaling.
 
@@ -262,7 +303,7 @@ def get_detections_img(shape, voxels):
 
     Returns
     -------
-    np.ndarray
+    numpy.ndarray
         A binary detection image, where each voxel in "voxels" is marked with
         1 and all other positions are set to 0.
 
