@@ -493,9 +493,9 @@ def gaussian_3d(xyz, x0, y0, z0, sigma_x, sigma_y, sigma_z, amplitude, offset):
     x, y, z = xyz
     value = offset + amplitude * np.exp(
         -(
-            ((x - x0) ** 2) / (2 * sigma_x**2)
-            + ((y - y0) ** 2) / (2 * sigma_y**2)
-            + ((z - z0) ** 2) / (2 * sigma_z**2)
+            ((x - x0)**2) / (2 * sigma_x**2)
+            + ((y - y0)**2) / (2 * sigma_y**2)
+            + ((z - z0)**2) / (2 * sigma_z**2)
         )
     )
     return value.ravel()
