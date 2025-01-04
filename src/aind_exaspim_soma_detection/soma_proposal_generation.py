@@ -265,7 +265,7 @@ def find_argmax_in_nbhd(img_patch, voxel, d):
 # --- Step 2: Filter Initial Proposals ---
 def filter_proposals(img_patch, proposals, max_proposals=10, radius=5):
     """
-    Filters a list of proposal based on multiple criteria including distance,
+    Filters a list of proposals based on multiple criteria including distance,
     brightness, and Gaussian fitness.
 
     Parameters
