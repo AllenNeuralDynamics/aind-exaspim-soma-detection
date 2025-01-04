@@ -351,7 +351,6 @@ def brightness_filtering(img_patch, proposals, k):
         Filtered list of proposals.
 
     """
-    # Extract brightness values
     brightness = list()
     for proposal in proposals:
         proposal = tuple(map(int, proposal))
