@@ -20,7 +20,8 @@ Code that generates soma proposals.
         2. Filter Initial Proposals - filter_proposals()
             a. Compute distances between proposals and merges proposals within
                a given distance threshold.
-            b. 
+            b. If the number of proposals exceeds a certain threshold, the top
+               k brightest proposals are kept.
             c. Fit Gaussian to neighborhood centered at proposal and compute
                fitness score by comparing fitted Gaussian and image values.
                Proposals are discarded if (1) fitness is below threshold or
@@ -33,7 +34,6 @@ from scipy.ndimage import gaussian_filter, gaussian_laplace, maximum_filter
 from scipy.optimize import curve_fit
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
-from time import time
 from tqdm import tqdm
 
 import numpy as np
@@ -41,7 +41,6 @@ import numpy as np
 from aind_exaspim_soma_detection.utils import img_util
 from aind_exaspim_soma_detection.utils.img_util import get_patch
 
-from random import sample
 
 # --- Wrappers ---
 def run_on_whole_brain(
@@ -51,6 +50,31 @@ def run_on_whole_brain(
     multiscale,
     bright_threshold=160,
 ):
+    """
+    Generates somas proposals across a whole brain 3D image by dividing the
+    image into patches. The coordinate of each image patch is assigned to a
+    thread in order to optimize the runtime of this process.
+
+    Parameters
+    ----------
+    img_prefix : str
+        Prefix (or path) of a whole brain image stored in a S3 bucket.
+    overlap : int
+        Overlap between adjacent image patches in each dimension.
+    patch_shape : Tuple[int]
+        Shape of each image patch.
+    multiscale : int
+        Level in the image pyramid that patches are read from.
+    bright_threshold : int, optional
+        Brightness threshold used to filter proposals and image patches. The
+        default is 160.
+
+    Returns
+    -------
+    List[Tuple[float]]
+        List of physical coordinates of proposals.
+
+    """
     # Initializations
     img = img_util.open_img(img_prefix)
     margin = np.min(overlap) // 4
@@ -80,7 +104,7 @@ def run_on_whole_brain(
             proposals.extend(thread.result())
             pbar.update(1)
         pbar.update(1)
-    return spatial_filtering(proposals, 30)
+    return spatial_filtering(proposals, 35)
 
 
 def generate_proposals(
@@ -241,6 +265,27 @@ def find_argmax_in_nbhd(img_patch, voxel, d):
 
 # --- Step 2: Filter Initial Proposals ---
 def filter_proposals(img_patch, proposals, max_proposals=10, radius=5):
+    """
+    Filters a list of proposal based on multiple criteria including distance,
+    brightness, and Gaussian fitness.
+
+    Parameters
+    ----------
+    img_patch : np.ndarray
+        A 3D image patch that contains proposals.
+    proposals : List[Tuple[int]]
+        List of voxel coordinates of the proposals to be filtered.
+    max_proposals : int, optional
+        The maximum number of proposals to return. The default is 10.
+    radius : int, optional
+        Radius (in voxels) to use for spatial filtering. The default is 5.
+
+    Returns
+    -------
+    List[Tuple[float]]
+        Filtered list of proposals.
+
+    """
     # Filter by distance and brightness
     proposals = spatial_filtering(proposals, radius)
     if len(proposals) > max_proposals:
@@ -288,10 +333,9 @@ def spatial_filtering(proposals, radius):
     return filtered_proposals
 
 
-def brightness_filtering(img_patch, proposals, max_proposals):
+def brightness_filtering(img_patch, proposals, k):
     """
-    Filters a list of proposed voxel by keeping the "max_proposals" at the
-    brightness values in the image.
+    Filters a list of proposed voxel by keeping the top "k" brightest.
 
     Parameters
     ----------
@@ -299,7 +343,7 @@ def brightness_filtering(img_patch, proposals, max_proposals):
         A 3D image patch that contains proposals.
     proposals : List[Tuple[int]]
         List of voxel coordinates of the proposals to be filtered.
-    max_proposals : int
+    k : int
         Maximum number of proposals to return.
 
     Returns
@@ -314,7 +358,7 @@ def brightness_filtering(img_patch, proposals, max_proposals):
         proposal = tuple(map(int, proposal))
         brightness.append(img_patch[proposal])
     brightest_idxs = np.argsort(brightness)[::-1]
-    return [proposals[idx] for idx in brightest_idxs[:max_proposals]]
+    return [proposals[idx] for idx in brightest_idxs[:k]]
 
 
 def gaussian_fitness_filtering(img_patch, proposals, r=4):
@@ -353,7 +397,7 @@ def gaussian_fitness_filtering(img_patch, proposals, r=4):
 
         # Check whether to filter
         feasible_range = all(std > 0.4) and all(std < 10)
-        if fit > 0.75 and (feasible_range and np.mean(std) > 0.7):
+        if fit > 0.75 and (feasible_range and np.mean(std) > 0.75):
             proposal = [proposal[i] + mean[i] - r for i in range(3)]
             filtered_proposals.append(proposal)
     return filtered_proposals
