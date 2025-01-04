@@ -163,7 +163,7 @@ def generate_proposals(
     return filtered_proposals
 
 
-# -- Step 1: Detect Initial Proposals ---
+# -- Step 1: Generate Initial Proposals ---
 def detect_blobs(img_patch, bright_threshold, LoG_sigma, margin):
     """
     Detects blob-like structures in a given image patch using Laplacian of
