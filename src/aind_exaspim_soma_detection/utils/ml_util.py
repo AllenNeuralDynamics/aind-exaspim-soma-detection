@@ -66,9 +66,10 @@ def report_metrics(y, hat_y):
     None
 
     """
-    print("Accuracy:", accuracy_score(y, hat_y))
-    print("Accuracy Dif:", accuracy_score(y, hat_y) - np.sum(y) / len(y))
-    print("Precision:", precision_score(y, hat_y))
-    print("Recall:", recall_score(y, hat_y))
-    print("F1:", f1_score(y, hat_y))
+    accuracy = accuracy_score(y, hat_y) 
+    print("Accuracy:", round(accuracy, 4))
+    print("Accuracy Dif:", round(accuracy - np.sum(y) / len(y), 4))
+    print("Precision:", round(precision_score(y, hat_y), 4))
+    print("Recall:", round(recall_score(y, hat_y), 4))
+    print("F1:", round(f1_score(y, hat_y), 4))
     print("")
