@@ -7,7 +7,11 @@
 ![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen?logo=codecov)
 ![Python](https://img.shields.io/badge/python->=3.10-blue?logo=python)
 
-
+<p>
+  <img src="imgs/pipeline.png" width="180" alt="pipeline">
+  <br>
+  <b> Figure: </b>Visualization of pipeline for generating proposals and classifying them with a neural network.
+</p>
 
 ## Usage
  - To use this template, click the green `Use this template` button and `Create new repository`.
