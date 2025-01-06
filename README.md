@@ -10,7 +10,7 @@
 <p>
   <img src="imgs/pipeline.png" width="1024" alt="pipeline">
   <br>
-  <b> Figure: </b>Visualization of pipeline for generating proposals and classifying them with a neural network.
+  <b> Figure: </b>Visualization of pipeline for generating proposals and classifying them with a convolutional neural network (CNN).
 </p>
 
 ## Usage
