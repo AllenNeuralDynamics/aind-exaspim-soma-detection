@@ -8,7 +8,7 @@
 ![Python](https://img.shields.io/badge/python->=3.10-blue?logo=python)
 
 <p>
-  <img src="imgs/pipeline.png" width="180" alt="pipeline">
+  <img src="imgs/pipeline.png" width="520" alt="pipeline">
   <br>
   <b> Figure: </b>Visualization of pipeline for generating proposals and classifying them with a neural network.
 </p>
