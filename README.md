@@ -15,7 +15,9 @@ To do...
   <b> Figure: </b>Visualization of soma detection pipeline.
 </p>
 
-## Step 1: Proposal Generation
+## Inference
+
+### Step 1: Proposal Generation
 
 To do...
 
@@ -25,11 +27,15 @@ To do...
   <b> Figure: </b>Example of proposals generated across a large region.
 </p>
 
-## Step 2: Filter Proposals with Heuristics
+### Step 2: Filter Proposals with Heuristics
 
 To do...
 
-## Step 3: Classify Proposals with Convolutional Neural Network (CNN)
+### Step 3: Classify Proposals with Convolutional Neural Network (CNN)
+
+To do...
+
+## Train Classification Model
 
 To do...
 
