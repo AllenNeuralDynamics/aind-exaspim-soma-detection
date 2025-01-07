@@ -10,7 +10,7 @@
 <p>
   <img src="imgs/pipeline.png" width="900" alt="pipeline">
   <br>
-  <b> Figure: </b>Visualization of pipeline for generating proposals and classifying them with a convolutional neural network (CNN).
+  <b> Figure: </b>Visualization of soma detection pipeline.
 </p>
 
 ## Usage
