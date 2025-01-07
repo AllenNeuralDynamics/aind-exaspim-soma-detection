@@ -359,7 +359,7 @@ def brightness_filtering(img_patch, proposals, k):
     return [proposals[idx] for idx in brightest_idxs[:k]]
 
 
-def gaussian_fitness_filtering(img_patch, proposals, r=4):
+def gaussian_fitness_filtering(img_patch, proposals, r=4, min_score=0.75):
     """
     Filters a list of proposals by fitting a gaussian to neighborhood of each
     proposal and then checking the closeness of the fit.
@@ -373,6 +373,8 @@ def gaussian_fitness_filtering(img_patch, proposals, r=4):
     r : int, optional
         Shape of neighborhood centered at each proposal that Gaussian is
         fitted to. The default is 4.
+    min_score : float, optional
+        Minimum fitness score that is used to filter proposals.
 
     Returns
     -------
@@ -395,7 +397,7 @@ def gaussian_fitness_filtering(img_patch, proposals, r=4):
 
         # Check whether to filter
         feasible_range = all(std > 0.4) and all(std < 10)
-        if fit > 0.75 and (feasible_range and np.mean(std) > 0.75):
+        if fit > min_score and (feasible_range and np.mean(std) > 0.75):
             proposal = [proposal[i] + mean[i] - r for i in range(3)]
             filtered_proposals.append(proposal)
     return filtered_proposals
@@ -502,7 +504,7 @@ def gaussian_3d(xyz, x0, y0, z0, sigma_x, sigma_y, sigma_z, amplitude, offset):
 
 def is_inbounds(shape, voxel, margin):
     """
-    Check if a voxel is within bounds of a 3D image, with a specified margin.
+    Check if voxel is within bounds of a 3D image, with a specified margin.
 
     Parameters
     ----------
