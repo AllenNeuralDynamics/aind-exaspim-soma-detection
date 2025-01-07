@@ -15,10 +15,21 @@
 
 ## Step 1: Proposal Generation
 
+To do...
+
+<p>
+  <img src="imgs/proposals_example.png.png" width="900" alt="proposals">
+  <br>
+  <b> Figure: </b>Example of proposals generated across a large region.
+</p>
+
 ## Step 2: Filter Proposals w/ Heuristics
+
+To do...
 
 ## Step 3: Classify Proposals w/ CNN
 
+To do...
 
 ## Installation
 To use the software, in the root directory, run
