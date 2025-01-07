@@ -25,11 +25,11 @@ To do...
   <b> Figure: </b>Example of proposals generated across a large region.
 </p>
 
-## Step 2: Filter Proposals w/ Heuristics
+## Step 2: Filter Proposals with Heuristics
 
 To do...
 
-## Step 3: Classify Proposals w/ CNN
+## Step 3: Classify Proposals with Convolutional Neural Network (CNN)
 
 To do...
 
