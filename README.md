@@ -17,6 +17,8 @@ To do...
   <b> Figure: </b>Visualization of soma detection pipeline.
 </p>
 
+Add code block that shows how to run code...
+
 ## Inference
 
 ### Step 1: Proposal Generation
