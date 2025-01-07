@@ -18,7 +18,7 @@
 To do...
 
 <p>
-  <img src="imgs/proposals_example.png.png" width="900" alt="proposals">
+  <img src="imgs/proposals_example.png" width="900" alt="proposals">
   <br>
   <b> Figure: </b>Example of proposals generated across a large region.
 </p>
