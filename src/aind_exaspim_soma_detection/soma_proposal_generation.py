@@ -359,7 +359,7 @@ def brightness_filtering(img_patch, proposals, k):
     return [proposals[idx] for idx in brightest_idxs[:k]]
 
 
-def gaussian_fitness_filtering(img_patch, proposals, r=4, min_score=0.75):
+def gaussian_fitness_filtering(img_patch, proposals, r=4, min_score=0.7):
     """
     Filters a list of proposals by fitting a gaussian to neighborhood of each
     proposal and then checking the closeness of the fit.
@@ -399,7 +399,10 @@ def gaussian_fitness_filtering(img_patch, proposals, r=4, min_score=0.75):
         feasible_range = all(std > 0.4) and all(std < 10)
         if fit > min_score and (feasible_range and np.mean(std) > 0.75):
             proposal = [proposal[i] + mean[i] - r for i in range(3)]
-            filtered_proposals.append(proposal)
+            if is_inbounds(img_patch.shape, proposal, 1):
+                filtered_proposals.append(proposal)
+            else:
+                print("Not inbounds")
     return filtered_proposals
 
 
@@ -494,9 +497,9 @@ def gaussian_3d(xyz, x0, y0, z0, sigma_x, sigma_y, sigma_z, amplitude, offset):
     x, y, z = xyz
     value = offset + amplitude * np.exp(
         -(
-            ((x - x0)**2) / (2 * sigma_x**2)
-            + ((y - y0)**2) / (2 * sigma_y**2)
-            + ((z - z0)**2) / (2 * sigma_z**2)
+            ((x - x0) ** 2) / (2 * sigma_x**2)
+            + ((y - y0) ** 2) / (2 * sigma_y**2)
+            + ((z - z0) ** 2) / (2 * sigma_z**2)
         )
     )
     return value.ravel()
