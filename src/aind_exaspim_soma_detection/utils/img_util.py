@@ -167,7 +167,7 @@ def to_voxels(xyz, multiscale=0):
         Coordinate converted to voxels.
 
     """
-    scaling_factor = 1.0 / 2 ** multiscale
+    scaling_factor = 1.0 / 2**multiscale
     voxel = scaling_factor * (xyz / np.array(ANISOTROPY))
     return np.round(voxel).astype(int)
 

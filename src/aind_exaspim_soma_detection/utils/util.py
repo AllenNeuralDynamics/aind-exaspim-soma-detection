@@ -165,7 +165,7 @@ def write_list_to_file(path, my_list):
     None
 
     """
-    with open(path, 'w') as file:
+    with open(path, "w") as file:
         for item in my_list:
             file.write(f"{item}\n")
 

@@ -10,7 +10,10 @@ Helper routines for training and inference.
 
 from random import sample
 from sklearn.metrics import (
-    accuracy_score, f1_score, precision_score, recall_score
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
 )
 
 import numpy as np
@@ -66,7 +69,7 @@ def report_metrics(y, hat_y):
     None
 
     """
-    accuracy = accuracy_score(y, hat_y) 
+    accuracy = accuracy_score(y, hat_y)
     print("Accuracy:", round(accuracy, 4))
     print("Accuracy Dif:", round(accuracy - np.sum(y) / len(y), 4))
     print("Precision:", round(precision_score(y, hat_y), 4))
