@@ -26,13 +26,10 @@ Add code block that shows how to run code...
 The objective of this step is to generate initial proposals for potential soma locations by detecting blob-like structures in the image. Our proposal detection algorithm includes the following steps:
 
 <blockquote>
-  a. Smooth image with Gaussian filter to reduce false positives.
-
-  b. Laplacian of Gaussian (LoG) to enhance regions where the gradient changes dramatically, then apply a maximum filter.
-
-  c. Generate initial set of proposals by detecting local maximas in LoG image that lie outside of the image margins.
-
-  d. Shift each proposal to the brightest voxel in its neighborhood. If the brightness is below a threshold, reject the proposal.
+  <p>a. Smooth image with Gaussian filter to reduce false positives.</p>
+  <p>b. Laplacian of Gaussian (LoG) to enhance regions where the gradient changes dramatically, then apply a maximum filter.</p>
+  <p>c. Generate initial set of proposals by detecting local maximas in LoG image that lie outside of the image margins.</p>
+  <p>d. Shift each proposal to the brightest voxel in its neighborhood. If the brightness is below a threshold, reject the proposal.</p>
 </blockquote>
 
 <p>
