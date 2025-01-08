@@ -8,6 +8,7 @@ Helper routines for training and inference.
 
 """
 
+import numpy as np
 from random import sample
 from sklearn.metrics import (
     accuracy_score,
@@ -15,8 +16,6 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
-
-import numpy as np
 
 
 def split_train_validation(examples, train_ratio=0.85):

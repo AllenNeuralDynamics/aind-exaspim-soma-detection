@@ -4,12 +4,17 @@ Created on Mon Jan 6 14:00:00 2025
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines for loading training data.
+Routines for loading soma proposal data during inference and training.
 
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import (
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    as_completed,
+)
 from scipy.ndimage import gaussian_filter
+from tqdm import tqdm
 
 import ast
 import os
@@ -29,22 +34,27 @@ def load_examples(path):
     return test_examples
 
 
-def fetch_smartsheet_somas(
-    smartsheet_path, img_prefixes_path, multiscale, adjust_coords_bool=True
-):
+def fetch_smartsheet_somas(smartsheet_path, img_prefixes_path, multiscale):
     # Read data
     img_prefixes = util.read_json(img_prefixes_path)
     soma_coords = util.extract_somas_from_smartsheet(smartsheet_path)
 
-    # Reformat data
+    # Center somas and reformat data
     data = list()
-    for brain_id, xyz_list in soma_coords.items():
-        if brain_id not in ["686955", "708373"]:
-            # Check whether to adjust coordinates
-            if adjust_coords_bool:
-                xyz_list = shift_somas(img_prefixes[brain_id], xyz_list)
+    with ProcessPoolExecutor() as executor:
+        # Assign processes
+        processes = list()
+        for brain_id, xyz_list in soma_coords.items():
+            if brain_id not in ["686955", "708373"]:
+                processes.append(
+                    executor.submit(
+                        shift_somas, brain_id, img_prefixes[brain_id], xyz_list
+                    )
+                )
 
-            # Add examples
+        # Store results
+        for process in tqdm(as_completed(processes), total=len(processes)):
+            brain_id, xyz_list = process.result()
             data.append(
                 reformat_data(brain_id, img_prefixes, multiscale, xyz_list, 1)
             )
@@ -109,7 +119,7 @@ def reformat_data(brain_id, img_prefixes, multiscale, xyz_list, label):
     multiscale : int
         Level in the image pyramid that the voxel coordinates must index into.
     xyz_list : List[ArrayLike]
-        List 3D xyz coordinates.
+        List of 3D xyz coordinates.
     label : int
         Label associated with the given coordinates (i.e. 1 for "accepts" and
         0 for "rejects").
@@ -127,12 +137,16 @@ def reformat_data(brain_id, img_prefixes, multiscale, xyz_list, label):
 
 
 # --- Adjust Smartsheet Coordinates ---
-def shift_somas(img_prefix, xyz_list, multiscale=3, patch_shape=(40, 40, 40)):
+def shift_somas(
+    brain_id, img_prefix, xyz_list, multiscale=3, patch_shape=(40, 40, 40)
+):
     """
     Shifts soma coordinates from dendritic shaft to soma center.
 
     Parameters
     ----------
+    brain_id : str
+        Unique identifier for the whole brain dataset.
     img_prefix : str
         Prefix (or path) of a whole brain image stored in a S3 bucket.
     xyz_list : List[Tuples[float]
@@ -146,8 +160,8 @@ def shift_somas(img_prefix, xyz_list, multiscale=3, patch_shape=(40, 40, 40)):
 
     Returns:
     --------
-    List[Tuple[float]]
-        Shifted soma coordinates in physical space.
+    str, List[Tuple[float]]
+        Brain id and shifted soma xyz coordinates.
 
     """
     img = img_util.open_img(img_prefix + str(multiscale))
@@ -158,12 +172,13 @@ def shift_somas(img_prefix, xyz_list, multiscale=3, patch_shape=(40, 40, 40)):
             threads.append(executor.submit(shift_soma, img, xyz, patch_shape))
 
         # Process results
-        shifted_soma_xyz_list = list()
+        shifted_xyz_list = list()
         for thread in as_completed(threads):
             shifted_xyz = thread.result()
             if shifted_xyz is not None:
-                shifted_soma_xyz_list.append(shifted_xyz)
-    return shifted_soma_xyz_list
+                shifted_xyz_list.append(shifted_xyz)
+
+    return brain_id, shifted_xyz_list
 
 
 def shift_soma(img, xyz, patch_shape, multiscale=3):
@@ -176,7 +191,7 @@ def shift_soma(img, xyz, patch_shape, multiscale=3):
     img : zarr.core.Array
         Array representing a 3D image of a whole brain.
     xyz : tuple or list of int
-        Physical coordinate of soma.
+        xyz coordinate of soma.
     patch_shape : Tuple[int]
         Shape of the image patch to be extracted from "img".
     multiscale : int, optional
@@ -185,8 +200,8 @@ def shift_soma(img, xyz, patch_shape, multiscale=3):
     Returns
     -------
     numpy.ndarray or None
-        If a soma is detected, returns the adjusted soma center coordinates in
-        physical space. If no valid shift is detected, it returns None.
+        If a soma is detected, returns the adjusted soma xyz coordinates. If
+        no soma is detected, it returns None.
 
     """
     voxel = img_util.to_voxels(xyz, multiscale=multiscale)
@@ -225,6 +240,7 @@ def get_soma_shift(img_patch):
 
     # Step 2: Filter Initial Proposals
     proposals = spg.spatial_filtering(proposals, 6)
+    proposals = spg.brightness_filtering(img_patch, proposals, 5)
     proposals = spg.gaussian_fitness_filtering(
         img_patch, proposals, min_score=0.7
     )
