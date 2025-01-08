@@ -30,13 +30,13 @@ Code that generates soma proposals.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import numpy as np
 from scipy.ndimage import gaussian_filter, gaussian_laplace, maximum_filter
 from scipy.optimize import curve_fit
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
 from tqdm import tqdm
-
-import numpy as np
 
 from aind_exaspim_soma_detection.utils import img_util
 from aind_exaspim_soma_detection.utils.img_util import get_patch
@@ -151,7 +151,7 @@ def generate_proposals(
     img_patch = gaussian_filter(img_patch, sigma=0.5)
     proposals_1 = detect_blobs(img_patch, bright_threshold, 8, margin)
     proposals_2 = detect_blobs(img_patch, bright_threshold, 5, margin)
-    proposals_3 = detect_blobs(img_patch, bright_threshold, 3.5, margin)
+    proposals_3 = detect_blobs(img_patch, bright_threshold, 3.25, margin)
     proposals = proposals_1 + proposals_2 + proposals_3
 
     # Filter initial proposals + convert coordinates
@@ -374,7 +374,8 @@ def gaussian_fitness_filtering(img_patch, proposals, r=4, min_score=0.7):
         Shape of neighborhood centered at each proposal that Gaussian is
         fitted to. The default is 4.
     min_score : float, optional
-        Minimum fitness score that is used to filter proposals.
+        Minimum fitness score that is used to filter proposals, which must be
+        a value between 0 and 1.
 
     Returns
     -------
