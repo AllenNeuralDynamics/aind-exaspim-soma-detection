@@ -401,8 +401,6 @@ def gaussian_fitness_filtering(img_patch, proposals, r=4, min_score=0.7):
             proposal = [proposal[i] + mean[i] - r for i in range(3)]
             if is_inbounds(img_patch.shape, proposal, 1):
                 filtered_proposals.append(proposal)
-            else:
-                print("Not inbounds")
     return filtered_proposals
 
 
