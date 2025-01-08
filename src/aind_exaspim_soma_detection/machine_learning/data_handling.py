@@ -12,14 +12,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.ndimage import rotate
 from torch.utils.data import Dataset
 
-import ast
 import numpy as np
-import os
 import random
 import torch
 import torchvision.transforms as transforms
 
-from aind_exaspim_soma_detection.utils import img_util, util
+from aind_exaspim_soma_detection.utils import img_util
 
 
 # --- Custom Dataset ---
@@ -208,7 +206,7 @@ class RandomRotation3D:
         self.axes = axes
 
     def __call__(self, img):
-        for _ in range(2):
+        for _ in range(3):
             angle = random.uniform(*self.angles)
             axis = random.choice(self.axes)
             img = rotate(img, angle, axes=axis, reshape=False, order=1)
@@ -288,7 +286,7 @@ class MultiThreadedDataLoader:
         return self.DataLoaderIterator(self)
 
     class DataLoaderIterator:
-        def __init__(self, dataloader):            
+        def __init__(self, dataloader):
             self.current_index = 0
             self.batch_size = dataloader.batch_size
             self.dataloader = dataloader
@@ -307,7 +305,7 @@ class MultiThreadedDataLoader:
 
             # Get the next batch of keys
             batch_keys = self.keys[
-                self.current_index: self.current_index
+                self.current_index : self.current_index
                 + self.dataloader.batch_size
             ]
             self.current_index += self.dataloader.batch_size

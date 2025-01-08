@@ -8,7 +8,12 @@ Code used to train neural network to classify somas proposals.
 
 """
 
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+)
 
 import numpy as np
 
