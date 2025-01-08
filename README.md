@@ -35,16 +35,6 @@ The objective of this step is to generate initial proposals for potential soma l
   d. Shift each proposal to the brightest voxel in its neighborhood. If the brightness is below a threshold, reject the proposal.
 </blockquote>
 
-<p style="margin-left: 20px;">
-  a. Smooth image with Gaussian filter to reduce false positives.
-
-  b. Laplacian of Gaussian (LoG) to enhance regions where the gradient changes dramatically, then apply a maximum filter.
-
-  c. Generate initial set of proposals by detecting local maximas in LoG image that lie outside of the image margins.
-
-  d. Shift each proposal to the brightest voxel in its neighborhood. If the brightness is below a threshold, reject the proposal.
-</p>
-
 <p>
   <img src="imgs/proposals_example.png" width="900" alt="proposals">
   <br>
