@@ -23,7 +23,7 @@ Add code block that shows how to run code...
 
 ### Step 1: Proposal Generation
 
-The objective of this step is to generate initial proposals for potential soma locations by detecting blob-like structures in the image. Our proposal detection algorithm includes the following steps:
+The objective of this step is to generate initial proposals for potential soma locations by detecting blob-like structures in the image. Our proposal generation algorithm consists the following steps:
 
 <blockquote>
   <p>a. Smooth image with Gaussian filter to reduce false positives.</p>
