@@ -20,13 +20,13 @@ def open_img(prefix):
     """
     Opens an image stored in an S3 bucket as a Zarr array.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     prefix : str
         Prefix (or path) within the S3 bucket where the image is stored.
 
-    Returns:
-    --------
+    Returns
+    -------
     zarr.core.Array
         A Zarr object representing an image.
 
@@ -47,7 +47,7 @@ def get_patch(img, voxel, shape, from_center=True):
     voxel : Tuple[int]
         Voxel coordinate used to extract patch.
     shape : Tuple[int]
-        Dimensions of the patch to extract.
+        Shape of the image patch to extract.
     from_center : bool, optional
         Indicates whether the given voxel is the center or top, left, front
         corner of the patch to be extracted.
@@ -59,7 +59,7 @@ def get_patch(img, voxel, shape, from_center=True):
 
     """
     start, end = get_start_end(voxel, shape, from_center=from_center)
-    return img[0, 0, start[2] : end[2], start[1] : end[1], start[0] : end[0]]
+    return img[0, 0, start[2]: end[2], start[1]: end[1], start[0]: end[0]]
 
 
 def sliding_window_coords_3d(img, window_shape, overlap):
@@ -106,11 +106,11 @@ def get_start_end(voxel, shape, from_center=True):
 
     Parameters
     ----------
-    voxel : tuple
+    voxel : Tuple[int]
         Voxel coordinate that specifies either the center or front-top-left
         corner of the patch to be read.
-    shape : tuple
-        Shape (dimensions) of the patch to be read.
+    shape : Tuple[int]
+        Shape of the image patch to be read.
     from_center : bool, optional
         Indication of whether the provided coordinates represent the center of
         the patch or the front-top-left corner. The default is True.
@@ -137,13 +137,13 @@ def to_physical(voxel):
 
     Parameters
     ----------
-    coord : numpy.ndarray
-        Coordinate to be converted.
+    voxel : ArrayLike
+        Voxel oordinate to be converted.
 
     Returns
     -------
     Tuple[int]
-        Physical coordinates of "voxel".
+        Physical coordinate of "voxel".
 
     """
     return tuple([voxel[i] * ANISOTROPY[i] for i in range(3)])
@@ -155,8 +155,8 @@ def to_voxels(xyz, multiscale=0):
 
     Parameters
     ----------
-    xyz : numpy.ndarray
-        xyz point to be converted to voxel coordinates.
+    xyz : ArrayLike
+        Physical coordiante to be converted to a voxel coordinate.
     multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
         The default is 0.
@@ -199,7 +199,7 @@ def local_to_physical(local_voxel, offset, multiscale=0):
 
 
 # --- Visualizations ---
-def plot_mips(img, prefix="", clip_bool=False):
+def plot_mips(img, clip_bool=False):
     """
     Plots the Maximum Intensity Projections (MIPs) of a 3D image along the XY,
     XZ, and YZ axes.
@@ -208,9 +208,6 @@ def plot_mips(img, prefix="", clip_bool=False):
     ----------
     img : numpy.ndarray
         Input 3D image to generate MIPs from.
-    prefix : str, optional
-        String to be added as a prefix to the titles of the MIP plots. The
-        default is an empty string.
     clip_bool : bool, optional
         If True, the resulting MIP will be clipped to the range [0, 1] during
         rescaling. If False, no clipping is applied. The default is False.
@@ -224,22 +221,22 @@ def plot_mips(img, prefix="", clip_bool=False):
     axs_names = ["XY", "XZ", "YZ"]
     for i in range(3):
         axs[i].imshow(get_mip(img, axis=i, clip_bool=clip_bool))
-        axs[i].set_title(prefix + axs_names[i], fontsize=16)
+        axs[i].set_title(axs_names[i], fontsize=16)
         axs[i].set_xticks([])
         axs[i].set_yticks([])
     plt.tight_layout()
     plt.show()
 
 
-def rescale(img, clip_bool=True):
+def rescale(img_patch, clip_bool=True):
     """
     Rescales the input image to a [0, 65535] intensity range, with optional
     clipping of extreme values.
 
     Parameters
     ----------
-    img : numpy.ndarray
-        Input image.
+    img_patch : numpy.ndarray
+        Image patch to be rescaled.
     clip_bool : bool, optional
         If True, the resulting MIP will be clipped to the range [0, 1] during
         rescaling. If False, no clipping is applied. The default is False.
@@ -252,26 +249,25 @@ def rescale(img, clip_bool=True):
     """
     # Clip image
     if clip_bool:
-        img = np.clip(img, 0, np.percentile(img, 99))
+        img_patch = np.clip(img_patch, 0, np.percentile(img_patch, 99))
 
     # Rescale image
-    img -= np.min(img)
-    img = (2**16 - 1) * (img / np.max(img))
-    return img.astype(np.uint16)
+    img_patch -= np.min(img_patch)
+    img_patch = (2**16 - 1) * (img_patch / np.max(img_patch))
+    return img_patch.astype(np.uint16)
 
 
-def get_mip(img, axis=0, clip_bool=False):
+def get_mip(img_patch, axis=0, clip_bool=False):
     """
     Computes the Maximum Intensity Projection (MIP) along a specified axis and
     rescales the resulting image.
 
     Parameters
     ----------
-    img : numpy.ndarray
-        Input image to generate MIPs from.
+    img_patch : numpy.ndarray
+        Image to generate MIPs from.
     axis : int, optional
-        The axis along which to compute the maximum intensity projection. The
-        default is 0.
+        The axis along which to compute the MIP. The default is 0.
     clip_bool : bool, optional
         If True, the resulting MIP will be clipped to the range [0, 1] during
         rescaling. If False, no clipping is applied. The default is False.
@@ -283,9 +279,8 @@ def get_mip(img, axis=0, clip_bool=False):
         rescaling.
 
     """
-    mip = np.max(img, axis=axis)
-    mip = rescale(mip, clip_bool=clip_bool)
-    return mip
+    mip = np.max(img_patch, axis=axis)
+    return rescale(mip, clip_bool=clip_bool)
 
 
 def get_detections_img(shape, voxels):
@@ -296,7 +291,7 @@ def get_detections_img(shape, voxels):
     Parameters
     ----------
     shape : Tuple[int]
-        The shape of the output detection image.
+        Shape of the output detection image.
     voxels : List[Tuple[int]
         List of voxel coordinates to be marked as detected in the output
         image.
