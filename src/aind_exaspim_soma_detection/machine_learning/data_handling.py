@@ -8,14 +8,15 @@ Routines for loading data and applying data augmentation (if applicable).
 
 """
 
+import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from scipy.ndimage import rotate
-from torch.utils.data import Dataset
 
 import numpy as np
-import random
 import torch
 import torchvision.transforms as transforms
+from scipy.ndimage import rotate
+from scipy.spatial import distance
+from torch.utils.data import Dataset
 
 from aind_exaspim_soma_detection.utils import img_util
 
@@ -23,32 +24,66 @@ from aind_exaspim_soma_detection.utils import img_util
 # --- Custom Dataset ---
 class ProposalDataset(Dataset):
     """
-    A custom dataset used to train a neural network to classify soma proposals
-    as either accept or reject. The dataset is initialized by providing
-    the following inputs:
-        (1) Path to a whole brain dataset stored in an S3 bucket
-        (2) List of voxel coordinates representing soma proposals
-        (3) Optionally, labels for each proposal (i.e. 0 or 1)
+    Custom dataset for classifying soma proposals as either accept or reject
+    by using a neural network. Proposals are stored in the "self.proposals"
+    dictionary, where each item consists of the following:
+        - Key: (brain_id, voxel)
+        - Value: label of proposal (0 or 1), optional
 
-    Note: This dataset supports inputs from multiple whole brain datasets.
+    This dataset is populated using the "self.ingest_proposals" method, which
+    requires the following inputs:
+        (1) brain_id: Unique identifier of brain containing proposals.
+        (2) img_prefix: Path to whole-brain image stored in an S3 bucket.
+        (3) voxels: List of voxel coordinates of proposals.
+        (4) labels: Labels for each proposal (0 or 1), optional.
+
+    Note: This dataset supports proposals from multiple whole-brain datasets.
 
     """
 
     def __init__(self, patch_shape, transform=False):
-        # Initialize class attributes
-        self.examples = dict()  # key: (brain_id, voxel), value: label
-        self.imgs = dict()  # key: brain_id, value: image
+        """
+        Initializes a custom dataset for processing soma proposals.
+
+        Parameters
+        ----------
+        patch_shape : Tuple[int]
+            Shape of the image patches to be extracted centered at proposals.
+        transform : bool, optional
+            Indication of whether to apply data augmentation to image patches.
+            The default is False.
+
+        Attributes
+        ----------
+        proposals : dict
+            Dictionary where each key is a tuple "(brain_id, voxel)" and the
+            value is the corresponding label of the proposal (0 or 1).
+        imgs : dict
+            Dictionary where each key is a "brain_id" and the value is the
+            corresponding whole-brain image.
+        img_paths : dict
+            A dictionary for storing the paths to the whole-brain images.
+        patch_shape : Tuple[int]
+            Shape of the image patches to be extracted centered at proposals.
+        transform : callable or None
+            Transformation pipeline applied to each image patch if "transform"
+            is True. Otherwise, this value is set to None.
+
+        """
+        # Class attributes
+        self.proposals = dict()
+        self.imgs = dict()
         self.img_paths = dict()
         self.patch_shape = patch_shape
 
-        # Data augmentation
+        # Data augmentation (if applicable)
         if transform:
             self.transform = transforms.Compose(
                 [
                     RandomFlip3D(),
+                    RandomRotation3D(),
+                    RandomContrast3D(),
                     RandomNoise3D(),
-                    RandomRotation3D(angles=(-30, 30)),
-                    RandomContrast3D(factor_range=(0.7, 1.3)),
                     lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(
                         0
                     ),
@@ -58,18 +93,51 @@ class ProposalDataset(Dataset):
             self.transform = transform
 
     def __len__(self):
-        return len(self.examples)
+        """
+        Counts the number of proposals in self.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        Number of proposals in self.
+
+        """
+        return len(self.proposals)
 
     def __getitem__(self, key):
+        """
+        Gets the proposal corresponding to the given key, which consists of a
+        "brain_id" and "voxel" coordinate. The proposal includes a normalized
+        image patch centered at the voxel, along with its corresponding label.
+
+        Parameters
+        ----------
+        key : tuple
+            A tuple containing:
+            - "brain_id" (str): Unique identifier of the brain dataset.
+            - "voxel" (Tuple[int]): Voxel coordinate of proposal.
+
+        Returns:
+        --------
+        Tuple
+            A tuple containing:
+            - "key" (tuple): Input "key" tuple.
+            - "img_patch" (numpy.ndarray): 3D image patch centered at "voxel".
+            - "label" (int): Label associated with the proposal.
+
+        """
         brain_id, voxel = key
         img_patch = img_util.get_patch(
             self.imgs[brain_id], voxel, self.patch_shape
         )
-        return key, img_patch / 2**15, self.examples[key]
+        return key, img_patch / 2**15, self.proposals[key]
 
     def get_positives(self):
         """
-        Gets all positive examples in the dataset.
+        Gets all positive proposals in the dataset.
 
         Parameters
         ----------
@@ -78,14 +146,14 @@ class ProposalDataset(Dataset):
         Returns
         -------
         dict
-            Positive examples in dataset.
+            Positive proposals in dataset.
 
         """
-        return dict({k: v for k, v in self.examples.items() if v})
+        return dict({k: v for k, v in self.proposals.items() if v})
 
     def get_negatives(self):
         """
-        Gets all negative examples in the dataset.
+        Gets all negative proposals in the dataset.
 
         Parameters
         ----------
@@ -94,14 +162,14 @@ class ProposalDataset(Dataset):
         Returns
         -------
         dict
-            Negetaive examples in dataset.
+            Negetaive proposals in dataset.
 
         """
-        return dict({k: v for k, v in self.examples.items() if not v})
+        return dict({k: v for k, v in self.proposals.items() if not v})
 
     def n_positives(self):
         """
-        Counts the number of positive examples in the dataset.
+        Counts the number of positive proposals in the dataset.
 
         Parameters
         ----------
@@ -110,14 +178,14 @@ class ProposalDataset(Dataset):
         Returns
         -------
         int
-            Number of positive examples in the dataset.
+            Number of positive proposals in the dataset.
 
         """
         return len(self.get_positives())
 
     def n_negatives(self):
         """
-        Counts the number of negative examples in the dataset.
+        Counts the number of negative proposals in the dataset.
 
         Parameters
         ----------
@@ -126,15 +194,15 @@ class ProposalDataset(Dataset):
         Returns
         -------
         int
-            Number of negative examples in the dataset.
+            Number of negative proposals in the dataset.
 
         """
         return len(self.get_negatives())
 
-    def ingest_examples(self, brain_id, img_prefix, proposals, labels=None):
+    def ingest_proposals(self, brain_id, img_prefix, voxels, labels=None):
         # Sanity check
         if labels is not None:
-            assert len(proposals) == len(labels), "#proposals != #labels"
+            assert len(voxels) == len(labels), "#proposals != #labels"
 
         # Load image (if applicable)
         if brain_id not in self.imgs:
@@ -142,18 +210,29 @@ class ProposalDataset(Dataset):
             self.img_paths[brain_id] = img_prefix
 
         # Load proposal voxel coordinates
-        for i, voxel in enumerate(proposals):
+        for i, voxel in enumerate(voxels):
             key = (brain_id, tuple(voxel))
-            self.examples[key] = labels[i] if labels else None
+            self.proposals[key] = labels[i] if labels else None
 
-    def remove_example(self, key):
-        del self.examples[key]
+    def remove_proposal(self, key, epsilon=0):
+        # Remove if proposal exists
+        if key in self.proposals:
+            del self.proposals[key]
 
-    def visualize_example(self, key):
+        # Search for nearby proposal
+        if epsilon > 0:
+            query_brain_id, query_voxel = key
+            for brain_id, voxel in self.proposals:
+                d = distance(query_voxel, voxel)
+                if brain_id == query_brain_id and d < epsilon:
+                    del self.proposals[(brain_id, voxel)]
+                    break
+
+    def visualize_proposal(self, key):
         _, img_patch, _ = self.__getitem__(key)
         img_util.plot_mips(img_patch, clip_bool=True)
 
-    def visualize_augmented_example(self, key):
+    def visualize_augmented_proposal(self, key):
         # Get image patch
         _, img_patch, _ = self.__getitem__(key)
         img_util.plot_mips(img_patch, clip_bool=True)
@@ -227,31 +306,6 @@ class RandomContrast3D:
         return np.clip(img * factor, img.min(), img.max())
 
 
-class RandomScale3D:
-    """
-    Randomly scale a 3D image along all axes.
-
-    """
-
-    def __init__(self, scale_range=(0.8, 1.2), axes=(0, 1, 2)):
-        self.scale_range = scale_range
-        self.axes = axes
-
-    def __call__(self, img):
-        # Generate scaling factors
-        scales = list()
-        for _ in self.axes:
-            scales.append(
-                random.uniform(self.scale_range[0], self.scale_range[1])
-            )
-
-        # Create a new shape by scaling the dimensions of the image
-        new_shape = list(img.shape)
-        for i, axis in enumerate(self.axes):
-            new_shape[axis] = int(img.shape[axis] * scales[i])
-        return np.resize(img, new_shape)
-
-
 # --- Custom Dataloader ---
 class MultiThreadedDataLoader:
     """
@@ -271,7 +325,7 @@ class MultiThreadedDataLoader:
         batch_size : int
             Number of samples per batch.
         return_keys : bool, optional
-            Indication of whether to return example ids. The default is False.
+            Indication of whether to return proposal ids. The default is False.
 
         Returns
         -------
@@ -291,7 +345,7 @@ class MultiThreadedDataLoader:
             self.batch_size = dataloader.batch_size
             self.dataloader = dataloader
             self.dataset = dataloader.dataset
-            self.keys = list(self.dataset.examples.keys())
+            self.keys = list(self.dataset.proposals.keys())
             self.return_keys = dataloader.return_keys
             np.random.shuffle(self.keys)
 
@@ -303,9 +357,9 @@ class MultiThreadedDataLoader:
             if self.current_index >= len(self.keys):
                 raise StopIteration
 
-            # Get the next batch of keys
+            # Get the next batch of proposals
             batch_keys = self.keys[
-                self.current_index : self.current_index
+                self.current_index: self.current_index
                 + self.dataloader.batch_size
             ]
             self.current_index += self.dataloader.batch_size
@@ -340,17 +394,17 @@ class MultiThreadedDataLoader:
 # --- utils ---
 def init_subdataset(dataset, positives, negatives, patch_shape, transform):
     subdataset = ProposalDataset(patch_shape, transform=transform)
-    for example_tuple in merge_examples(dataset, positives, negatives):
-        subdataset.ingest_examples(*example_tuple)
+    for proposal_tuple in merge_proposals(dataset, positives, negatives):
+        subdataset.ingest_proposals(*proposal_tuple)
     return subdataset
 
 
-def merge_examples(soma_dataset, positives, negatives):
-    examples = list()
+def merge_proposals(soma_dataset, positives, negatives):
+    proposals = list()
     combined_dict = positives.copy()
     combined_dict.update(negatives)
     for key, value in combined_dict.items():
         brain_id, voxel = key
         img_path = soma_dataset.img_paths[brain_id]
-        examples.append((brain_id, img_path, [voxel], [value]))
-    return examples
+        proposals.append((brain_id, img_path, [voxel], [value]))
+    return proposals
