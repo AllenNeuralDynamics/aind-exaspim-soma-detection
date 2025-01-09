@@ -51,7 +51,7 @@ def split_train_validation(examples, train_ratio=0.85):
     return train_examples, valid_examples
 
 
-def report_metrics(y, hat_y):
+def report_metrics(y, hat_y, threshold):
     """
     Computes and prints various evaluation metrics based on the true labels
     "y" and predicted labels "hat_y".
@@ -68,6 +68,7 @@ def report_metrics(y, hat_y):
     None
 
     """
+    hat_y = (hat_y > threshold).astype(int)
     accuracy = accuracy_score(y, hat_y)
     print("Accuracy:", round(accuracy, 4))
     print("Accuracy Dif:", round(accuracy - np.sum(y) / len(y), 4))

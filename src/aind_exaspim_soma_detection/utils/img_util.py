@@ -228,35 +228,6 @@ def plot_mips(img, clip_bool=False):
     plt.show()
 
 
-def rescale(img_patch, clip_bool=True):
-    """
-    Rescales the input image to a [0, 65535] intensity range, with optional
-    clipping of extreme values.
-
-    Parameters
-    ----------
-    img_patch : numpy.ndarray
-        Image patch to be rescaled.
-    clip_bool : bool, optional
-        If True, the resulting MIP will be clipped to the range [0, 1] during
-        rescaling. If False, no clipping is applied. The default is False.
-
-    Returns
-    -------
-    numpy.ndarray
-        Rescaled image.
-
-    """
-    # Clip image
-    if clip_bool:
-        img_patch = np.clip(img_patch, 0, np.percentile(img_patch, 99))
-
-    # Rescale image
-    img_patch -= np.min(img_patch)
-    img_patch = (2**16 - 1) * (img_patch / np.max(img_patch))
-    return img_patch.astype(np.uint16)
-
-
 def get_mip(img_patch, axis=0, clip_bool=False):
     """
     Computes the Maximum Intensity Projection (MIP) along a specified axis and
@@ -292,7 +263,7 @@ def get_detections_img(shape, voxels):
     ----------
     shape : Tuple[int]
         Shape of the output detection image.
-    voxels : List[Tuple[int]
+    voxels : List[Tuple[int]]
         List of voxel coordinates to be marked as detected in the output
         image.
 
@@ -308,3 +279,51 @@ def get_detections_img(shape, voxels):
         voxel = tuple([int(v) for v in voxel])
         detections_img[voxel] = 1
     return detections_img
+
+
+# --- Utils ---
+def normalize(img_patch):
+    """
+    Rescales the input image to a [0, 1] intensity range.
+
+    Parameters
+    ----------
+    img_patch : numpy.ndarray
+        Image patch to be normalized.
+
+    Returns
+    -------
+    numpy.ndarray
+        Normalized image.
+
+    """
+    img_patch -= np.min(img_patch)
+    return img_patch / np.max(img_patch)
+
+
+def rescale(img_patch, clip_bool=True):
+    """
+    Rescales the input image to a [0, 65535] intensity range, with optional
+    clipping of extreme values.
+
+    Parameters
+    ----------
+    img_patch : numpy.ndarray
+        Image patch to be rescaled.
+    clip_bool : bool, optional
+        If True, the resulting MIP will be clipped to the range [0, 1] during
+        rescaling. If False, no clipping is applied. The default is False.
+
+    Returns
+    -------
+    numpy.ndarray
+        Rescaled image.
+
+    """
+    # Clip image
+    if clip_bool:
+        img_patch = np.clip(img_patch, 0, np.percentile(img_patch, 99))
+
+    # Rescale image
+    img_patch = (2**16 - 1) * normalize(img_patch)
+    return img_patch.astype(np.uint16)
