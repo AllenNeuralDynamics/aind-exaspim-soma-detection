@@ -14,7 +14,7 @@ To do...
 <p>
   <img src="imgs/pipeline.png" width="900" alt="pipeline">
   <br>
-  <b> Figure: </b>Visualization of soma detection pipeline. See Inference section for detailed description of each step.
+  <b> Figure: </b>Visualization of soma detection pipeline. See "Inference" section for description of each step.
 </p>
 
 Add code block that shows how to run code...
