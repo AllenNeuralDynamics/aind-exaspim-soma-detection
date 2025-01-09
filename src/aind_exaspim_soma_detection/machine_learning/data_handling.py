@@ -133,7 +133,8 @@ class ProposalDataset(Dataset):
         img_patch = img_util.get_patch(
             self.imgs[brain_id], voxel, self.patch_shape
         )
-        return key, img_patch / 2**15, self.proposals[key]
+        img_patch = img_util.normalize(img_patch)
+        return key, img_patch, self.proposals[key]
 
     def get_positives(self):
         """
@@ -223,7 +224,7 @@ class ProposalDataset(Dataset):
         if epsilon > 0:
             query_brain_id, query_voxel = key
             for brain_id, voxel in self.proposals:
-                d = distance(query_voxel, voxel)
+                d = distance.euclidean(query_voxel, voxel)
                 if brain_id == query_brain_id and d < epsilon:
                     del self.proposals[(brain_id, voxel)]
                     break
