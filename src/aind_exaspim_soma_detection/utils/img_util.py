@@ -149,7 +149,7 @@ def to_physical(voxel):
     return tuple([voxel[i] * ANISOTROPY[i] for i in range(3)])
 
 
-def to_voxels(xyz, multiscale=0):
+def to_voxels(xyz, multiscale):
     """
     Converts the given coordinate from physical to voxel space.
 
@@ -157,9 +157,8 @@ def to_voxels(xyz, multiscale=0):
     ----------
     xyz : ArrayLike
         Physical coordiante to be converted to a voxel coordinate.
-    multiscale : int, optional
+    multiscale : int
         Level in the image pyramid that the voxel coordinate must index into.
-        The default is 0.
 
     Returns
     -------
@@ -172,7 +171,7 @@ def to_voxels(xyz, multiscale=0):
     return np.round(voxel).astype(int)
 
 
-def local_to_physical(local_voxel, offset, multiscale=0):
+def local_to_physical(local_voxel, offset, multiscale):
     """
     Converts a local voxel coordinate to a physical coordinate in global
     space.
@@ -184,9 +183,8 @@ def local_to_physical(local_voxel, offset, multiscale=0):
     offset : Tuple[int]
         Offset from the local coordinate system to the global coordinate
         system.
-    multiscale : int, optional
+    multiscale : int
         Level in the image pyramid that the voxel coordinate must index into.
-        The default is 0.
 
     Returns
     -------
