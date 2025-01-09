@@ -10,8 +10,7 @@ Code that generates soma proposals.
         1. Generate Initial Proposals - detect_blobs()
             a. Smooth image with Gaussian filter to reduce false positives.
             b. Laplacian of Gaussian (LoG) to enhance regions where the
-               intensity changes dramatically (i.e. higher gradient), then
-               apply a non-linear maximum filter.
+               gradient changes dramatically, then apply a maximum filter.
             c. Generate initial set of proposals by detecting local maximas
                that lie outside of the image margins.
             d. Shift each proposal to the brightest voxel in its neighborhood.
@@ -43,11 +42,11 @@ from aind_exaspim_soma_detection.utils.img_util import get_patch
 
 
 # --- Wrappers ---
-def run_on_whole_brain(
+def generate_proposals(
     img_prefix,
     overlap,
-    patch_shape,
     multiscale,
+    patch_shape,
     bright_threshold=160,
 ):
     """
@@ -61,10 +60,10 @@ def run_on_whole_brain(
         Prefix (or path) of a whole brain image stored in a S3 bucket.
     overlap : int
         Overlap between adjacent image patches in each dimension.
-    patch_shape : Tuple[int]
-        Shape of each image patch.
     multiscale : int
         Level in the image pyramid that patches are read from.
+    patch_shape : Tuple[int]
+        Shape of each image patch.
     bright_threshold : int, optional
         Brightness threshold used to filter proposals and image patches. The
         default is 160.
@@ -87,7 +86,7 @@ def run_on_whole_brain(
         for offset in offsets:
             threads.append(
                 executor.submit(
-                    generate_proposals,
+                    generate_proposals_patch,
                     img,
                     offset,
                     margin,
@@ -107,7 +106,7 @@ def run_on_whole_brain(
     return spatial_filtering(proposals, 35)
 
 
-def generate_proposals(
+def generate_proposals_patch(
     img,
     offset,
     margin,
