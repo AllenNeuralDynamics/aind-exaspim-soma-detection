@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # Parameters ~ Proposal Generation
     multiscale_1 = 4
     patch_shape_1 = (64, 64, 64)
-    bright_threshold = 10
+    bright_threshold = 100
     overlap = (28, 28, 28)
 
     # Parameters ~ Proposal Classification
