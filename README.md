@@ -46,7 +46,6 @@ if __name__ == "__main__":
 
 ```
 
-Add image of what the code prints out...
 
 ## Inference
 
