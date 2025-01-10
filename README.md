@@ -47,8 +47,8 @@ To do...
 <blockquote>
   <p>a. Compute distances between proposals and merges proposals within a given distance threshold.</p>
   <p>b. If the number of proposals exceeds a certain threshold, the top k brightest proposals are kept.</p>
-  <p>c. Fit Gaussian to neighborhood centered at proposal and compute fitness score by comparing fitted Gaussian and image values.
-        Proposals are discarded if (1) fitness is below threshold or (2) standard deviation of Gaussian is out of range.</p>
+  <p>c. Fit Gaussian to neighborhood centered at proposal and compute fitness score by comparing fitted Gaussian to image values.
+        Proposals are discarded if (1) fitness score is below threshold or (2) estimated standard deviation is out of range.</p>
 </blockquote>
 
 <p>
