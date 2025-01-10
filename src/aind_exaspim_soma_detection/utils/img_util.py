@@ -163,7 +163,7 @@ def to_voxels(xyz, multiscale):
     Returns
     -------
     numpy.ndarray
-        Coordinate converted to voxels.
+        Voxel coordinate of the input.
 
     """
     scaling_factor = 1.0 / 2**multiscale

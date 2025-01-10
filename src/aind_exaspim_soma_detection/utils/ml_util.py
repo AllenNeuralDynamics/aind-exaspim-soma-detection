@@ -76,3 +76,27 @@ def report_metrics(y, hat_y, threshold):
     print("Recall:", round(recall_score(y, hat_y), 4))
     print("F1:", round(f1_score(y, hat_y), 4))
     print("")
+
+
+def toCPU(tensor, return_numpy=True):
+    """
+    Transfers a PyTorch tensor from the GPU to the CPU and optionally converts
+    it to a NumPy array.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        Input tensor that is on a GPU. 
+    return_numpy : bool, optional
+        Indication of whether to return the tensor as a NumPy array. The
+        default is True.
+
+    Returns
+    -------
+    numpy.ndarray or torch.Tensor
+        Input tensor as a NumPy on the CPU if "return_numpy" is True.
+        Otherwise, input tensor on the CPU.
+
+    """
+    tensor = tensor.detach().cpu()
+    return np.array(tensor) if return_numpy else tensor
