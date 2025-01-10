@@ -17,7 +17,33 @@ To do...
   <b> Figure: </b>Visualization of soma detection pipeline. See "Inference" section for description of each step.
 </p>
 
-Add code block that shows how to run code...
+Here is an example of calling the main routine to run the full inference pipeline.
+
+```python
+
+if __name__ == "__main__":
+    # Initializations
+    brain_id = "unique-identifier-of-dataset"
+    img_prefix = "path-to-image"
+    save_proposals_bool = True
+    save_somas_bool = True
+
+    # Parameters ~ Proposal Generation
+    multiscale_1 = 4
+    patch_shape_1 = (64, 64, 64)
+    bright_threshold = 10
+    overlap = (28, 28, 28)
+
+    # Parameters ~ Proposal Classification
+    multiscale_2 = 1
+    patch_shape_2 = (102, 102, 102)
+    confidence_threshold = 0.4
+    model_path = None
+
+    # Main
+    main()
+
+```
 
 Add image of what the code prints out...
 
