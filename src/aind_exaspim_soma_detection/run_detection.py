@@ -1,13 +1,15 @@
 """
-Created on Wed Nov 27 12:00:00 2024
+Created on Wed Jan 8 16:00:00 2025
 
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Code that generates soma proposals.
+Code that generates soma proposals and classifies them for a whole-brain
+image dataset.
 
 """
 
+from scipy.optimize import OptimizeWarning
 from time import time
 
 import warnings
@@ -16,13 +18,14 @@ from aind_exaspim_soma_detection import soma_proposal_classification as spc
 from aind_exaspim_soma_detection import soma_proposal_generation as spg
 from aind_exaspim_soma_detection.utils import util
 
+warnings.filterwarnings("ignore", category=OptimizeWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 def main():
     # Part 1: Generate Soma Proposals
     t0 = time()
-    print("\nPart 1: Soma Proposal Generation")
+    print("\nPart 1: Generate Soma Proposals")
     img_prefix = img_prefixes[brain_id] + str(multiscale_1)
     proposals = spg.generate_proposals(
         img_prefix,
@@ -35,11 +38,11 @@ def main():
     print("Runtime:", time() - t0)
     if save_proposals_bool:
         output_dir = "/root/capsule/results/proposals"
-        save_result(proposals, output_dir, "proposal_")
+        save_result(proposals, output_dir, "0.0 0.0 1.0", "proposal_", 20)
 
     # Part 2: Classify Soma Proposals
     t0 = time()
-    print("\nPart 2: Soma Proposal Classification")
+    print("\nPart 2: Classify Soma Proposals")
     img_prefix = img_prefixes[brain_id] + str(multiscale_1)
     somas = spc.classify_proposals(
         brain_id,
@@ -48,23 +51,23 @@ def main():
         multiscale_2,
         patch_shape_2,
         confidence_threshold,
+        model_path,
     )
-    print("\n# Proposals Generated:", len(proposals))
+    print("\n# Somas Detected:", len(proposals))
     print("Runtime:", time() - t0)
     if save_proposals_bool:
         output_dir = "/root/capsule/results/somas"
-        save_result(somas, output_dir, "soma_")
+        save_result(somas, output_dir, "1.0 0.0 0.0", "soma_", 25)
 
 
-def save_result(xyz_list, output_dir, prefix):
+def save_result(xyz_list, output_dir, color, prefix, radius):
     util.write_points(
-        output_dir, xyz_list, color="1.0 0.0 0.0", prefix=prefix
+        output_dir, xyz_list, color=color, prefix=prefix, radius=radius,
     )
 
 
 if __name__ == "__main__":
     # Parameters
-    bucket_name = "aind-open-data"
     brain_id = "704522"
     save_proposals_bool = True
     save_somas_bool = True
@@ -72,7 +75,7 @@ if __name__ == "__main__":
     # Parameters ~ Proposal Generation
     multiscale_1 = 4
     patch_shape_1 = (64, 64, 64)
-    bright_threshold = 10
+    bright_threshold = 100
     overlap = (28, 28, 28)
 
     # Parameters ~ Proposal Classification
