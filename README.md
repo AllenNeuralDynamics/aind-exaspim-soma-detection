@@ -44,6 +44,12 @@ The objective of this step is to generate initial proposals for potential soma l
 
 To do...
 
+<p>
+  <img src="imgs/filtered_proposals_example.png" width="900" alt="proposals">
+  <br>
+  <b> Figure: </b>Examples of filtered proposals.
+</p>
+
 ### Step 3: Classify Proposals with Convolutional Neural Network (CNN)
 
 To do...
