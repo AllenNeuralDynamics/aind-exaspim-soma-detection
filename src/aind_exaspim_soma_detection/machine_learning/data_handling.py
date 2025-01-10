@@ -129,7 +129,12 @@ class ProposalDataset(Dataset):
             - "label" (int): Label associated with the proposal.
 
         """
+        # Get voxel coordinate
         brain_id, voxel = key
+        if self.transform:
+            voxel = [voxel_i + random.randint(-6, 6) for voxel_i in voxel]
+
+        # Get image patch
         img_patch = img_util.get_patch(
             self.imgs[brain_id], voxel, self.patch_shape
         )
@@ -266,7 +271,7 @@ class RandomNoise3D:
 
     """
 
-    def __init__(self, mean=0.0, std=0.001):
+    def __init__(self, mean=0.0, std=0.025):
         self.mean = mean
         self.std = std
 
@@ -315,7 +320,7 @@ class MultiThreadedDataLoader:
 
     """
 
-    def __init__(self, dataset, batch_size, return_keys=False):
+    def __init__(self, dataset, batch_size):
         """
         Constructs a multithreaded data loading object.
 
@@ -325,8 +330,6 @@ class MultiThreadedDataLoader:
             Instance of custom dataset.
         batch_size : int
             Number of samples per batch.
-        return_keys : bool, optional
-            Indication of whether to return proposal ids. The default is False.
 
         Returns
         -------
@@ -335,7 +338,6 @@ class MultiThreadedDataLoader:
         """
         self.dataset = dataset
         self.batch_size = batch_size
-        self.return_keys = return_keys
 
     def __iter__(self):
         return self.DataLoaderIterator(self)
@@ -347,7 +349,6 @@ class MultiThreadedDataLoader:
             self.dataloader = dataloader
             self.dataset = dataloader.dataset
             self.keys = list(self.dataset.proposals.keys())
-            self.return_keys = dataloader.return_keys
             np.random.shuffle(self.keys)
 
         def __iter__(self):
@@ -386,10 +387,7 @@ class MultiThreadedDataLoader:
             # Reformat inputs
             patches = torch.unsqueeze(torch.stack(patches), dim=1)
             labels = torch.unsqueeze(torch.stack(labels), dim=1)
-            if self.return_keys:
-                return keys, patches, labels
-            else:
-                return patches, labels
+            return keys, patches, labels
 
 
 # --- utils ---

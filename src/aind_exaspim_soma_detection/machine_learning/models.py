@@ -41,7 +41,7 @@ class Fast3dCNN(nn.Module):
             FastConvLayer(1, 32),
             nn.BatchNorm3d(32),
             nn.ReLU(),
-            nn.Dropout3d(0.2),
+            nn.Dropout3d(0.4),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
@@ -50,7 +50,7 @@ class Fast3dCNN(nn.Module):
             FastConvLayer(32, 64),
             nn.BatchNorm3d(64),
             nn.ReLU(),
-            nn.Dropout3d(0.2),
+            nn.Dropout3d(0.4),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
@@ -59,7 +59,7 @@ class Fast3dCNN(nn.Module):
             FastConvLayer(64, 128),
             nn.BatchNorm3d(128),
             nn.ReLU(),
-            nn.Dropout3d(0.2),
+            nn.Dropout3d(0.4),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
@@ -67,7 +67,7 @@ class Fast3dCNN(nn.Module):
         self.output = nn.Sequential(
             nn.Linear(128 * (self.patch_shape[0] // 8) ** 3, 512),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(0.4),
             nn.Linear(512, 1),
         )
 
@@ -120,7 +120,6 @@ class FastConvLayer(nn.Module):
 
         """
         super(FastConvLayer, self).__init__()
-
         self.conv_2d = nn.Conv2d(in_channels, in_channels, 3, padding=1)
         self.conv_3d = nn.Conv3d(3 * in_channels, out_channels, 3, padding=1)
 
