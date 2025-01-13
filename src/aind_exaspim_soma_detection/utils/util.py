@@ -301,7 +301,7 @@ def read_swc(path):
     return [float(xyz_str[i]) + offset[i] for i in range(3)]
 
 
-def write_points(output_dir, points, color=None, prefix=""):
+def write_points(output_dir, points, color=None, prefix="", radius=20):
     """
     Writes a list of 3D points to individual SWC files in the specified
     directory.
@@ -318,6 +318,8 @@ def write_points(output_dir, points, color=None, prefix=""):
     prefix : str, optional
         String that is prefixed to the filenames of the SWC files. Default is
         an empty string.
+    radius : float, optional
+        Radius to be used in swc file.
 
     Returns
     --------
@@ -332,7 +334,7 @@ def write_points(output_dir, points, color=None, prefix=""):
             filename = prefix + str(i + 1) + ".swc"
             path = os.path.join(output_dir, filename)
             threads.append(
-                executor.submit(write_point, path, xyz, 20, color=color)
+                executor.submit(write_point, path, xyz, radius, color=color)
             )
 
 

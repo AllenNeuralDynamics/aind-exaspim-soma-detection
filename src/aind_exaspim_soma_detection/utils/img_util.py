@@ -59,7 +59,7 @@ def get_patch(img, voxel, shape, from_center=True):
 
     """
     start, end = get_start_end(voxel, shape, from_center=from_center)
-    return img[0, 0, start[2]: end[2], start[1]: end[1], start[0]: end[0]]
+    return img[0, 0, start[0]: end[0], start[1]: end[1], start[2]: end[2]]
 
 
 def sliding_window_coords_3d(img, window_shape, overlap):
@@ -85,18 +85,18 @@ def sliding_window_coords_3d(img, window_shape, overlap):
     """
     # Calculate stride based on the overlap and window size
     stride = tuple(w - o for w, o in zip(window_shape, overlap))
-    z_stride, y_stride, x_stride = stride
+    i_stride, j_stride, k_stride = stride
 
     # Get dimensions of the window
-    _, _, z_dim, y_dim, x_dim = img.shape
-    z_win, y_win, x_win = window_shape
+    _, _, i_dim, j_dim, k_dim = img.shape
+    i_win, j_win, k_win = window_shape
 
     # Loop over the  with the sliding window
     coords = []
-    for x in range(0, x_dim - x_win + 1, x_stride):
-        for y in range(0, y_dim - y_win + 1, y_stride):
-            for z in range(0, z_dim - z_win + 1, z_stride):
-                coords.append((x, y, z))
+    for i in range(0, i_dim - i_win + 1, i_stride):
+        for j in range(0, j_dim - j_win + 1, j_stride):
+            for k in range(0, k_dim - k_win + 1, k_stride):
+                coords.append((i, j, k))
     return coords
 
 
@@ -131,14 +131,17 @@ def get_start_end(voxel, shape, from_center=True):
 
 
 # --- Coordinate Conversions ---
-def to_physical(voxel):
+def to_physical(voxel, multiscale):
     """
     Converts the given coordinate from voxels to physical space.
 
     Parameters
     ----------
     voxel : ArrayLike
-        Voxel oordinate to be converted.
+        Voxel coordinate to be converted.
+    multiscale
+        Level in the image pyramid that the voxel coordinate must index into.
+        
 
     Returns
     -------
@@ -146,7 +149,8 @@ def to_physical(voxel):
         Physical coordinate of "voxel".
 
     """
-    return tuple([voxel[i] * ANISOTROPY[i] for i in range(3)])
+    voxel = voxel[::-1]
+    return tuple([voxel[i] * ANISOTROPY[i] * 2**multiscale for i in range(3)])
 
 
 def to_voxels(xyz, multiscale):
@@ -168,7 +172,7 @@ def to_voxels(xyz, multiscale):
     """
     scaling_factor = 1.0 / 2**multiscale
     voxel = scaling_factor * (xyz / np.array(ANISOTROPY))
-    return np.round(voxel).astype(int)
+    return np.round(voxel).astype(int)[::-1]
 
 
 def local_to_physical(local_voxel, offset, multiscale):
@@ -193,7 +197,7 @@ def local_to_physical(local_voxel, offset, multiscale):
 
     """
     global_voxel = np.array([v + o for v, o in zip(local_voxel, offset)])
-    return to_physical(global_voxel * 2**multiscale)
+    return to_physical(global_voxel, multiscale)
 
 
 # --- Visualizations ---
