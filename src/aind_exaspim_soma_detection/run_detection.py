@@ -18,6 +18,7 @@ from aind_exaspim_soma_detection import soma_proposal_classification as spc
 from aind_exaspim_soma_detection import soma_proposal_generation as spg
 from aind_exaspim_soma_detection.utils import util
 
+warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings("ignore", category=OptimizeWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -43,17 +44,18 @@ def main():
     # Part 2: Classify Soma Proposals
     t0 = time()
     print("\nPart 2: Classify Soma Proposals")
-    img_prefix = img_prefixes[brain_id] + str(multiscale_1)
+    img_prefix = img_prefixes[brain_id] + str(multiscale_2)
     somas = spc.classify_proposals(
         brain_id,
         proposals,
         img_prefix,
+        model_path,
         multiscale_2,
         patch_shape_2,
-        confidence_threshold,
-        model_path,
+        threshold,
+        
     )
-    print("\n# Somas Detected:", len(proposals))
+    print("\n# Somas Detected:", len(somas))
     print("Runtime:", time() - t0)
     if save_proposals_bool:
         output_dir = "/root/capsule/results/somas"
@@ -68,21 +70,21 @@ def save_result(xyz_list, output_dir, color, prefix, radius):
 
 if __name__ == "__main__":
     # Parameters
-    brain_id = "704522"
+    brain_id = "719654"
     save_proposals_bool = True
     save_somas_bool = True
 
     # Parameters ~ Proposal Generation
     multiscale_1 = 4
     patch_shape_1 = (64, 64, 64)
-    bright_threshold = 100
+    bright_threshold = 120
     overlap = (28, 28, 28)
 
     # Parameters ~ Proposal Classification
     multiscale_2 = 1
     patch_shape_2 = (102, 102, 102)
-    confidence_threshold = 0.4
-    model_path = None
+    threshold = 0.3
+    model_path = "/root/capsule/scratch/soma_classifiers/soma_classifiers_2025-01-11 21:07:42.683209/model_8640_f1=0.93.pth"
 
     # Initializations
     prefix_lookup_path = "/root/capsule/data/exaspim_image_prefixes.json"

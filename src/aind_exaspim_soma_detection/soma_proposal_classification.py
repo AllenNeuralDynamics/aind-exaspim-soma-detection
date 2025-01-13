@@ -22,9 +22,9 @@ def classify_proposals(
     brain_id,
     proposals,
     img_prefix,
-    patch_shape,
-    multiscale,
     model_path,
+    multiscale,
+    patch_shape,
     threshold,
     batch_size=16,
     device="cuda",
@@ -35,7 +35,7 @@ def classify_proposals(
     dataset.ingest_proposals(brain_id, img_prefix, proposals)
 
     # Generate predictions
-    dataloader = MultiThreadedDataLoader(dataset, batch_size, True)
+    dataloader = MultiThreadedDataLoader(dataset, batch_size)
     model = load_model(model_path, patch_shape, device)
     keys, hat_y, _ = run_inference(dataloader, model, device)
 
@@ -43,16 +43,16 @@ def classify_proposals(
     soma_xyz_list = list()
     for key_i, hat_y_i in zip(keys, hat_y):
         if hat_y_i > threshold:
-            voxel = key_i[1] * 2**multiscale
-            soma_xyz_list.append(img_util.to_physical(voxel[::-1]))
+            soma_xyz_list.append(img_util.to_physical(key_i[1], multiscale))
     return soma_xyz_list
 
 
 def run_inference(dataloader, model, device, progress_bool=True):
-    model.eval()
     keys, hat_y, y = list(), list(), list()
     with torch.no_grad():
-        iterator = tqdm(dataloader) if progress_bool else dataloader
+        model.eval()
+        n = dataloader.n_rounds
+        iterator = tqdm(dataloader, total=n) if progress_bool else dataloader
         for keys_i, x_i, y_i in iterator:
             # Forward pass
             x_i = x_i.to(device)
@@ -67,6 +67,6 @@ def run_inference(dataloader, model, device, progress_bool=True):
 
 def load_model(path, patch_shape, device):
     model = Fast3dCNN(patch_shape)
-    model.load_state_dict(torch.load(path))
+    model.load_state_dict(torch.load(path, map_location=device))
     model.to(device)
     return model

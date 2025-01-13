@@ -29,13 +29,15 @@ Code that generates soma proposals.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-import numpy as np
 from scipy.ndimage import gaussian_filter, gaussian_laplace, maximum_filter
 from scipy.optimize import curve_fit
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
 from tqdm import tqdm
+
+from random import sample
+
+import numpy as np
 
 from aind_exaspim_soma_detection.utils import img_util
 from aind_exaspim_soma_detection.utils.img_util import get_patch
@@ -47,7 +49,7 @@ def generate_proposals(
     overlap,
     multiscale,
     patch_shape,
-    bright_threshold=160,
+    bright_threshold=150,
 ):
     """
     Generates somas proposals across a whole brain 3D image by dividing the
@@ -66,7 +68,7 @@ def generate_proposals(
         Shape of each image patch.
     bright_threshold : int, optional
         Brightness threshold used to filter proposals and image patches. The
-        default is 160.
+        default is 150.
 
     Returns
     -------
@@ -112,7 +114,7 @@ def generate_proposals_patch(
     margin,
     patch_shape,
     multiscale,
-    bright_threshold=160,
+    bright_threshold=150,
 ):
     """
     Generates soma proposals by detecting blobs, filtering them, and
@@ -157,7 +159,7 @@ def generate_proposals_patch(
     filtered_proposals = list()
     for voxel in filter_proposals(img_patch, proposals):
         filtered_proposals.append(
-            img_util.local_to_physical(voxel[::-1], offset, multiscale)
+            img_util.local_to_physical(voxel, offset, multiscale)
         )
     return filtered_proposals
 
