@@ -41,7 +41,7 @@ class Fast3dCNN(nn.Module):
             FastConvLayer(1, 32),
             nn.BatchNorm3d(32),
             nn.ReLU(),
-            nn.Dropout3d(0.4),
+            nn.Dropout3d(0.3),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
@@ -50,7 +50,7 @@ class Fast3dCNN(nn.Module):
             FastConvLayer(32, 64),
             nn.BatchNorm3d(64),
             nn.ReLU(),
-            nn.Dropout3d(0.4),
+            nn.Dropout3d(0.3),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
@@ -59,16 +59,16 @@ class Fast3dCNN(nn.Module):
             FastConvLayer(64, 128),
             nn.BatchNorm3d(128),
             nn.ReLU(),
-            nn.Dropout3d(0.4),
+            nn.Dropout3d(0.3),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
         # Final fully connected layers
         self.output = nn.Sequential(
-            nn.Linear(128 * (self.patch_shape[0] // 8) ** 3, 512),
+            nn.Linear(128 * (self.patch_shape[0] // 8) ** 3, 128),
             nn.ReLU(),
             nn.Dropout(0.4),
-            nn.Linear(512, 1),
+            nn.Linear(128, 1),
         )
 
     def forward(self, x):

@@ -129,7 +129,7 @@ class ProposalDataset(Dataset):
             - "label" (int): Label associated with the proposal.
 
         """
-        # Get voxel coordinate
+        # Get voxel
         brain_id, voxel = key
         if self.transform:
             voxel = [voxel_i + random.randint(-6, 6) for voxel_i in voxel]
@@ -218,7 +218,7 @@ class ProposalDataset(Dataset):
         # Load proposal voxel coordinates
         for i, voxel in enumerate(voxels):
             key = (brain_id, tuple(voxel))
-            self.proposals[key] = labels[i] if labels else None
+            self.proposals[key] = labels[i] if labels else -1
 
     def remove_proposal(self, key, epsilon=0):
         # Remove if proposal exists
@@ -338,6 +338,7 @@ class MultiThreadedDataLoader:
         """
         self.dataset = dataset
         self.batch_size = batch_size
+        self.n_rounds = len(dataset) // batch_size
 
     def __iter__(self):
         return self.DataLoaderIterator(self)
