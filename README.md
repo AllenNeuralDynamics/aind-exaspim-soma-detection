@@ -38,8 +38,8 @@ if __name__ == "__main__":
     # Parameters ~ Proposal Classification
     multiscale_2 = 1
     patch_shape_2 = (102, 102, 102)
-    confidence_threshold = 0.4
-    model_path = "path-to-cnn"
+    accept_threshold = 0.4
+    model_path = "path-to-model"
 
     # Main
     main()
