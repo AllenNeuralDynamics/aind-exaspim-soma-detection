@@ -35,8 +35,9 @@ def main():
         patch_shape_1,
         bright_threshold=bright_threshold,
     )
+    t, unit = time_writer(time() - t0)
     print("\n# Proposals Generated:", len(proposals))
-    print("Runtime:", time() - t0)
+    print(f"Runtime: {t} {unit}")
     if save_proposals_bool:
         output_dir = "/root/capsule/results/proposals"
         save_result(proposals, output_dir, "0.0 0.0 1.0", "proposal_", 20)
@@ -55,8 +56,9 @@ def main():
         threshold,
         
     )
+    t, unit = time_writer(time() - t0)
     print("\n# Somas Detected:", len(somas))
-    print("Runtime:", time() - t0)
+    print(f"Runtime: {t} {unit}")
     if save_proposals_bool:
         output_dir = "/root/capsule/results/somas"
         save_result(somas, output_dir, "1.0 0.0 0.0", "soma_", 25)
@@ -70,7 +72,7 @@ def save_result(xyz_list, output_dir, color, prefix, radius):
 
 if __name__ == "__main__":
     # Parameters
-    brain_id = "719654"
+    brain_id = "721830"
     save_proposals_bool = True
     save_somas_bool = True
 
