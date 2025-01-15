@@ -516,3 +516,33 @@ def sample_once(my_container):
 
     """
     return sample(my_container, 1)[0]
+
+
+def time_writer(t, unit="seconds"):
+    """
+    Converts a runtime "t" to a larger unit of time if applicable.
+
+    Parameters
+    ----------
+    t : float
+        Runtime.
+    unit : str, optional
+        Unit of time that "t" is expressed in.
+
+    Returns
+    -------
+    float
+        Runtime
+    str
+        Unit of time.
+
+    """
+    assert unit in ["seconds", "minutes", "hours"]
+    upd_unit = {"seconds": "minutes", "minutes": "hours"}
+    if t < 60 or unit == "hours":
+        return t, unit
+    else:
+        t /= 60
+        unit = upd_unit[unit]
+        t, unit = time_writer(t, unit=unit)
+    return t, unit
