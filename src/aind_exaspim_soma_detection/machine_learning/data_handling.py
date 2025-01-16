@@ -132,7 +132,7 @@ class ProposalDataset(Dataset):
         # Get voxel
         brain_id, voxel = key
         if self.transform:
-            voxel = [voxel_i + random.randint(-6, 6) for voxel_i in voxel]
+            voxel = [voxel_i + random.randint(-8, 8) for voxel_i in voxel]
 
         # Get image patch
         try:
@@ -308,7 +308,7 @@ class RandomContrast3D:
 
     """
 
-    def __init__(self, factor_range=(0.8, 1.2)):
+    def __init__(self, factor_range=(0.7, 1.3)):
         self.factor_range = factor_range
 
     def __call__(self, img):
