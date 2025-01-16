@@ -91,6 +91,12 @@ To do...
 
 To do...
 
+<p>
+  <img src="imgs/detections.png" width="900" alt="detections">
+  <br>
+  <b> Figure: </b>Example of detected somas across a large region.
+</p>
+
 ## Installation
 To use the software, in the root directory, run
 ```bash
