@@ -60,14 +60,14 @@ def get_patch(img, voxel, shape, from_center=True):
     """
     # Get image patch coordiantes
     start, end = get_start_end(voxel, shape, from_center=from_center)
-    valid_start = any([s < 0 for s in start])
-    valid_end = any([e > img.shape[i + 2] for i, e in enumerate(end)])
+    valid_start = any([s >= 0 for s in start])
+    valid_end = any([e < img.shape[i + 2] for i, e in enumerate(end)])
 
     # Get image patch
     if valid_start and valid_end: 
         return img[0, 0, start[0]: end[0], start[1]: end[1], start[2]: end[2]]
     else:
-        return np.zeros(shape)
+        return np.ones(shape)
 
 
 def sliding_window_coords_3d(img, window_shape, overlap):

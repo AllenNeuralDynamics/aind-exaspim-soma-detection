@@ -25,13 +25,13 @@ from aind_exaspim_soma_detection.utils import img_util, util
 
 # --- Fetch Data ---
 def load_examples(path):
-    test_examples = list()
+    examples = list()
     for line in util.read_txt(path):
         idx = line.find(",")
         brain_id = ast.literal_eval(line[1:idx])
-        xyz = ast.literal_eval(line[idx + 2: -1])
-        test_examples.append((brain_id, xyz))
-    return test_examples
+        voxel = ast.literal_eval(line[idx + 2: -1])[::-1]  # temp
+        examples.append((brain_id, voxel))
+    return examples
 
 
 def fetch_smartsheet_somas(smartsheet_path, img_prefixes_path, multiscale):
@@ -208,7 +208,7 @@ def shift_soma(img, xyz, patch_shape, multiscale=3):
     img_patch = img_util.get_patch(img, voxel, patch_shape)
     shift = get_soma_shift(img_patch)
     if shift is not None:
-        return img_util.local_to_physical(voxel, shift[::-1], multiscale)
+        return img_util.local_to_physical(voxel, shift, multiscale)
     else:
         return None
 
@@ -247,6 +247,6 @@ def get_soma_shift(img_patch):
     proposals = spg.brightness_filtering(img_patch, proposals, 1)
     if len(proposals) > 0:
         shape = img_patch.shape
-        return [s_i - ps_i // 2 for s_i, ps_i in zip(proposals[0], shape)]
+        return [ps_i - s_i // 2 for s_i, ps_i in zip(shape, proposals[0])]
     else:
         return None
