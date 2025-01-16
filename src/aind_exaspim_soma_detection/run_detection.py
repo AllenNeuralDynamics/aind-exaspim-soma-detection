@@ -35,9 +35,9 @@ def main():
         patch_shape_1,
         bright_threshold=bright_threshold,
     )
-    t, unit = time_writer(time() - t0)
+    t, unit = util.time_writer(time() - t0)
     print("\n# Proposals Generated:", len(proposals))
-    print(f"Runtime: {t} {unit}")
+    print(f"Runtime: {round(t, 4)} {unit}")
     if save_proposals_bool:
         output_dir = "/root/capsule/results/proposals"
         save_result(proposals, output_dir, "0.0 0.0 1.0", "proposal_", 20)
@@ -56,9 +56,10 @@ def main():
         threshold,
         
     )
-    t, unit = time_writer(time() - t0)
+    t, unit = util.time_writer(time() - t0)
     print("\n# Somas Detected:", len(somas))
-    print(f"Runtime: {t} {unit}")
+    print("% Proposals Accepted:", len(somas) / len(proposals))
+    print(f"Runtime: {round(t, 4)} {unit}")
     if save_proposals_bool:
         output_dir = "/root/capsule/results/somas"
         save_result(somas, output_dir, "1.0 0.0 0.0", "soma_", 25)
