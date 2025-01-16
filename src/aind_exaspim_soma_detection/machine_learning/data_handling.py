@@ -135,10 +135,14 @@ class ProposalDataset(Dataset):
             voxel = [voxel_i + random.randint(-6, 6) for voxel_i in voxel]
 
         # Get image patch
-        img_patch = img_util.get_patch(
-            self.imgs[brain_id], voxel, self.patch_shape
-        )
-        img_patch = img_util.normalize(img_patch)
+        try:
+            img_patch = img_util.get_patch(
+                self.imgs[brain_id], voxel, self.patch_shape
+            )
+            img_patch = img_util.normalize(img_patch)
+        except:
+            print(voxel, self.imgs[brain_id].shape)
+            img_patch = np.ones(self.patch_shape)
         return key, img_patch, self.proposals[key]
 
     def get_positives(self):
@@ -220,14 +224,14 @@ class ProposalDataset(Dataset):
             key = (brain_id, tuple(voxel))
             self.proposals[key] = labels[i] if labels else -1
 
-    def remove_proposal(self, key, epsilon=0):
+    def remove_proposal(self, query_key, epsilon=0):
         # Remove if proposal exists
-        if key in self.proposals:
-            del self.proposals[key]
+        if query_key in self.proposals:
+            del self.proposals[query_key]
 
         # Search for nearby proposal
         if epsilon > 0:
-            query_brain_id, query_voxel = key
+            query_brain_id, query_voxel = query_key
             for brain_id, voxel in self.proposals:
                 d = distance.euclidean(query_voxel, voxel)
                 if brain_id == query_brain_id and d < epsilon:
