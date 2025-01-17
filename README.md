@@ -87,15 +87,16 @@ The initial proposal generation step is tuned to prioritize high recall which of
 
 To do...
 
-## Train Classification Model
-
-To do...
-
 <p>
   <img src="imgs/detections.png" width="900" alt="detections">
   <br>
   <b> Figure: </b>Example of detected somas across a large region.
 </p>
+
+## Train Classification Model
+
+To do...
+
 
 ## Installation
 To use the software, in the root directory, run
