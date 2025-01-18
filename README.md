@@ -26,20 +26,20 @@ if __name__ == "__main__":
     # Initializations
     brain_id = "unique-identifier-of-dataset"
     img_prefix = "path-to-image"
-    save_proposals_bool = True
-    save_somas_bool = True
 
     # Parameters ~ Proposal Generation
     multiscale_1 = 4
     patch_shape_1 = (64, 64, 64)
     bright_threshold = 100
     overlap = (28, 28, 28)
+    save_proposals_bool = True
 
     # Parameters ~ Proposal Classification
     multiscale_2 = 1
     patch_shape_2 = (102, 102, 102)
     accept_threshold = 0.4
     model_path = "path-to-model"
+    save_somas_bool = True
 
     # Main
     main()
