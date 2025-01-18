@@ -78,7 +78,7 @@ The initial proposal generation step prioritizes high recall, which results in m
 </blockquote>
 
 <p>
-  <img src="imgs/filtered_proposals_example.png" width="900" alt="proposals">
+  <img src="imgs/filtered_proposals_example.png" width="800" alt="proposals">
   <br>
   <b> Figure: </b>Examples of filtered proposals.
 </p>
@@ -88,7 +88,7 @@ The initial proposal generation step prioritizes high recall, which results in m
 To do...
 
 <p>
-  <img src="imgs/detections.png" width="900" alt="detections">
+  <img src="imgs/detections.png" width="800" alt="detections">
   <br>
   <b> Figure: </b>Example of detected somas across a large region.
 </p>
