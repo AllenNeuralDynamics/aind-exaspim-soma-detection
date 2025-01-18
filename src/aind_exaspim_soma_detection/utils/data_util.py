@@ -223,7 +223,7 @@ def get_soma_coords(df, idx, soma_status):
 
 # --- Adjust Smartsheet Coordinates ---
 def shift_somas(
-    brain_id, img_prefix, xyz_list, multiscale=3, patch_shape=(40, 40, 40)
+    brain_id, img_prefix, xyz_list, multiscale=3, patch_shape=(36, 36, 36)
 ):
     """
     Shifts soma coordinates from dendritic shaft to soma center.
@@ -327,7 +327,7 @@ def get_soma_shift(img_patch):
     proposals = spg.spatial_filtering(proposals, 6)
     proposals = spg.brightness_filtering(img_patch, proposals, 5)
     proposals = spg.gaussian_fitness_filtering(
-        img_patch, proposals, min_score=0.7
+        img_patch, proposals, min_score=0.8
     )
     proposals = spg.brightness_filtering(img_patch, proposals, 1)
     if len(proposals) > 0:
