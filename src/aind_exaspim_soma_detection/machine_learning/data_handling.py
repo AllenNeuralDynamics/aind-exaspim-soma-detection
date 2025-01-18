@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import torch
 import torchvision.transforms as transforms
-from scipy.ndimage import rotate
+from scipy.ndimage import rotate, zoom
 from scipy.spatial import distance
 from torch.utils.data import Dataset
 
@@ -82,7 +82,9 @@ class ProposalDataset(Dataset):
                 [
                     RandomFlip3D(),
                     RandomRotation3D(),
+                    RandomScale3D(),
                     RandomContrast3D(),
+                    RandomBrightness3D(),
                     RandomNoise3D(),
                     lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(
                         0
@@ -132,7 +134,7 @@ class ProposalDataset(Dataset):
         # Get voxel
         brain_id, voxel = key
         if self.transform:
-            voxel = [voxel_i + random.randint(-8, 8) for voxel_i in voxel]
+            voxel = [voxel_i + random.randint(-6, 6) for voxel_i in voxel]
 
         # Get image patch
         try:
@@ -253,6 +255,29 @@ class ProposalDataset(Dataset):
 
 
 # --- Data Augmentation ---
+class RandomBrightness3D:
+    def __init__(self, delta=0.1):
+        self.delta = delta
+    
+    def __call__(self, img):
+        factor = 1 + np.random.uniform(-self.delta, self.delta)
+        return img * factor
+
+
+class RandomContrast3D:
+    """
+    Adjusts the contrast of a 3D image by scaling voxel intensities.
+
+    """
+
+    def __init__(self, factor_range=(0.8, 1.2)):
+        self.factor_range = factor_range
+
+    def __call__(self, img):
+        factor = random.uniform(*self.factor_range)
+        return np.clip(img * factor, img.min(), img.max())
+
+
 class RandomFlip3D:
     """
     Randomly flip a 3D image along one or more axes.
@@ -294,26 +319,36 @@ class RandomRotation3D:
         self.angles = angles
         self.axes = axes
 
-    def __call__(self, img):
-        for _ in range(3):
+    def __call__(self, img, mode="grid-mirror"):
+        for axis in self.axes:
             angle = random.uniform(*self.angles)
-            axis = random.choice(self.axes)
-            img = rotate(img, angle, axes=axis, reshape=False, order=1)
+            img = rotate(
+                img, angle, axes=axis, mode=mode, reshape=False, order=1
+            )
         return img
 
 
-class RandomContrast3D:
+class RandomScale3D:
     """
-    Adjusts the contrast of a 3D image by scaling voxel intensities.
+    Applies random scaling to an image along each axis.
 
     """
-
-    def __init__(self, factor_range=(0.7, 1.3)):
-        self.factor_range = factor_range
+    def __init__(self, scale_range=(0.9, 1.1)):
+        self.scale_range = scale_range
 
     def __call__(self, img):
-        factor = random.uniform(*self.factor_range)
-        return np.clip(img * factor, img.min(), img.max())
+        # Sample new image shape
+        alpha = np.random.uniform(self.scale_range[0], self.scale_range[1])
+        new_shape = (int(img.shape[0] * alpha), 
+                     int(img.shape[1] * alpha),
+                     int(img.shape[2] * alpha))
+
+        # Compute the zoom factors
+        shape = img.shape
+        zoom_factors = [
+            new_dim / old_dim for old_dim, new_dim in zip(shape, new_shape)
+        ]
+        return zoom(img, zoom_factors, order=3)
 
 
 # --- Custom Dataloader ---

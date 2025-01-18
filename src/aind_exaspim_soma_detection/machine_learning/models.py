@@ -11,6 +11,7 @@ soma proposal as accept or reject.
 
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 
 
 class Fast3dCNN(nn.Module):
@@ -36,40 +37,66 @@ class Fast3dCNN(nn.Module):
         super(Fast3dCNN, self).__init__()
         self.patch_shape = patch_shape
 
-        # Convolutional Layer 1
+        # Convolutional layer 1
         self.layer1 = nn.Sequential(
-            FastConvLayer(1, 32),
-            nn.BatchNorm3d(32),
+            FastConvLayer(1, 16),
+            nn.BatchNorm3d(16),
             nn.ReLU(),
-            nn.Dropout3d(0.3),
+            nn.Dropout3d(0.25),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
-        # Convolutional Layer 2
+        # Convolutional layer 2
         self.layer2 = nn.Sequential(
+            FastConvLayer(16, 32),
+            nn.BatchNorm3d(32),
+            nn.ReLU(),
+            nn.Dropout3d(0.25),
+            nn.MaxPool3d(kernel_size=2, stride=2),
+        )
+
+        # Convolutional layer 3
+        self.layer3 = nn.Sequential(
             FastConvLayer(32, 64),
             nn.BatchNorm3d(64),
             nn.ReLU(),
-            nn.Dropout3d(0.3),
+            nn.Dropout3d(0.25),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
-        # Convolutional Layer 3
-        self.layer3 = nn.Sequential(
+        # Convolutional layer 4
+        self.layer4 = nn.Sequential(
             FastConvLayer(64, 128),
             nn.BatchNorm3d(128),
             nn.ReLU(),
-            nn.Dropout3d(0.3),
+            nn.Dropout3d(0.25),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
         # Final fully connected layers
         self.output = nn.Sequential(
-            nn.Linear(128 * (self.patch_shape[0] // 8) ** 3, 128),
+            nn.Linear(128 * (self.patch_shape[0] // 16) ** 3, 128),
             nn.ReLU(),
             nn.Dropout(0.4),
             nn.Linear(128, 1),
         )
+
+        # Initialize weights
+        self.apply(self.init_weights)
+
+    @staticmethod
+    def init_weights(m):
+        if isinstance(m, nn.Conv3d):
+            init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            if m.bias is not None:
+                init.constant_(m.bias, 0)
+        elif isinstance(m, nn.Linear):
+            init.xavier_normal_(m.weight)
+            if m.bias is not None:
+                init.constant_(m.bias, 0)
+        elif isinstance(m, nn.BatchNorm3d):
+            init.constant_(m.weight, 1)
+            init.constant_(m.bias, 0)
 
     def forward(self, x):
         """
@@ -90,6 +117,7 @@ class Fast3dCNN(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+        x = self.layer4(x)
 
         # Output layer
         x = torch.flatten(x, start_dim=1)
