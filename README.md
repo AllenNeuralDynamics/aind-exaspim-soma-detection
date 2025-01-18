@@ -68,10 +68,10 @@ The objective of this step is to generate initial proposals for potential soma l
 
 ### Step 2: Filter Proposals with Heuristics
 
-The initial proposal generation step is tuned to prioritize high recall which often results in a large number of false positives. The purpose of this step is to use prior knowledge, such as somas having a Gaussian-like appearance and an expected size range, to filter out trivial false positives.
+The initial proposal generation step prioritizes high recall which often results in many false positives. This step leverages prior knowledge, such as the Gaussian-like appearance and expected size of somas, to filter out trivial false positives.
 
 <blockquote>
-  <p>a. Compute distances between proposals and merges proposals within a given distance threshold.</p>
+  <p>a. Merges proposals within a given distance threshold.</p>
   <p>b. If the number of proposals exceeds a certain threshold, the top k brightest proposals are kept.</p>
   <p>c. Fit Gaussian to neighborhood centered at proposal and compute fitness score by comparing fitted Gaussian to image values.
         Proposals are discarded if (1) fitness score is below threshold or (2) estimated standard deviation is out of range.</p>
