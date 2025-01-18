@@ -68,7 +68,7 @@ The objective of this step is to generate initial proposals for potential soma l
 
 ### Step 2: Filter Proposals with Heuristics
 
-The initial proposal generation step prioritizes high recall which often results in many false positives. This step leverages prior knowledge, such as the Gaussian-like appearance and expected size of somas, to filter out trivial false positives.
+The initial proposal generation step prioritizes high recall, which results in many false positives. This step leverages prior knowledge, such as the Gaussian-like appearance and expected size of somas, to filter out trivial false positives.
 
 <blockquote>
   <p>a. Merges proposals within a given distance threshold.</p>
