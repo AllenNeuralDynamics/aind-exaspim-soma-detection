@@ -61,7 +61,7 @@ The objective of this step is to generate initial proposals for potential soma l
 </blockquote>
 
 <p>
-  <img src="imgs/proposals_example.png" width="900" alt="proposals">
+  <img src="imgs/proposals_example.png" width="800" alt="proposals">
   <br>
   <b> Figure: </b>Example of proposals generated across a large region.
 </p>
