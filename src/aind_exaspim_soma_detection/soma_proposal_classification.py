@@ -14,8 +14,11 @@ import numpy as np
 import torch
 
 from aind_exaspim_soma_detection.utils import img_util, ml_util
-from aind_exaspim_soma_detection.machine_learning.models import Fast3dCNN
-from aind_exaspim_soma_detection.machine_learning.data_handling import MultiThreadedDataLoader, ProposalDataset
+from aind_exaspim_soma_detection.machine_learning.models import FastConvNet3d
+from aind_exaspim_soma_detection.machine_learning.data_handling import (
+    MultiThreadedDataLoader,
+    ProposalDataset,
+)
 
 
 def classify_proposals(
@@ -47,12 +50,12 @@ def classify_proposals(
     return soma_xyz_list
 
 
-def run_inference(dataloader, model, device, progress_bool=True):
+def run_inference(dataloader, model, device, verbose=True):
     keys, hat_y, y = list(), list(), list()
     with torch.no_grad():
         model.eval()
         n = dataloader.n_rounds
-        iterator = tqdm(dataloader, total=n) if progress_bool else dataloader
+        iterator = tqdm(dataloader, total=n) if verbose else dataloader
         for keys_i, x_i, y_i in iterator:
             # Forward pass
             x_i = x_i.to(device)
@@ -62,11 +65,30 @@ def run_inference(dataloader, model, device, progress_bool=True):
             keys.extend(keys_i)
             hat_y.append(ml_util.toCPU(hat_y_i))
             y.append(np.array(y_i) if y_i[0] is not None else list())
-    return keys, np.vstack(hat_y), np.vstack(y)
+    return keys, np.vstack(hat_y)[:, 0], np.vstack(y)[:, 0]
 
 
 def load_model(path, patch_shape, device):
-    model = Fast3dCNN(patch_shape)
+    """
+    Loads a pre-trained model from the given, then transfers the model to the
+    specified device (i.e. CPU or GPU).
+
+    Parameters
+    ----------
+    path : str
+        Path to the saved model weights.
+    patch_shape : Tuple[int]
+        Shape of the input patches expected by the model expects.
+    device : str
+        Name of device where model should be loaded and run.
+
+    Returns
+    -------
+    FastConvNet3d
+        Model instance with the loaded weights.
+
+    """
+    model = FastConvNet3d(patch_shape)
     model.load_state_dict(torch.load(path, map_location=device))
     model.to(device)
     return model

@@ -9,22 +9,21 @@ Code that generates soma proposals.
     Soma Proposal Generation Algorithm
         1. Generate Initial Proposals - detect_blobs()
             a. Smooth image with Gaussian filter to reduce false positives.
-            b. Laplacian of Gaussian (LoG) to enhance regions where the
-               gradient changes dramatically, then apply a maximum filter.
-            c. Generate initial set of proposals by detecting local maximas
-               that lie outside of the image margins.
-            d. Shift each proposal to the brightest voxel in its neighborhood.
-               If the brightness is below a threshold, reject the proposal.
+            b. Laplacian of Gaussian (LoG) with multiple sigmas to enhance
+               regions where the gradient changes rapidly, then apply non-
+               linear maximum filter.
+            c. Generate initial set of proposals by detecting local maximas.
+            d. Shift each proposal to the brightest voxel in its neighborhood
+               and reject it if the brightness is below a threshold.
 
         2. Filter Initial Proposals - filter_proposals()
-            a. Compute distances between proposals and merges proposals within
-               a given distance threshold.
+            a. Merges proposals within a given distance threshold.
             b. If the number of proposals exceeds a certain threshold, the top
                k brightest proposals are kept.
             c. Fit Gaussian to neighborhood centered at proposal and compute
-               fitness score by comparing fitted Gaussian and image values.
-               Proposals are discarded if (1) fitness is below threshold or
-               (2) standard deviation of Gaussian is out of range.
+               fitness score by comparing fitted Gaussian to image values.
+               Proposals are discarded if (1) fitness score is below threshold
+               or (2) estimated standard deviation is out of range.
 
 """
 
@@ -34,8 +33,6 @@ from scipy.optimize import curve_fit
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
 from tqdm import tqdm
-
-from random import sample
 
 import numpy as np
 

@@ -18,12 +18,25 @@ from aind_exaspim_soma_detection import soma_proposal_classification as spc
 from aind_exaspim_soma_detection import soma_proposal_generation as spg
 from aind_exaspim_soma_detection.utils import util
 
-warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=OptimizeWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 def main():
+    """
+    Runs the soma proposal and classification pipeline for a whole-brain image
+    dataset.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+
+    """
     # Part 1: Generate Soma Proposals
     t0 = time()
     print("\nPart 1: Generate Soma Proposals")
@@ -54,7 +67,6 @@ def main():
         multiscale_2,
         patch_shape_2,
         threshold,
-        
     )
     t, unit = util.time_writer(time() - t0)
     print("\n# Somas Detected:", len(somas))
@@ -66,8 +78,33 @@ def main():
 
 
 def save_result(xyz_list, output_dir, color, prefix, radius):
+    """
+    Saves a list of xyz coordinates as SWC files in a given directory.
+
+    Parameters
+    ----------
+    xyz_list : List[Tuple[float]]
+        List of xyz coordinates to be written to an SWC file.
+    output_dir : str
+        Directory where the SWC files will be saved.
+    color : str
+        String representing the RGB color for the points.
+    prefix : str
+        Prefix string that will be added to each SWC filename.
+    radius : float
+        Size of radius (in microns) for each poitn.
+
+    Returns
+    -------
+    None
+
+    """
     util.write_points(
-        output_dir, xyz_list, color=color, prefix=prefix, radius=radius,
+        output_dir,
+        xyz_list,
+        color=color,
+        prefix=prefix,
+        radius=radius,
     )
 
 
@@ -87,7 +124,7 @@ if __name__ == "__main__":
     multiscale_2 = 1
     patch_shape_2 = (102, 102, 102)
     threshold = 0.3
-    model_path = "/root/capsule/scratch/soma_classifiers/soma_classifiers_2025-01-11 21:07:42.683209/model_8640_f1=0.93.pth"
+    model_path = "/root/capsule/data/benchmarked_models/model_v1_conv2-5d_f1=0.9635.pth"
 
     # Initializations
     prefix_lookup_path = "/root/capsule/data/exaspim_image_prefixes.json"
