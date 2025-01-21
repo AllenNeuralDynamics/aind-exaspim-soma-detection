@@ -16,6 +16,7 @@ This repository implements a pipeline for detecting somas in whole-brain images.
   <br>
   <b> Figure: </b>Visualization of soma detection pipeline. See Inference section for description of each step.
 </p>
+<br>
 
 The inference pipeline consists of three main steps:
 
