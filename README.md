@@ -11,7 +11,13 @@
 
 This repository implements a pipeline for detecting somas in whole-brain images. It utilizes a multi-step approach to propose, filter, and classify potential soma locations. The pipeline prioritizes high recall in the initial proposal generation, followed by filtering based on prior knowledge of soma characteristics, and finally refines the proposals using a convolutional neural network (CNN) for classification.
 
-The pipeline consists of three main steps:
+<p>
+  <img src="imgs/pipeline.png" width="900" alt="pipeline">
+  <br>
+  <b> Figure: </b>Visualization of soma detection pipeline. See Inference section for description of each step.
+</p>
+
+The inference pipeline consists of three main steps:
 
 <blockquote>
   <p>a. <strong>Proposal Generation</strong>: Detects blob-like structures to generate initial soma proposals.</p>
@@ -19,13 +25,7 @@ The pipeline consists of three main steps:
   <p>c. <strong>Proposal Classification</strong>: Classify proposals with a convolutional neural network (CNN).</p>
 </blockquote>
 
-<p>
-  <img src="imgs/pipeline.png" width="900" alt="pipeline">
-  <br>
-  <b> Figure: </b>Visualization of soma detection pipeline. See Inference section for description of each step.
-</p>
 <br>
-
 Here is an example of calling the main routine to run the full inference pipeline.
 
 ```python
