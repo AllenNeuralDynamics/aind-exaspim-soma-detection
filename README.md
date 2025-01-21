@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
 ### Step 1: Proposal Generation
 
-The goal of this step is to generate initial proposals for soma locations by detecting blob-like structures in the image. The proposal generation algorithm follows these steps:
+The goal of this step is to generate initial proposals for soma locations by detecting blob-like structures in the image.
 
 <blockquote>
   <p>a. Smooth image with Gaussian filter to reduce false positives.</p>
