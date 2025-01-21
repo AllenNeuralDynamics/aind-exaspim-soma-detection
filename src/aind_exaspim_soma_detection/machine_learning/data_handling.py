@@ -71,6 +71,7 @@ class ProposalDataset(Dataset):
 
         """
         # Class attributes
+        self.key_to_filename = dict()
         self.proposals = dict()
         self.imgs = dict()
         self.img_paths = dict()
@@ -134,7 +135,7 @@ class ProposalDataset(Dataset):
         # Get voxel
         brain_id, voxel = key
         if self.transform:
-            voxel = [voxel_i + random.randint(-6, 6) for voxel_i in voxel]
+            voxel = [voxel_i + random.randint(-5, 5) for voxel_i in voxel]
 
         # Get image patch
         try:
@@ -211,10 +212,14 @@ class ProposalDataset(Dataset):
         """
         return len(self.get_negatives())
 
-    def ingest_proposals(self, brain_id, img_prefix, voxels, labels=None):
-        # Sanity check
+    def ingest_proposals(
+        self, brain_id, img_prefix, voxels, labels=None, filenames=None
+    ):
+        # Sanity checks
         if labels is not None:
             assert len(voxels) == len(labels), "#proposals != #labels"
+        if filenames is not None:
+            assert len(voxels) == len(filenames), "#proposals != #filenames"
 
         # Load image (if applicable)
         if brain_id not in self.imgs:
@@ -225,6 +230,8 @@ class ProposalDataset(Dataset):
         for i, voxel in enumerate(voxels):
             key = (brain_id, tuple(voxel))
             self.proposals[key] = labels[i] if labels else -1
+            if filenames is not None:
+                self.key_to_filename[key] = filenames[i]
 
     def remove_proposal(self, query_key, epsilon=0):
         # Remove if proposal exists
@@ -258,7 +265,7 @@ class ProposalDataset(Dataset):
 class RandomBrightness3D:
     def __init__(self, delta=0.1):
         self.delta = delta
-    
+
     def __call__(self, img):
         factor = 1 + np.random.uniform(-self.delta, self.delta)
         return img * factor
@@ -333,15 +340,18 @@ class RandomScale3D:
     Applies random scaling to an image along each axis.
 
     """
+
     def __init__(self, scale_range=(0.9, 1.1)):
         self.scale_range = scale_range
 
     def __call__(self, img):
         # Sample new image shape
         alpha = np.random.uniform(self.scale_range[0], self.scale_range[1])
-        new_shape = (int(img.shape[0] * alpha), 
-                     int(img.shape[1] * alpha),
-                     int(img.shape[2] * alpha))
+        new_shape = (
+            int(img.shape[0] * alpha),
+            int(img.shape[1] * alpha),
+            int(img.shape[2] * alpha),
+        )
 
         # Compute the zoom factors
         shape = img.shape

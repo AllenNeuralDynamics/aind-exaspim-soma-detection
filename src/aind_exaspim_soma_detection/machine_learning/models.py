@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.init as init
 
 
-class Fast3dCNN(nn.Module):
+class FastConvNet3d(nn.Module):
     """
     Fast 3d convolutional neural network that utilizes 2.5d convolutional
     layers to improve the computational complexity.
@@ -34,7 +34,7 @@ class Fast3dCNN(nn.Module):
         None
 
         """
-        super(Fast3dCNN, self).__init__()
+        super(FastConvNet3d, self).__init__()
         self.patch_shape = patch_shape
 
         # Convolutional layer 1
@@ -42,7 +42,7 @@ class Fast3dCNN(nn.Module):
             FastConvLayer(1, 16),
             nn.BatchNorm3d(16),
             nn.ReLU(),
-            nn.Dropout3d(0.25),
+            nn.Dropout3d(0.2),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
@@ -51,7 +51,7 @@ class Fast3dCNN(nn.Module):
             FastConvLayer(16, 32),
             nn.BatchNorm3d(32),
             nn.ReLU(),
-            nn.Dropout3d(0.25),
+            nn.Dropout3d(0.2),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
@@ -60,7 +60,7 @@ class Fast3dCNN(nn.Module):
             FastConvLayer(32, 64),
             nn.BatchNorm3d(64),
             nn.ReLU(),
-            nn.Dropout3d(0.25),
+            nn.Dropout3d(0.2),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
@@ -69,16 +69,16 @@ class Fast3dCNN(nn.Module):
             FastConvLayer(64, 128),
             nn.BatchNorm3d(128),
             nn.ReLU(),
-            nn.Dropout3d(0.25),
+            nn.Dropout3d(0.2),
             nn.MaxPool3d(kernel_size=2, stride=2),
         )
 
         # Final fully connected layers
         self.output = nn.Sequential(
-            nn.Linear(128 * (self.patch_shape[0] // 16) ** 3, 128),
+            nn.Linear((128 * (self.patch_shape[0] // 16) ** 3), 256),
             nn.ReLU(),
-            nn.Dropout(0.4),
-            nn.Linear(128, 1),
+            nn.Dropout(0.2),
+            nn.Linear(256, 1),
         )
 
         # Initialize weights
@@ -86,8 +86,21 @@ class Fast3dCNN(nn.Module):
 
     @staticmethod
     def init_weights(m):
+        """
+        Initializes the weights and biases of a given PyTorch layer.
+
+        Parameters
+        ----------
+        m : nn.Module
+            PyTorch layer or module.
+
+        Returns
+        -------
+        None
+
+        """
         if isinstance(m, nn.Conv3d):
-            init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             if m.bias is not None:
                 init.constant_(m.bias, 0)
         elif isinstance(m, nn.Linear):

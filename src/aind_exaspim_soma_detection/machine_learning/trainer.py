@@ -14,14 +14,43 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
+import torch.nn.functional as F
 
 import numpy as np
 import os
 import torch
+import torch.nn as nn
 
 from aind_exaspim_soma_detection import soma_proposal_classification as spc
 
 
+# --- Loss Functions ---
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, hat_y, y):
+        BCE_loss = F.binary_cross_entropy(hat_y, y, reduction="none")
+        pt = torch.exp(-BCE_loss)
+        return torch.mean(self.alpha * (1 - pt) ** self.gamma * BCE_loss)
+
+
+def focal_loss(hat_y, y, alpha=0.5, gamma=2.0, smooth=1e-6):
+    # Flatten the tensors
+    hat_y = hat_y.view(-1)
+    y = y.view(-1)
+
+    # Calculate focal loss
+    hat_y = torch.clamp(hat_y, min=smooth, max=1.0 - smooth)
+    y = y.float()
+    cross_entropy = -y * torch.log(hat_y) - (1 - y) * torch.log(1 - hat_y)
+    loss = alpha * (1 - hat_y) ** gamma * cross_entropy
+    return loss.mean()
+
+
+# --- Validation ---
 def validate_model(writer, dataloader, model, model_dir, device, cnt, best_f1):
     _, hat_y, y = spc.run_inference(dataloader, model, device, False)
     f1 = evaluation_metrics(writer, hat_y, y, cnt, "validation", 0.5)
@@ -31,8 +60,6 @@ def validate_model(writer, dataloader, model, model_dir, device, cnt, best_f1):
         model_path = os.path.join(model_dir, model_name)
         torch.save(model.state_dict(), model_path)
         print("New Best:", model_path)
-    else:
-        print("F1 score:", f1)
     return best_f1
 
 
