@@ -18,7 +18,7 @@ This repository implements a pipeline for detecting somas in whole-brain images.
 </p>
 <br>
 
-The inference pipeline consists of three main steps:
+The soma detection pipeline consists of three main steps:
 
 <blockquote>
   <p>a. <strong>Proposal Generation</strong>: Detects blob-like structures to generate initial soma proposals.</p>
@@ -27,7 +27,7 @@ The inference pipeline consists of three main steps:
 </blockquote>
 
 <br>
-Here is an example of calling the main routine to run the full inference pipeline.
+Here is an example of calling the main routine to run the full pipeline.
 
 ```python
 
