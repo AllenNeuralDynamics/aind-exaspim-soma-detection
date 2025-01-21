@@ -93,10 +93,6 @@ To do...
   <b> Figure: </b>Detected somas across a large region.
 </p>
 
-## Train Classification Model
-
-To do...
-
 
 ## Installation
 To use the software, in the root directory, run
