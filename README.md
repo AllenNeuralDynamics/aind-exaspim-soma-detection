@@ -51,11 +51,11 @@ if __name__ == "__main__":
 
 ### Step 1: Proposal Generation
 
-The objective of this step is to generate initial proposals for potential soma locations by detecting blob-like structures in the image. Our proposal generation algorithm consists the following steps:
+The goal of this step is to generate initial proposals for soma locations by detecting blob-like structures in the image. The proposal generation algorithm follows these steps:
 
 <blockquote>
   <p>a. Smooth image with Gaussian filter to reduce false positives.</p>
-  <p>b. Laplacian of Gaussian (LoG) with multiple sigmas to enhance regions where the gradient changes rapidly, then apply a non-linear maximum filter.</p>
+  <p>b. Laplacian of Gaussian (LoG) with multiple sigmas to enhance regions where the gradient changes rapidly, then apply a max filter.</p>
   <p>c. Generate initial set of proposals by detecting local maximas.</p>
   <p>d. Shift each proposal to the brightest voxel in its neighborhood and reject it if the brightness is below a threshold.</p>
 </blockquote>
@@ -63,7 +63,7 @@ The objective of this step is to generate initial proposals for potential soma l
 <p>
   <img src="imgs/proposals_example.png" width="800" alt="proposals">
   <br>
-  <b> Figure: </b>Example of proposals generated across a large region.
+  <b> Figure: </b>Proposals generated across a large region.
 </p>
 
 ### Step 2: Filter Proposals with Heuristics
@@ -90,7 +90,7 @@ To do...
 <p>
   <img src="imgs/detections.png" width="800" alt="detections">
   <br>
-  <b> Figure: </b>Example of detected somas across a large region.
+  <b> Figure: </b>Detected somas across a large region.
 </p>
 
 ## Train Classification Model
