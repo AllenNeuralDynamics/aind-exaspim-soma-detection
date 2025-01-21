@@ -4,7 +4,7 @@ Created on Mon Jan 6 14:00:00 2025
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines for loading soma proposal data during inference and training.
+Routines for loading soma proposal data for testing and training.
 
 """
 
@@ -26,20 +26,213 @@ from aind_exaspim_soma_detection.utils import img_util, util
 
 
 # --- Fetch Data ---
+def fetch_smartsheet_somas(dataset_path, img_prefixes_path, multiscale):
+    """
+    Fetches and formats data from a text file generated from the Neuron
+    Reconstruction SmartSheet.
+
+    Parameters
+    ----------
+    dataset_path : str
+        Path to the text file where each line is formatted as "(brain_id,
+        voxel)".
+    img_prefixes_path : str
+        Path to a JSON file containing image prefixes for each brain ID.
+    multiscale : int
+        Level in the image pyramid that the voxel coordinates must index into.
+
+    Returns
+    -------
+    List[tuple]
+        List of tuples where each tuple contains the following:
+            - "brain_id" (str): Unique identifier for the brain.
+            - "img_path" (str): Path to image stored in S3 bucket.
+            - "voxels" (list): Voxel coordinates of proposed somas.
+            - "labels" (list): Labels corresponding to voxels.
+
+    """
+    data = list()
+    img_prefixes = util.read_json(img_prefixes_path)
+    for brain_id, voxel in load_examples(dataset_path):
+        data.append(
+            reformat_data(brain_id, img_prefixes, multiscale, [voxel], 1)
+        )
+    return data
+
+
+def fetch_exaspim_somas_2024(dataset_path, img_prefixes_path, multiscale):
+    """
+    Fetches and formats data from exaSPIM datasets.
+
+    Parameters
+    ----------
+    dataset_path : str
+        Path to the dataset directory containing brain-specific subdirectories
+        with "accepts" and "rejects" folders.
+    img_prefixes_path : str
+        Path to a JSON file containing image prefixes for each brain ID.
+    multiscale : int
+        Level in the image pyramid that the voxel coordinates must index into.
+
+    Returns
+    -------
+    List[tuple]
+        List of tuples where each tuple contains the following:
+            - "brain_id" (str): Unique identifier for the brain.
+            - "img_path" (str): Path to image stored in S3 bucket.
+            - "voxels" (list): Voxel coordinates of proposed somas.
+            - "labels" (list): Labels corresponding to voxels.
+
+    """
+    data = list()
+    img_prefixes = util.read_json(img_prefixes_path)
+    for brain_id in util.list_subdirectory_names(dataset_path):
+        # Accepts
+        accepts_dir = os.path.join(dataset_path, brain_id, "accepts")
+        data.append(
+            load_swc_examples(
+                accepts_dir, brain_id, img_prefixes, multiscale, 1
+            )
+        )
+
+        # Rejects
+        rejects_dir = os.path.join(dataset_path, brain_id, "rejects")
+        data.append(
+            load_swc_examples(
+                rejects_dir, brain_id, img_prefixes, multiscale, 0
+            )
+        )
+    return data
+
+
+def load_swc_examples(swc_dir, brain_id, img_prefixes, multiscale, label):
+    """
+    Loads SWC files, converts soma coordinates to voxel format, and reformats
+    the data for training and testing.
+
+    Parameters
+    ----------
+    swc_dir : str
+        Directory containing SWC files to be read.
+    brain_id : str
+        Unique identifier for the whole brain dataset.
+    img_prefixes : dict
+        Dictionary that maps brain IDs to image S3 prefixes.
+    multiscale : int
+        Level in the image pyramid that the voxel coordinates must index into.
+    label : int
+        Label with each SWC file.
+
+    Returns
+    -------
+    List[tuple]
+        List of tuples where each tuple contains the following:
+            - "brain_id" (str): Unique identifier for the brain.
+            - "img_path" (str): Path to image stored in S3 bucket.
+            - "voxels" (list): Voxel coordinates of proposed somas.
+            - "labels" (list): Labels corresponding to voxels.
+
+    """
+    paths, xyz_list = util.read_swc_dir(swc_dir)
+    voxels = [img_util.to_voxels(xyz, multiscale) for xyz in xyz_list]
+    data = reformat_data(
+        brain_id, img_prefixes, multiscale, voxels, label, paths
+    )
+    return data
+
+
+def reformat_data(
+    brain_id, img_prefixes, multiscale, voxels, label, paths=None
+):
+    """
+    Reformats data for training or inference by converting xyz to voxel
+    coordinates and associates them with a brain id, image path, and labels.
+
+    Parameters
+    ----------
+    brain_id : str
+        Unique identifier for the whole brain dataset.
+    img_prefixes : dict
+        Dictionary that maps brain IDs to image S3 prefixes.
+    multiscale : int
+        Level in the image pyramid that the voxel coordinates must index into.
+    voxels : List[ArrayLike]
+        List of voxel coordinates.
+    label : int
+        Label associated with the given coordinates (i.e. 1 for "accepts" and
+        0 for "rejects").
+    paths : List[str], optional
+        List of file paths corresponding to the examples in xyz_list. The
+        default is None.
+
+    Returns
+    -------
+    tuple
+        Tuple that contains the following:
+            - "brain_id" (str): Unique identifier for the brain.
+            - "img_path" (str): Path to image stored in S3 bucket.
+            - "voxels" (list): Voxel coordinates of proposed somas.
+            - "labels" (list): Labels corresponding to voxels.
+
+    """
+    img_path = img_prefixes[brain_id] + str(multiscale)
+    labels = len(voxels) * [label]
+    if paths is None:
+        return (brain_id, img_path, voxels, labels)
+    else:
+        return (brain_id, img_path, voxels, labels, paths)
+
+
 def load_examples(path):
+    """
+    Loads examples stored in a text file where each line is formatted as
+    "(brain_id, voxel)".
+
+    Parameters
+    ----------
+    path : str
+        Path to text file to be parsed.
+
+    Returns
+    -------
+    List[Tuple[str, ArrayLike]]
+        List of tuples such that each contains a "brain_id" and "voxel"
+        coordinate.
+
+    """
     examples = list()
     for line in util.read_txt(path):
         idx = line.find(",")
         brain_id = ast.literal_eval(line[1:idx])
-        voxel = ast.literal_eval(line[idx + 2: -1])[::-1]  # temp
+        voxel = ast.literal_eval(line[idx + 2: -1])
         examples.append((brain_id, voxel))
     return examples
 
 
-def fetch_smartsheet_somas(smartsheet_path, img_prefixes_path, multiscale):
+# --- Read SmartSheet ---
+def scrape_smartsheet(smartsheet_path, img_prefixes_path, multiscale):
+    """
+    Scrapes data from a Smartsheet containing soma xyz coordinates, shifts the
+    coordinate to the center of the soma, and reformats the data.
+
+    Parameters
+    ----------
+    smartsheet_path : str
+        Path to the Smartsheet file containing soma coordinates.
+    img_prefixes_path : str
+        Path to a JSON file containing image prefixes for each brain ID.
+    multiscale : int
+        Level in the image pyramid that the voxel coordinates must index into.
+
+    Returns
+    -------
+    List[tuple]
+        List of tuples containing processed soma data for each brain.
+
+    """
     # Read data
     img_prefixes = util.read_json(img_prefixes_path)
-    soma_coords = extract_somas_from_smartsheet(smartsheet_path)
+    soma_coords = extract_smartsheet_somas(smartsheet_path)
 
     # Center somas and reformat data
     data = list()
@@ -63,83 +256,7 @@ def fetch_smartsheet_somas(smartsheet_path, img_prefixes_path, multiscale):
     return data
 
 
-def fetch_exaspim_somas_2024(dataset_path, img_prefixes_path, multiscale):
-    """
-    Fetches and formats soma data for training from the exaSPIM dataset.
-
-    Parameters
-    ----------
-    dataset_path : str
-        Path to the dataset directory containing brain-specific subdirectories
-        with "accepts" and "rejects" folders.
-    img_prefixes_path : str
-        Path to a JSON file that maps brain IDs to image S3 prefixes.
-    multiscale : int, optional
-        Level in the image pyramid that the voxel coordinates must index into.
-
-    Returns
-    -------
-    List[tuple]
-        List of tuples where each tuple contains the following:
-            - "brain_id" (str): Unique identifier for the brain.
-            - "img_path" (str): Path to image stored in S3 bucket.
-            - "voxels" (list): Voxel coordinates of proposed somas.
-            - "labels" (list): Labels corresponding to voxels.
-
-    """
-    data = list()
-    img_prefixes = util.read_json(img_prefixes_path)
-    for brain_id in util.list_subdirectory_names(dataset_path):
-        # Read data
-        accepts_dir = os.path.join(dataset_path, brain_id, "accepts")
-        accepts_xyz = util.read_swc_dir(accepts_dir)
-
-        rejects_dir = os.path.join(dataset_path, brain_id, "rejects")
-        rejects_xyz = util.read_swc_dir(rejects_dir)
-
-        # Reformat data
-        data.append(
-            reformat_data(brain_id, img_prefixes, multiscale, accepts_xyz, 1)
-        )
-        data.append(
-            reformat_data(brain_id, img_prefixes, multiscale, rejects_xyz, 0)
-        )
-    return data
-
-
-def reformat_data(brain_id, img_prefixes, multiscale, xyz_list, label):
-    """
-    Reformats data for training or inference by converting xyz to voxel
-    coordinates and associates them with a brain id, image path, and labels.
-
-    Parameters
-    ----------
-    brain_id : str
-        Unique identifier for the whole brain dataset.
-    img_prefixes : dict
-        A dictionary mapping brain IDs to image S3 prefixes.
-    multiscale : int
-        Level in the image pyramid that the voxel coordinates must index into.
-    xyz_list : List[ArrayLike]
-        List of 3D xyz coordinates.
-    label : int
-        Label associated with the given coordinates (i.e. 1 for "accepts" and
-        0 for "rejects").
-
-    Returns
-    -------
-    tuple
-        Tuple containing the "brain_id", "image_path", "voxels", and "labels".
-
-    """
-    img_path = img_prefixes[brain_id] + str(multiscale)
-    voxels = [img_util.to_voxels(xyz, multiscale) for xyz in xyz_list]
-    labels = len(voxels) * [label]
-    return (brain_id, img_path, voxels, labels)
-
-
-# --- Read SmartSheet ---
-def extract_somas_from_smartsheet(path, soma_status=None):
+def extract_smartsheet_somas(path, soma_status=None):
     """
     Extracts soma coordinates from the AIND neuron reconstructions Smartsheet
     which is assumed to be stored locally as an Excel file.

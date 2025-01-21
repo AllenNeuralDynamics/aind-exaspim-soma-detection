@@ -11,10 +11,8 @@ Miscellaneous helper routines.
 from concurrent.futures import ThreadPoolExecutor
 from random import sample
 
-import ast
 import boto3
 import json
-import numpy as np
 import os
 import shutil
 
@@ -170,7 +168,7 @@ def write_list_to_file(path, my_list):
 
 
 # --- swc utils ---
-def read_swc_dir(swc_dir):
+def read_swc_dir(swc_dir, return_paths=True):
     """
     Reads all swc files in a given directory and returns the content. Note
     that each swc file is assumed to contain a single point.
@@ -179,14 +177,23 @@ def read_swc_dir(swc_dir):
     ----------
     swc_dir : str
         Path to the directory containing swc files.
+    return_paths : bool, optional
+        Indication of whether to return swc file path corresponding to each
+        xyz coordinate. The default is True.
 
     Returns
     -------
-    list
-        xyz coordinates read from swc files.
+    Tuple[list]
+        Paths to SWC files and xyz coordinates read from corresponding SWC
+        files.
 
     """
-    return [read_swc(path) for path in list_paths(swc_dir, extension=".swc")]
+    paths = list_paths(swc_dir, extension=".swc")
+    xyz_list = [read_swc(path) for path in paths]
+    if return_paths:
+        return paths, xyz_list
+    else:
+        return xyz_list
 
 
 def read_swc(path):

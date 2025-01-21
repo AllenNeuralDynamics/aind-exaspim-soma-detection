@@ -64,8 +64,10 @@ def get_patch(img, voxel, shape, from_center=True):
     valid_end = any([e < img.shape[i + 2] for i, e in enumerate(end)])
 
     # Get image patch
-    if valid_start and valid_end: 
-        return img[0, 0, start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+    if valid_start and valid_end:
+        return img[
+            0, 0, start[0]: end[0], start[1]: end[1], start[2]: end[2]
+        ]
     else:
         return np.ones(shape)
 
@@ -149,7 +151,7 @@ def to_physical(voxel, multiscale):
         Voxel coordinate to be converted.
     multiscale
         Level in the image pyramid that the voxel coordinate must index into.
-        
+
 
     Returns
     -------

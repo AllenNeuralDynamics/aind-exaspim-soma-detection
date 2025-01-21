@@ -86,7 +86,7 @@ def toCPU(tensor, return_numpy=True):
     Parameters
     ----------
     tensor : torch.Tensor
-        Input tensor that is on a GPU. 
+        Input tensor that is on a GPU.
     return_numpy : bool, optional
         Indication of whether to return the tensor as a NumPy array. The
         default is True.
