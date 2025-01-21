@@ -75,7 +75,7 @@ The goal of this step is to generate initial proposals for soma locations by det
   <b> Figure: </b>Proposals generated across a large region.
 </p>
 
-### Step 2: Filter Proposals with Heuristics
+### Step 2: Proposal Filtering
 
 The initial proposal generation step prioritizes high recall, which results in many false positives. This step leverages prior knowledge, such as the Gaussian-like appearance and expected size of somas, to filter out trivial false positives.
 
@@ -92,8 +92,7 @@ The initial proposal generation step prioritizes high recall, which results in m
   <b> Figure: </b>Examples of filtered proposals.
 </p>
 
-### Step 3: Classify Proposals with Convolutional Neural Network (CNN)
-
+### Step 3: Proposal Classification
 To do...
 
 <p>
