@@ -18,6 +18,7 @@ The soma detection pipeline consists of three main steps:
   <p>b. <strong>Proposal Filtering</strong>: Filters out trivial false positives using heuristics and prior knowledge of soma characteristics.</p>
   <p>c. <strong>Proposal Classification</strong>: Classify proposals with a convolutional neural network (CNN).</p>
 </blockquote>
+<br>
 
 <p>
   <img src="imgs/pipeline.png" width="900" alt="pipeline">
