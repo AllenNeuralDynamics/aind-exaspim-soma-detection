@@ -9,7 +9,15 @@
 
 ## Overview
 
-To do...
+This repository implements a pipeline for detecting somas in whole-brain images. It utilizes a multi-step approach to propose, filter, and classify potential soma locations. The pipeline prioritizes high recall in the initial proposal generation, followed by filtering based on prior knowledge of soma characteristics, and finally refines the proposals using a convolutional neural network (CNN) for classification.
+
+The pipeline consists of three main steps:
+
+<blockquote>
+  <p>a. <strong>Proposal Generation</strong>: Detects blob-like structures to generate initial soma proposals.</p>
+  <p>b. <strong>Proposal Filtering</strong>: Filters out trivial false positives using heuristics and prior knowledge of soma characteristics.</p>
+  <p>c. <strong>Proposal Classification</strong>: Classify proposals with a convolutional neural network (CNN).</p>
+</blockquote>
 
 <p>
   <img src="imgs/pipeline.png" width="900" alt="pipeline">
@@ -51,7 +59,7 @@ if __name__ == "__main__":
 
 ### Step 1: Proposal Generation
 
-The goal of this step is to generate initial proposals for soma locations by detecting blob-like structures in the image.
+The goal of this step is to generate initial proposals for soma locations by detecting blob-like structures in the image. The proposal generation algorithm consists of the following steps
 
 <blockquote>
   <p>a. Smooth image with Gaussian filter to reduce false positives.</p>
