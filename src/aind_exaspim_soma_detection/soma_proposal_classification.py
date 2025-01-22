@@ -4,7 +4,8 @@ Created on Wed Jan 8 3:00:00 2025
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Code that classifies soma proposals with a convolutional neural network.
+Code that classifies soma proposals from a whole-brain with a convolutional
+neural network.
 
 """
 
@@ -32,6 +33,37 @@ def classify_proposals(
     batch_size=16,
     device="cuda",
 ):
+    """
+    Classifies soma proposals using a pre-trained model and returns the
+    physical coordinates of accepted soma proposals.
+
+    Parameters
+    ----------
+    brain_id : str
+        Unique identifier for the whole brain dataset.
+    proposals : List[Tuple[float]]
+        List of proposals, where each is represented by an xyz coordinate.
+    img_prefix : str
+        Prefix (or path) of a whole brain image stored in a S3 bucket.
+    model_path : str
+        Path to the pre-trained model that is used to classify the proposals.
+    multiscale : int
+        Level in the image pyramid that the voxel coordinate must index into.
+    patch_shape : tuple of int
+        Shape of image patches to be used for inference.
+    threshold : float
+        Threshold above which a proposal is called a soma.
+    batch_size : int, optional
+        Batch size used to run inference on the proposals. The default is 16.
+    device : str, optional
+        Device to run the inference on. The default is "cuda".
+
+    Returns:
+    --------
+    List[Tuple[float]]
+        List of physical coordinates of the somas detected by the model.
+
+    """
     # Initialize dataset
     proposals = [img_util.to_voxels(p, multiscale) for p in proposals]
     dataset = ProposalDataset(patch_shape)
@@ -51,6 +83,31 @@ def classify_proposals(
 
 
 def run_inference(dataloader, model, device, verbose=True):
+    """
+    Runs inference on a given dataset using the provided model, then returns
+    the predictions and ground truth labels.
+
+    Parameters
+    ----------
+    dataloader : torch.utils.data.DataLoader
+        A DataLoader object that loads the dataset in batches.
+    model : torch.nn.Module
+        Neural network model that is used to generate predictions.
+    device : str
+        Device to run the inference on. The default is "cuda".
+    verbose : bool, optional, default=True
+        Indication of whether to display a progress bar during inference.
+
+    Returns
+    -------
+    Tuple[list]
+        Tuple that contains the following:
+            - "keys" (List[tuple]): Unique identifier for each proposal that
+               consists of the "brain_id" and "voxel" coordinate.
+            - "hat_y" (numpy.ndarray): Prediction for each proposal.
+            - "y" (numpy.ndarray): Ground truth label for each proposal.
+
+    """
     keys, hat_y, y = list(), list(), list()
     with torch.no_grad():
         model.eval()
@@ -90,5 +147,5 @@ def load_model(path, patch_shape, device):
     """
     model = FastConvNet3d(patch_shape)
     model.load_state_dict(torch.load(path, map_location=device))
-    model.to(device)
+    model = model.to(device)
     return model

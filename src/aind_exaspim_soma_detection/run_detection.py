@@ -92,7 +92,7 @@ def save_result(xyz_list, output_dir, color, prefix, radius):
     prefix : str
         Prefix string that will be added to each SWC filename.
     radius : float
-        Size of radius (in microns) for each poitn.
+        Size of radius (in microns) for each point.
 
     Returns
     -------
@@ -123,8 +123,8 @@ if __name__ == "__main__":
     # Parameters ~ Proposal Classification
     multiscale_2 = 1
     patch_shape_2 = (102, 102, 102)
-    threshold = 0.3
-    model_path = "/root/capsule/data/benchmarked_models/model_v1_conv2-5d_f1=0.9635.pth"
+    threshold = 0.2
+    model_path = "/root/capsule/data/benchmarked_models/model_v1_cosine-sch_f1=0.9667.pth"
 
     # Initializations
     prefix_lookup_path = "/root/capsule/data/exaspim_image_prefixes.json"
