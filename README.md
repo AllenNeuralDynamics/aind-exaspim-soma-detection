@@ -93,7 +93,8 @@ The initial proposal generation step prioritizes high recall, which results in m
 </p>
 
 ### Step 3: Proposal Classification
-To do...
+
+Finally, the remaining proposals are classified by a neural network that generates soma likelihoods. Proposals with a likelihood above a given threshold are "accepted" as soma locations.
 
 <p>
   <img src="imgs/detections.png" width="800" alt="detections">
