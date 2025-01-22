@@ -115,7 +115,7 @@ def load_swc_examples(swc_dir, brain_id, img_prefixes, multiscale, label):
     swc_dir : str
         Directory containing SWC files to be read.
     brain_id : str
-        Unique identifier for the whole brain dataset.
+        Unique identifier for the whole-brain dataset.
     img_prefixes : dict
         Dictionary that maps brain IDs to image S3 prefixes.
     multiscale : int
@@ -151,7 +151,7 @@ def reformat_data(
     Parameters
     ----------
     brain_id : str
-        Unique identifier for the whole brain dataset.
+        Unique identifier for the whole-brain dataset.
     img_prefixes : dict
         Dictionary that maps brain IDs to image S3 prefixes.
     multiscale : int
@@ -348,9 +348,9 @@ def shift_somas(
     Parameters
     ----------
     brain_id : str
-        Unique identifier for the whole brain dataset.
+        Unique identifier for the whole-brain dataset.
     img_prefix : str
-        Prefix (or path) of a whole brain image stored in a S3 bucket.
+        Prefix (or path) of a whole-brain image stored in a S3 bucket.
     xyz_list : List[Tuples[float]
         List of soma coordinates to process.
     multiscale : int, optional
@@ -391,7 +391,7 @@ def shift_soma(img, xyz, patch_shape, multiscale=3):
     Parameters
     ----------
     img : zarr.core.Array
-        Array representing a 3D image of a whole brain.
+        Array representing a 3D image of a whole-brain.
     xyz : tuple or list of int
         xyz coordinate of soma.
     patch_shape : Tuple[int]
