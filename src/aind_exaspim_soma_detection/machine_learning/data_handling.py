@@ -4,20 +4,27 @@ Created on Thu Dec 5 14:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines for loading data and applying data augmentation (if applicable).
+Routines for loading data during training and inference.
 
 """
 
-import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import numpy as np
-import torch
-import torchvision.transforms as transforms
-from scipy.ndimage import rotate, zoom
 from scipy.spatial import distance
 from torch.utils.data import Dataset
 
+import numpy as np
+import random
+import torch
+import torchvision.transforms as transforms
+
+from aind_exaspim_soma_detection.machine_learning.augmentation import (
+    RandomContrast3D,
+    RandomFlip3D,
+    RandomNoise3D,
+    RandomRotation3D,
+    RandomScale3D,
+)
 from aind_exaspim_soma_detection.utils import img_util
 
 
@@ -85,7 +92,6 @@ class ProposalDataset(Dataset):
                     RandomRotation3D(),
                     RandomScale3D(),
                     RandomContrast3D(),
-                    RandomBrightness3D(),
                     RandomNoise3D(),
                     lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(
                         0
@@ -112,14 +118,13 @@ class ProposalDataset(Dataset):
 
     def __getitem__(self, key):
         """
-        Gets the proposal corresponding to the given key, which consists of a
-        "brain_id" and "voxel" coordinate. The proposal includes a normalized
-        image patch centered at the voxel, along with its corresponding label.
+        Gets the image patch centered at the voxel corresponding to the given
+        key.
 
         Parameters
         ----------
         key : tuple
-            A tuple containing:
+            Unique indentifier of a proposal which is a tuple containing:
             - "brain_id" (str): Unique identifier of the brain dataset.
             - "voxel" (Tuple[int]): Voxel coordinate of proposal.
 
@@ -175,7 +180,7 @@ class ProposalDataset(Dataset):
         Returns
         -------
         dict
-            Negetaive proposals in dataset.
+            Negative proposals in dataset.
 
         """
         return dict({k: v for k, v in self.proposals.items() if not v})
@@ -213,13 +218,37 @@ class ProposalDataset(Dataset):
         return len(self.get_negatives())
 
     def ingest_proposals(
-        self, brain_id, img_prefix, voxels, labels=None, filenames=None
+        self, brain_id, img_prefix, voxels, labels=None, paths=None
     ):
+        """
+        Ingests proposals represented by voxel coordinates along with optional
+        labels and paths into the dataset.
+
+        Parameters
+        ----------
+        brain_id : str
+            Unique identifier for the whole-brain dataset.
+        img_prefix : str
+            Prefix (or path) of a whole-brain image stored in a S3 bucket.
+        voxels : List[Tuple[int]]
+            List of voxel coordinates representing the proposals.
+        labels : List[int], optional
+            List of ground truth labels corresponding to the proposals. The
+            default is None.
+        paths : List[str], optional
+            List of file paths corresponding to the proposal. The default is
+            None.
+
+        Returns
+        -------
+        None
+
+        """
         # Sanity checks
         if labels is not None:
             assert len(voxels) == len(labels), "#proposals != #labels"
-        if filenames is not None:
-            assert len(voxels) == len(filenames), "#proposals != #filenames"
+        if paths is not None:
+            assert len(voxels) == len(paths), "#proposals != #paths"
 
         # Load image (if applicable)
         if brain_id not in self.imgs:
@@ -230,10 +259,28 @@ class ProposalDataset(Dataset):
         for i, voxel in enumerate(voxels):
             key = (brain_id, tuple(voxel))
             self.proposals[key] = labels[i] if labels else -1
-            if filenames is not None:
-                self.key_to_filename[key] = filenames[i]
+            if paths is not None:
+                self.key_to_filename[key] = paths[i]
 
     def remove_proposal(self, query_key, epsilon=0):
+        """
+        Removes the proposal corresponding to the given key. Optionally,
+        removes nearby proposals within a specified distance "epsilon".
+
+        Parameters
+        ----------
+        query_key : tuple
+            Unique indentifier of a proposal which is a tuple containing:
+            - "brain_id" (str): Unique identifier of the brain dataset.
+            - "voxel" (Tuple[int]): Voxel coordinate of proposal.
+        epsilon : float, optional
+            Distance threshold used to search for nearby proposals.
+
+        Returns
+        -------
+        None
+
+        """
         # Remove if proposal exists
         if query_key in self.proposals:
             del self.proposals[query_key]
@@ -248,10 +295,42 @@ class ProposalDataset(Dataset):
                     break
 
     def visualize_proposal(self, key):
+        """
+        Plots maximum intensity projections (MIPs) of the image patch centered
+        at the proposal corresponding to the given key.
+
+        Parameters
+        ----------
+        key : tuple
+            Unique indentifier of a proposal which is a tuple containing:
+            - "brain_id" (str): Unique identifier of the brain dataset.
+            - "voxel" (Tuple[int]): Voxel coordinate of proposal.
+
+        Returns
+        -------
+        None
+
+        """
         _, img_patch, _ = self.__getitem__(key)
         img_util.plot_mips(img_patch, clip_bool=True)
 
     def visualize_augmented_proposal(self, key):
+        """
+        Plots maximum intensity projections (MIPs) of the image patch centered
+        at the given proposal key, before and after image augmentation.
+
+        Parameters
+        ----------
+        key : tuple
+            Unique indentifier of a proposal which is a tuple containing:
+            - "brain_id" (str): Unique identifier of the brain dataset.
+            - "voxel" (Tuple[int]): Voxel coordinate of proposal.
+
+        Returns
+        -------
+        None
+
+        """
         # Get image patch
         _, img_patch, _ = self.__getitem__(key)
         img_util.plot_mips(img_patch, clip_bool=True)
@@ -259,106 +338,6 @@ class ProposalDataset(Dataset):
         # Apply transforms
         img_patch = np.array(self.transform(img_patch))
         img_util.plot_mips(img_patch[0, ...], clip_bool=True)
-
-
-# --- Data Augmentation ---
-class RandomBrightness3D:
-    def __init__(self, delta=0.1):
-        self.delta = delta
-
-    def __call__(self, img):
-        factor = 1 + np.random.uniform(-self.delta, self.delta)
-        return img * factor
-
-
-class RandomContrast3D:
-    """
-    Adjusts the contrast of a 3D image by scaling voxel intensities.
-
-    """
-
-    def __init__(self, factor_range=(0.8, 1.2)):
-        self.factor_range = factor_range
-
-    def __call__(self, img):
-        factor = random.uniform(*self.factor_range)
-        return np.clip(img * factor, img.min(), img.max())
-
-
-class RandomFlip3D:
-    """
-    Randomly flip a 3D image along one or more axes.
-
-    """
-
-    def __init__(self, axes=(0, 1, 2)):
-        self.axes = axes
-
-    def __call__(self, img):
-        for axis in self.axes:
-            if random.random() > 0.5:
-                img = np.flip(img, axis=axis)
-        return img
-
-
-class RandomNoise3D:
-    """
-    Adds random Gaussian noise to a 3D image.
-
-    """
-
-    def __init__(self, mean=0.0, std=0.025):
-        self.mean = mean
-        self.std = std
-
-    def __call__(self, img):
-        noise = np.random.normal(self.mean, self.std, img.shape)
-        return img + noise
-
-
-class RandomRotation3D:
-    """
-    Applies random rotation to a 3D image along a randomly chosen axis.
-
-    """
-
-    def __init__(self, angles=(-45, 45), axes=((0, 1), (0, 2), (1, 2))):
-        self.angles = angles
-        self.axes = axes
-
-    def __call__(self, img, mode="grid-mirror"):
-        for axis in self.axes:
-            angle = random.uniform(*self.angles)
-            img = rotate(
-                img, angle, axes=axis, mode=mode, reshape=False, order=1
-            )
-        return img
-
-
-class RandomScale3D:
-    """
-    Applies random scaling to an image along each axis.
-
-    """
-
-    def __init__(self, scale_range=(0.9, 1.1)):
-        self.scale_range = scale_range
-
-    def __call__(self, img):
-        # Sample new image shape
-        alpha = np.random.uniform(self.scale_range[0], self.scale_range[1])
-        new_shape = (
-            int(img.shape[0] * alpha),
-            int(img.shape[1] * alpha),
-            int(img.shape[2] * alpha),
-        )
-
-        # Compute the zoom factors
-        shape = img.shape
-        zoom_factors = [
-            new_dim / old_dim for old_dim, new_dim in zip(shape, new_shape)
-        ]
-        return zoom(img, zoom_factors, order=3)
 
 
 # --- Custom Dataloader ---
@@ -369,9 +348,9 @@ class MultiThreadedDataLoader:
 
     """
 
-    def __init__(self, dataset, batch_size):
+    def __init__(self, dataset, batch_size, shuffle=True):
         """
-        Constructs a multithreaded data loading object.
+        Constructs a multithreaded data loader.
 
         Parameters
         ----------
@@ -390,10 +369,36 @@ class MultiThreadedDataLoader:
         self.n_rounds = len(dataset) // batch_size
 
     def __iter__(self):
+        """
+        Returns an iterator for the data loader, providing the functionality
+        to iterate over the whole dataset.
+
+        Returns
+        -------
+        iterator
+            Iterator for the data loader.
+
+        """
         return self.DataLoaderIterator(self)
 
     class DataLoaderIterator:
+        """
+        Custom iterator class for iterating over the dataset in the data
+        loader.
+
+        """
+
         def __init__(self, dataloader):
+            """
+            Initializes the "DataLoaderIterator" object for custom iteration
+            over the dataset.
+
+            Parameters
+            ----------
+            MultiThreadedDataLoader
+                Data loader instance that this iterator is associated with.
+
+            """
             self.current_index = 0
             self.batch_size = dataloader.batch_size
             self.dataloader = dataloader
@@ -402,9 +407,38 @@ class MultiThreadedDataLoader:
             np.random.shuffle(self.keys)
 
         def __iter__(self):
+            """
+            Returns the iterator object for custom iteration over the dataset.
+
+            Returns
+            -------
+            DataLoaderIterator
+                Iterator object itself.
+
+            """
             return self
 
         def __next__(self):
+            """
+            Retrieves the next batch of image patches and their corresponding
+            labels from the dataset.
+
+            Parameters
+            ----------
+            None
+
+            Returns
+            -------
+            tuple
+                A tuple containing the following:
+                - "keys" (list): List of keys corresponding to the current
+                  batch of proposals.
+                - "patches" (torch.Tensor): Image patches from the dataset
+                  with the shape (self.batch_size, 1, H, W, D).
+                - "labels" (torch.Tensor): Labels corresponding to the image
+                   patches with the shape (self.batch_size, 1).
+
+            """
             # Check whether to stop
             if self.current_index >= len(self.keys):
                 raise StopIteration
