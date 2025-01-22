@@ -25,7 +25,6 @@ The soma detection pipeline consists of three main steps:
   <br>
   <b> Figure: </b>Visualization of soma detection pipeline, see Inference section for description of each step.
 </p>
-<br>
 
 ## Usage
 
