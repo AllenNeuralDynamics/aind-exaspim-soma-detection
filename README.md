@@ -36,14 +36,14 @@ if __name__ == "__main__":
     brain_id = "unique-identifier-of-dataset"
     img_prefix = "path-to-image"
 
-    # Parameters ~ Proposal Generation
+    # Parameters - Proposal Generation
     multiscale_1 = 4
     patch_shape_1 = (64, 64, 64)
     bright_threshold = 100
     overlap = (28, 28, 28)
     save_proposals_bool = True
 
-    # Parameters ~ Proposal Classification
+    # Parameters - Proposal Classification
     multiscale_2 = 1
     patch_shape_2 = (102, 102, 102)
     accept_threshold = 0.4
