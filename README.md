@@ -27,6 +27,8 @@ The soma detection pipeline consists of three main steps:
 </p>
 <br>
 
+## Usage
+
 Here is an example of calling the main routine to run the full pipeline.
 
 ```python
