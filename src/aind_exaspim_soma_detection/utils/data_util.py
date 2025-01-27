@@ -105,7 +105,9 @@ def fetch_exaspim_somas_2024(dataset_path, img_prefixes_path, multiscale):
     return data
 
 
-def load_swc_examples(swc_dir, brain_id, img_prefixes, multiscale, label):
+def load_swc_examples(
+    swc_dir, brain_id, img_prefixes, multiscale, label=None
+):
     """
     Loads SWC files, converts soma coordinates to voxel format, and reformats
     the data for training and testing.
@@ -120,8 +122,8 @@ def load_swc_examples(swc_dir, brain_id, img_prefixes, multiscale, label):
         Dictionary that maps brain IDs to image S3 prefixes.
     multiscale : int
         Level in the image pyramid that the voxel coordinates must index into.
-    label : int
-        Label with each SWC file.
+    label : int, optional
+        Label with each SWC file. The default is None.
 
     Returns
     -------
@@ -176,7 +178,7 @@ def reformat_data(
 
     """
     img_path = img_prefixes[brain_id] + str(multiscale)
-    labels = len(voxels) * [label]
+    labels = len(voxels) * [label] if label else None
     if paths is None:
         return (brain_id, img_path, voxels, labels)
     else:
@@ -273,7 +275,7 @@ def extract_smartsheet_somas(path, soma_status=None):
 
     Returns
     -------
-    Dict[(str, list)]
+    dict
         Dictionary where the keys are brain IDs and values are lists of soma
         coordinates extracted from the sheet.
 

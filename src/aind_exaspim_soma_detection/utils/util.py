@@ -8,7 +8,7 @@ Miscellaneous helper routines.
 
 """
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import as_completed, ThreadPoolExecutor
 from random import sample
 
 import boto3
@@ -168,18 +168,15 @@ def write_list_to_file(path, my_list):
 
 
 # --- swc utils ---
-def read_swc_dir(swc_dir, return_paths=True):
+def read_swc_dir(swc_dir):
     """
-    Reads all swc files in a given directory and returns the content. Note
-    that each swc file is assumed to contain a single point.
+    Reads all SWC files in a given directory and returns the content. Note
+    that each SWC file is assumed to contain a single point.
 
     Parameters
     ----------
     swc_dir : str
-        Path to the directory containing swc files.
-    return_paths : bool, optional
-        Indication of whether to return swc file path corresponding to each
-        xyz coordinate. The default is True.
+        Path to the directory containing SWC files.
 
     Returns
     -------
@@ -188,12 +185,20 @@ def read_swc_dir(swc_dir, return_paths=True):
         files.
 
     """
-    paths = list_paths(swc_dir, extension=".swc")
-    xyz_list = [read_swc(path) for path in paths]
-    if return_paths:
-        return paths, xyz_list
-    else:
-        return xyz_list
+    with ThreadPoolExecutor() as executor:
+        # Assign threads
+        threads = list()
+        for path in list_paths(swc_dir, extension=".swc"):
+            threads.append(executor.submit(read_swc, path))
+
+        # Process results
+        path_list = list()
+        xyz_list = list()
+        for thread in as_completed(threads):
+            path, xyz = thread.result()
+            path_list.append(path)
+            xyz_list.append(xyz)
+        return path_list, xyz_list
 
 
 def read_swc(path):
@@ -223,7 +228,7 @@ def read_swc(path):
 
     # Extract xyz coordinate
     xyz_str = line.split()[2:5]
-    return [float(xyz_str[i]) + offset[i] for i in range(3)]
+    return path, [float(xyz_str[i]) + offset[i] for i in range(3)]
 
 
 def write_points(output_dir, points, color=None, prefix="", radius=20):
@@ -265,14 +270,14 @@ def write_points(output_dir, points, color=None, prefix="", radius=20):
 
 def write_point(path, xyz, radius=5, color=None):
     """
-    Writes an swc file.
+    Writes an SWC file.
 
     Parameters
     ----------
     path : str
-        Path on local machine that swc file will be written to.
+        Path on local machine that SWC file will be written to.
     xyz : ArrayLike
-        xyz coordinate to be written to an swc file.
+        xyz coordinate to be written to an SWC file.
     radius : float, optional
         Radius of point. The default is 5um.
     color : str, optional
