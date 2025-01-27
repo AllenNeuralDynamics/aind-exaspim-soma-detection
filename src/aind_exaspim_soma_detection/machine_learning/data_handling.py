@@ -116,7 +116,7 @@ class ProposalDataset(Dataset):
         """
         return len(self.proposals)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key, normalize=True):
         """
         Gets the image patch centered at the voxel corresponding to the given
         key.
@@ -127,6 +127,9 @@ class ProposalDataset(Dataset):
             Unique indentifier of a proposal which is a tuple containing:
             - "brain_id" (str): Unique identifier of the brain dataset.
             - "voxel" (Tuple[int]): Voxel coordinate of proposal.
+        normalize : bool
+            Indication of whether to normalize the img_patch corresponding to
+            the given key.
 
         Returns:
         --------
@@ -147,9 +150,9 @@ class ProposalDataset(Dataset):
             img_patch = img_util.get_patch(
                 self.imgs[brain_id], voxel, self.patch_shape
             )
-            img_patch = img_util.normalize(img_patch)
+            if normalize:
+                img_patch = img_util.normalize(img_patch)
         except:
-            print(voxel, self.imgs[brain_id].shape)
             img_patch = np.ones(self.patch_shape)
         return key, img_patch, self.proposals[key]
 
@@ -258,7 +261,7 @@ class ProposalDataset(Dataset):
         # Load proposal voxel coordinates
         for i, voxel in enumerate(voxels):
             key = (brain_id, tuple(voxel))
-            self.proposals[key] = labels[i] if labels else -1
+            self.proposals[key] = -1 if labels is None else labels[i]
             if paths is not None:
                 self.key_to_filename[key] = paths[i]
 
@@ -311,7 +314,7 @@ class ProposalDataset(Dataset):
         None
 
         """
-        _, img_patch, _ = self.__getitem__(key)
+        _, img_patch, _ = self[key]
         img_util.plot_mips(img_patch, clip_bool=True)
 
     def visualize_augmented_proposal(self, key):
@@ -332,7 +335,7 @@ class ProposalDataset(Dataset):
 
         """
         # Get image patch
-        _, img_patch, _ = self.__getitem__(key)
+        _, img_patch, _ = self[key]
         img_util.plot_mips(img_patch, clip_bool=True)
 
         # Apply transforms
