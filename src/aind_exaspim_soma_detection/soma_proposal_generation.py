@@ -419,22 +419,18 @@ def gaussian_fitness(img_patch):
         Fitness score and parameters of the fitted Gaussian.
 
     """
-    # Generate coordinates
-    shape = img_patch.shape
-    xyz = [np.linspace(0, shape[i], shape[i]) for i in range(3)]
-    x, y, z = np.meshgrid(xyz[0], xyz[1], xyz[2], indexing="ij")
-
     # Initialize guess for parameters
+    shape = img_patch.shape
     amplitude, offset = np.max(img_patch), np.min(img_patch)
     x0, y0, z0 = shape[0] // 2, shape[1] // 2, shape[2] // 2
     p0 = (x0, y0, z0, 2, 2, 2, amplitude, offset)
 
     # Fit Gaussian
-    img_vals = img_patch.ravel()
-    xyz = (x.ravel(), y.ravel(), z.ravel())
     try:
-        params, _ = curve_fit(gaussian_3d, xyz, img_vals, p0=p0)
-        return fitness_score(img_vals, xyz, params), params
+        img_vals = img_patch.ravel()
+        voxels = generate_grid_coords(shape)
+        params, _ = curve_fit(gaussian_3d, voxels, img_vals, p0=p0)
+        return fitness_score(img_vals, voxels, params), params
     except RuntimeError:
         return 0, np.zeros((9))
 
@@ -525,3 +521,27 @@ def is_inbounds(shape, voxel, margin):
         if voxel[i] < margin or voxel[i] > shape[i] - margin:
             return False
     return True
+
+
+def generate_grid_coords(shape):
+    """
+    Generates a 3D grid of coordinates based on the input shape, then returns
+    the coordinates flattened as 1D arrays.
+
+    Parameters
+    ----------
+    shape : Tuple[int]
+        Shape of rectangular 3D region to generate coordinates for.
+
+    Returns
+    -------
+    Tuple[numpy.ndarray]
+        A tuple containing the following:
+        - x (numpy.ndarray): 1D array of x-coordinates.
+        - y (numpy.ndarray): 1D array of y-coordinates.
+        - z (numpy.ndarray): 1D array of z-coordinates.
+
+    """
+    xyz = [np.linspace(0, shape[i], shape[i]) for i in range(3)]
+    x, y, z = np.meshgrid(xyz[0], xyz[1], xyz[2], indexing="ij")
+    return x.ravel(), y.ravel(), z.ravel()

@@ -37,9 +37,9 @@ def main():
     None
 
     """
-    # Part 1: Generate Soma Proposals
+    # Step 1: Generate Soma Proposals
     t0 = time()
-    print("\nPart 1: Generate Soma Proposals")
+    print("\nStep 1: Generate Soma Proposals")
     img_prefix = img_prefixes[brain_id] + str(multiscale_1)
     proposals = spg.generate_proposals(
         img_prefix,
@@ -55,9 +55,9 @@ def main():
         output_dir = "/root/capsule/results/proposals"
         save_result(proposals, output_dir, "0.0 0.0 1.0", "proposal_", 20)
 
-    # Part 2: Classify Soma Proposals
+    # Step 2: Classify Soma Proposals
     t0 = time()
-    print("\nPart 2: Classify Soma Proposals")
+    print("\nStep 2: Classify Soma Proposals")
     img_prefix = img_prefixes[brain_id] + str(multiscale_2)
     somas = spc.classify_proposals(
         brain_id,
@@ -110,20 +110,20 @@ def save_result(xyz_list, output_dir, color, prefix, radius):
 
 if __name__ == "__main__":
     # Parameters
-    brain_id = "721830"
+    brain_id = "715345"
     save_proposals_bool = True
     save_somas_bool = True
 
-    # Parameters ~ Proposal Generation
+    # Parameters - Proposal Generation
     multiscale_1 = 4
     patch_shape_1 = (64, 64, 64)
     bright_threshold = 120
     overlap = (28, 28, 28)
 
-    # Parameters ~ Proposal Classification
+    # Parameters - Proposal Classification
     multiscale_2 = 1
     patch_shape_2 = (102, 102, 102)
-    threshold = 0.2
+    threshold = 0.5
     model_path = "/root/capsule/data/benchmarked_models/model_v1_cosine-sch_f1=0.9667.pth"
 
     # Initializations
