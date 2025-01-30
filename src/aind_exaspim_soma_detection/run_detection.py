@@ -12,6 +12,7 @@ image dataset.
 from scipy.optimize import OptimizeWarning
 from time import time
 
+import os
 import warnings
 
 from aind_exaspim_soma_detection import soma_proposal_classification as spc
@@ -37,10 +38,15 @@ def main():
     None
 
     """
+    # Run pipeline
     print("\nBrain_ID:", brain_id)
     proposals = generate_proposals()
-    accepted_proposals = classify_proposals(proposals)
-    return filter_accepts(accepted_proposals)
+    accepts = classify_proposals(proposals)
+    filtered_accepts = filter_accepts(accepts)
+
+    # Save result
+    path = os.path.join(output_dir, f"somas-xyz-{brain_id}.txt")
+    util.write_list_to_file(path, filtered_accepts)
 
 
 def generate_proposals():
@@ -74,7 +80,7 @@ def generate_proposals():
     print(f"Runtime: {round(t, 4)} {unit}")
     if save_proposals:
         util.write_points(
-            f"/root/capsule/results/{brain_id}/proposals",
+            os.path.join(output_dir, "proposals"),
             proposals,
             color="0.0 1.0 0.0",
             prefix="proposal_",
@@ -101,7 +107,7 @@ def classify_proposals(proposals):
     t0 = time()
     print("\nStep 3: Classify Proposals")
     img_prefix = img_prefixes[brain_id] + str(multiscale_2)
-    accepted_proposals = spc.classify_proposals(
+    accepts = spc.classify_proposals(
         brain_id,
         proposals,
         img_prefix,
@@ -113,28 +119,28 @@ def classify_proposals(proposals):
     t, unit = util.time_writer(time() - t0)
 
     # Report results
-    print("\n# Somas Detected:", len(accepted_proposals))
-    print("% Proposals Accepted:", len(accepted_proposals) / len(proposals))
+    print("\n# Proposals Accepted:", len(accepts))
+    print("% Proposals Accepted:", round(len(accepts) / len(proposals), 4))
     print(f"Runtime: {round(t, 4)} {unit}")
     if save_accepts:
         util.write_points(
-            f"/root/capsule/results/{brain_id}/accepts",
-            accepted_proposals,
+            os.path.join(output_dir, "accepts"),
+            accepts,
             color="0.0 0.0 1.0",
             prefix="accept_",
             radius=20,
         )
-    return accepted_proposals
+    return accepts
 
 
-def filter_accepts(accepted_proposals):
+def filter_accepts(accepts):
     """
     Filters a list of accpeted soma proposals and saves the results if
     applicable.
 
     Parameters
     ----------
-    accepted_proposals : List[Tuple[float]]
+    accepts : List[Tuple[float]]
         List of accepted proposals, where each is represented by an xyz
         coordinate.
 
@@ -148,29 +154,27 @@ def filter_accepts(accepted_proposals):
     print("\nStep 4: Filter Accepted Proposals")
     img_prefix = img_prefixes[brain_id] + str(multiscale_3)
     filtered_accepts = spc.branchiness_filtering(
-        img_prefix, accepted_proposals, patch_shape_3
+        img_prefix, accepts, multiscale_3, patch_shape_3
     )
     t, unit = util.time_writer(time() - t0)
 
     # Report results
-    n = len(filtered_accepts)
-    print("\n# Somas Detected:", n)
-    print("% Proposals Accepted:", n / len(accepted_proposals))
+    print("# Filtered Accepts:", len(filtered_accepts))
     print(f"Runtime: {round(t, 4)} {unit}")
     if save_filtered_accepts:
         util.write_points(
-            f"/root/capsule/results/{brain_id}/filtered_accepts",
+            os.path.join(output_dir, "filtered_accepts"),
             filtered_accepts,
             color="1.0 0.0 0.0",
-            prefix="soma_",
             radius=25,
         )
+    return filtered_accepts
 
 
 if __name__ == "__main__":
     # Parameters
     brain_id = "730902"
-    save_proposals = True
+    save_proposals = False
     save_accepts = True
     save_filtered_accepts = True
 
@@ -186,14 +190,15 @@ if __name__ == "__main__":
     threshold = 0.9
     model_path = "/root/capsule/data/benchmarked_models/model_v1_cosine-sch_f1=0.9667.pth"
 
-    # Parameters - Accpeted Proposal Filtering
-    multiscale_3 = 2
-    patch_shape_3 = (48, 48, 48)
+    # Parameters - Accepted Proposal Filtering
+    multiscale_3 = 3
+    patch_shape_3 = (36, 36, 36)
 
     # Initializations
     prefix_lookup_path = "/root/capsule/data/exaspim_image_prefixes.json"
     img_prefixes = util.read_json(prefix_lookup_path)
-    util.mkdir(f"/root/capsule/results/{brain_id}", delete=True)
+    output_dir = f"/root/capsule/results/soma-detection-{brain_id}"
+    util.mkdir(output_dir, delete=True)
 
     # Main
     main()
