@@ -210,12 +210,12 @@ def read_swc(path):
     Parameters
     ----------
     path : str
-        Path to an swc file.
+        Path to an SWC file.
 
     Returns
     -------
     List[float]
-        xyz coordinate stored in swc file.
+        xyz coordinate stored in SWC file.
 
     """
     # Parse commented section

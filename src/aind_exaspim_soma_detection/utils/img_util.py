@@ -294,6 +294,67 @@ def get_detections_img(shape, voxels):
 
 
 # --- Utils ---
+def get_nbs(voxel, shape):
+    """
+    Gets the neighbors of a given voxel in a 3D grid with respect to
+    26-connectivity.
+
+    Parameters
+    ----------
+    voxel : Tuple[int]
+        Voxel coordinate for which neighbors are to be found.
+    shape : Tuple[int]
+        Shape of the 3D grid. This is used to ensure that neighbors are
+        within the grid boundaries.
+
+    Returns
+    -------
+    List[Tuple[int]]
+        Voxel coordinates of the neighboring voxels.
+
+    """
+    x, y, z = voxel
+    nbs = []
+    for dx in [-1, 0, 1]:
+        for dy in [-1, 0, 1]:
+            for dz in [-1, 0, 1]:
+                # Skip the given voxel
+                if dx == 0 and dy == 0 and dz == 0:
+                    continue
+
+                # Add neighbor
+                nb = (x + dx, y + dy, z + dz)
+                if is_inbounds(nb, shape):
+                    nbs.append(nb)
+    return nbs
+
+
+def is_inbounds(voxel, shape):
+    """
+    Checks if a given voxel is within the bounds of a 3D grid.
+
+    Parameters
+    ----------
+    voxel : Tuple[int]
+        Voxel coordinate to be checked.
+    shape : Tuple[int]
+        Shape of the 3D grid.
+
+    Returns
+    -------
+    bool
+        Indication of whether the given voxel is within the bounds of the
+        grid.
+
+    """
+    x, y, z = voxel
+    height, width, depth = shape
+    if 0 <= x < height and 0 <= y < width and 0 <= z < depth:
+        return True
+    else:
+        return False
+
+
 def normalize(img_patch):
     """
     Rescales the input image to a [0, 1] intensity range.
@@ -315,16 +376,16 @@ def normalize(img_patch):
 
 def rescale(img_patch, clip_bool=True):
     """
-    Rescales the input image to a [0, 65535] intensity range, with optional
-    clipping of extreme values.
+    Rescales the input image to a [0, 2**16 - 1] intensity range, with optional
+    clipping at the 99th percentile.
 
     Parameters
     ----------
     img_patch : numpy.ndarray
         Image patch to be rescaled.
     clip_bool : bool, optional
-        If True, the resulting MIP will be clipped to the range [0, 1] during
-        rescaling. If False, no clipping is applied. The default is False.
+        If True, the resulting MIP will be clipped at the 99th percentile. The
+        default is True.
 
     Returns
     -------
