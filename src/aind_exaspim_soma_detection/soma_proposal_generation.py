@@ -60,7 +60,7 @@ def generate_proposals(
     overlap : int
         Overlap between adjacent image patches in each dimension.
     multiscale : int
-        Level in the image pyramid that patches are read from.
+        Level in the image pyramid that image patches are read from.
     patch_shape : Tuple[int]
         Shape of each image patch.
     bright_threshold : int, optional
@@ -130,7 +130,7 @@ def generate_proposals_patch(
     patch_shape : List[int]
         Shape of the image patch to be extracted from "img".
     multiscale : int
-        Level in the image pyramid that the voxel coordinate must index into.
+        Level in the image pyramid that image patches are read from.
     bright_threshold : int, optional
         Minimum brightness required for image patch. The default is 160.
 
@@ -403,7 +403,7 @@ def gaussian_fitness_filtering(img_patch, proposals, r=4, min_score=0.7):
     return filtered_proposals
 
 
-def gaussian_fitness(img_patch):
+def gaussian_fitness(img_patch, r=2.0):
     """
     Fits a 3D Gaussian to an image patch and computes a score that represents
     how well the fitted Gaussian approximates the image patch.
@@ -412,6 +412,9 @@ def gaussian_fitness(img_patch):
     ----------
     img_patch : numpy.ndarray
         A 3D image that Gaussian is to be fitted to.
+    r : float, optional
+        Estimate of standard devation of Gaussian to be fit. The default is
+        2.0.
 
     Returns
     -------
@@ -423,7 +426,7 @@ def gaussian_fitness(img_patch):
     shape = img_patch.shape
     amplitude, offset = np.max(img_patch), np.min(img_patch)
     x0, y0, z0 = shape[0] // 2, shape[1] // 2, shape[2] // 2
-    p0 = (x0, y0, z0, 2, 2, 2, amplitude, offset)
+    p0 = (x0, y0, z0, r, r, r, amplitude, offset)
 
     # Fit Gaussian
     try:

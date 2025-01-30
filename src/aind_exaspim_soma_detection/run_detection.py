@@ -25,8 +25,8 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 def main():
     """
-    Runs the soma proposal and classification pipeline for a whole-brain image
-    dataset.
+    Runs the soma proposal generation and classification pipeline for a
+    whole-brain image dataset.
 
     Parameters
     ----------
@@ -37,9 +37,28 @@ def main():
     None
 
     """
-    # Step 1: Generate Soma Proposals
+    print("\nBrain_ID:", brain_id)
+    proposals = generate_proposals()
+    accepted_proposals = classify_proposals(proposals)
+    return filter_accepts(accepted_proposals)
+
+
+def generate_proposals():
+    """
+    Generates soma proposals and saves the results if applicable.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+
+    """
+    # Main
     t0 = time()
-    print("\nStep 1: Generate Soma Proposals")
+    print("\nSteps 1-2: Generate and Filter Proposals")
     img_prefix = img_prefixes[brain_id] + str(multiscale_1)
     proposals = spg.generate_proposals(
         img_prefix,
@@ -49,17 +68,40 @@ def main():
         bright_threshold=bright_threshold,
     )
     t, unit = util.time_writer(time() - t0)
+
+    # Report results
     print("\n# Proposals Generated:", len(proposals))
     print(f"Runtime: {round(t, 4)} {unit}")
-    if save_proposals_bool:
-        output_dir = "/root/capsule/results/proposals"
-        save_result(proposals, output_dir, "0.0 0.0 1.0", "proposal_", 20)
+    if save_proposals:
+        util.write_points(
+            f"/root/capsule/results/{brain_id}/proposals",
+            proposals,
+            color="0.0 1.0 0.0",
+            prefix="proposal_",
+            radius=15,
+        )
+    return proposals
 
-    # Step 2: Classify Soma Proposals
+
+def classify_proposals(proposals):
+    """
+    Classifies a list of soma proposals and saves the results if applicable.
+
+    Parameters
+    ----------
+    proposals : List[Tuple[float]]
+        List of proposals, where each is represented by an xyz coordinate.
+
+    Returns
+    -------
+    None
+
+    """
+    # Main
     t0 = time()
-    print("\nStep 2: Classify Soma Proposals")
+    print("\nStep 3: Classify Proposals")
     img_prefix = img_prefixes[brain_id] + str(multiscale_2)
-    somas = spc.classify_proposals(
+    accepted_proposals = spc.classify_proposals(
         brain_id,
         proposals,
         img_prefix,
@@ -69,50 +111,68 @@ def main():
         threshold,
     )
     t, unit = util.time_writer(time() - t0)
-    print("\n# Somas Detected:", len(somas))
-    print("% Proposals Accepted:", len(somas) / len(proposals))
+
+    # Report results
+    print("\n# Somas Detected:", len(accepted_proposals))
+    print("% Proposals Accepted:", len(accepted_proposals) / len(proposals))
     print(f"Runtime: {round(t, 4)} {unit}")
-    if save_proposals_bool:
-        output_dir = "/root/capsule/results/somas"
-        save_result(somas, output_dir, "1.0 0.0 0.0", "soma_", 25)
+    if save_accepts:
+        util.write_points(
+            f"/root/capsule/results/{brain_id}/accepts",
+            accepted_proposals,
+            color="0.0 0.0 1.0",
+            prefix="accept_",
+            radius=20,
+        )
+    return accepted_proposals
 
 
-def save_result(xyz_list, output_dir, color, prefix, radius):
+def filter_accepts(accepted_proposals):
     """
-    Saves a list of xyz coordinates as SWC files in a given directory.
+    Filters a list of accpeted soma proposals and saves the results if
+    applicable.
 
     Parameters
     ----------
-    xyz_list : List[Tuple[float]]
-        List of xyz coordinates to be written to an SWC file.
-    output_dir : str
-        Directory where the SWC files will be saved.
-    color : str
-        String representing the RGB color for the points.
-    prefix : str
-        Prefix string that will be added to each SWC filename.
-    radius : float
-        Size of radius (in microns) for each point.
+    accepted_proposals : List[Tuple[float]]
+        List of accepted proposals, where each is represented by an xyz
+        coordinate.
 
     Returns
     -------
     None
 
     """
-    util.write_points(
-        output_dir,
-        xyz_list,
-        color=color,
-        prefix=prefix,
-        radius=radius,
+    # Main
+    t0 = time()
+    print("\nStep 4: Filter Accepted Proposals")
+    img_prefix = img_prefixes[brain_id] + str(multiscale_3)
+    filtered_accepts = spc.branchiness_filtering(
+        img_prefix, accepted_proposals, patch_shape_3
     )
+    t, unit = util.time_writer(time() - t0)
+
+    # Report results
+    n = len(filtered_accepts)
+    print("\n# Somas Detected:", n)
+    print("% Proposals Accepted:", n / len(accepted_proposals))
+    print(f"Runtime: {round(t, 4)} {unit}")
+    if save_filtered_accepts:
+        util.write_points(
+            f"/root/capsule/results/{brain_id}/filtered_accepts",
+            filtered_accepts,
+            color="1.0 0.0 0.0",
+            prefix="soma_",
+            radius=25,
+        )
 
 
 if __name__ == "__main__":
     # Parameters
-    brain_id = "715345"
-    save_proposals_bool = True
-    save_somas_bool = True
+    brain_id = "730902"
+    save_proposals = True
+    save_accepts = True
+    save_filtered_accepts = True
 
     # Parameters - Proposal Generation
     multiscale_1 = 4
@@ -123,13 +183,17 @@ if __name__ == "__main__":
     # Parameters - Proposal Classification
     multiscale_2 = 1
     patch_shape_2 = (102, 102, 102)
-    threshold = 0.5
+    threshold = 0.9
     model_path = "/root/capsule/data/benchmarked_models/model_v1_cosine-sch_f1=0.9667.pth"
+
+    # Parameters - Accpeted Proposal Filtering
+    multiscale_3 = 2
+    patch_shape_3 = (48, 48, 48)
 
     # Initializations
     prefix_lookup_path = "/root/capsule/data/exaspim_image_prefixes.json"
     img_prefixes = util.read_json(prefix_lookup_path)
+    util.mkdir(f"/root/capsule/results/{brain_id}", delete=True)
 
     # Main
-    print("\nBrain_ID:", brain_id)
     main()
