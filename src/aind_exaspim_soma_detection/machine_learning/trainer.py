@@ -33,13 +33,13 @@ class FocalLoss(nn.Module):
 
     def __init__(self, alpha=0.5, gamma=2.0):
         """
-        Initializes the Focal Loss module with given alpha and gamma.
+        Initializes a Focal Loss module for a given alpha and gamma.
 
         Parameters
         ----------
         alpha : float, optional
             Factor that controls the balance between positive and negative
-            examples. The default is 0.5.        
+            examples. The default is 0.5.
         gamma : float, optional
             Focusing parameter that controls the rate at which easy examples
             are down-weighted. The default is 2.0.
