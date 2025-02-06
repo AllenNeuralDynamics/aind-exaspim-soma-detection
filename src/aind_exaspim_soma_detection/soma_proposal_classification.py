@@ -60,7 +60,8 @@ def classify_proposals(
     batch_size : int, optional
         Batch size used to run inference on the proposals. The default is 16.
     device : str, optional
-        Device to run the inference on. The default is "cuda".
+        Name of device where model should be loaded and run. The default is
+        "cuda".
 
     Returns:
     --------
@@ -94,13 +95,14 @@ def run_inference(dataloader, model, device, verbose=True):
     Parameters
     ----------
     dataloader : torch.utils.data.DataLoader
-        A DataLoader object that loads the dataset in batches.
+        DataLoader object that loads the dataset in batches.
     model : torch.nn.Module
         Neural network model that is used to generate predictions.
     device : str
-        Device to run the inference on. The default is "cuda".
+        Name of device where model should be loaded and run.
     verbose : bool, optional, default=True
-        Indication of whether to display a progress bar during inference.
+        Indication of whether to display a progress bar during inference. The
+        default is True.
 
     Returns
     -------
@@ -116,8 +118,8 @@ def run_inference(dataloader, model, device, verbose=True):
     with torch.no_grad():
         model.eval()
         n = dataloader.n_rounds
-        iterator = tqdm(dataloader, total=n) if verbose else dataloader
-        for keys_i, x_i, y_i in iterator:
+        iter = tqdm(dataloader, total=n, dynamic_ncols=True) if verbose else dataloader
+        for keys_i, x_i, y_i in iter:
             # Forward pass
             x_i = x_i.to(device)
             hat_y_i = torch.sigmoid(model(x_i))
@@ -212,9 +214,9 @@ def is_branchy(img, voxel, patch_shape):
     mean = tuple(params[0:3].astype(int))
 
     # Branchiness Check
-    branch_dist = max(2 * np.sqrt(3 * np.min(params[3:6]**2)), 10)
+    branch_dist = max(2.5 * np.sqrt(3 * np.min(params[3:6]**2)), 8)
     if branch_dist < patch_shape[0] // 2 - 1 and branch_dist > 0:
-        img_patch = exposure.equalize_adapthist(img_patch, nbins=5)
+        img_patch = exposure.equalize_adapthist(img_patch, nbins=6)
         if branch_search(img_patch, mean, branch_dist):
             return True, voxel
         else:

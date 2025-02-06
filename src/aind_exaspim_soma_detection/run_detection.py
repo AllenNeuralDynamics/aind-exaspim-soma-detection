@@ -114,7 +114,7 @@ def classify_proposals(proposals):
         model_path,
         multiscale_2,
         patch_shape_2,
-        threshold,
+        accept_threshold,
     )
     t, unit = util.time_writer(time() - t0)
 
@@ -173,7 +173,7 @@ def filter_accepts(accepts):
 
 if __name__ == "__main__":
     # Parameters
-    brain_id = "730902"
+    brain_id = "709222"
     save_proposals = False
     save_accepts = True
     save_filtered_accepts = True
@@ -187,7 +187,7 @@ if __name__ == "__main__":
     # Parameters - Proposal Classification
     multiscale_2 = 1
     patch_shape_2 = (102, 102, 102)
-    threshold = 0.9
+    accept_threshold = 0.9
     model_path = "/root/capsule/data/benchmarked_models/model_v1_cosine-sch_f1=0.9667.pth"
 
     # Parameters - Accepted Proposal Filtering
@@ -197,7 +197,7 @@ if __name__ == "__main__":
     # Initializations
     prefix_lookup_path = "/root/capsule/data/exaspim_image_prefixes.json"
     img_prefixes = util.read_json(prefix_lookup_path)
-    output_dir = f"/root/capsule/results/soma-detection-{brain_id}"
+    output_dir = f"/root/capsule/scratch/soma-detection-{brain_id}"
     util.mkdir(output_dir, delete=True)
 
     # Main

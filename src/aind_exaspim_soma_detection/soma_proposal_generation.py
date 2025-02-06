@@ -97,12 +97,12 @@ def generate_proposals(
 
         # Process thread
         proposals = list()
-        pbar = tqdm(total=len(threads))
+        pbar = tqdm(total=len(threads), dynamic_ncols=True)
         for thread in as_completed(threads):
             proposals.extend(thread.result())
             pbar.update(1)
         pbar.update(1)
-    return spatial_filtering(proposals, 35)
+    return spatial_filtering(proposals, 50)
 
 
 def generate_proposals_patch(
@@ -132,7 +132,7 @@ def generate_proposals_patch(
     multiscale : int
         Level in the image pyramid that image patches are read from.
     bright_threshold : int, optional
-        Minimum brightness required for image patch. The default is 160.
+        Minimum brightness required for image patch. The default is 150.
 
     Returns
     -------
