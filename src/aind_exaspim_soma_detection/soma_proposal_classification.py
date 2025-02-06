@@ -17,7 +17,6 @@ from tqdm import tqdm
 import numpy as np
 import torch
 
-from aind_exaspim_soma_detection import soma_proposal_generation as spg
 from aind_exaspim_soma_detection.utils import img_util, ml_util
 from aind_exaspim_soma_detection.machine_learning.models import FastConvNet3d
 from aind_exaspim_soma_detection.machine_learning.data_handling import (
@@ -114,12 +113,15 @@ def run_inference(dataloader, model, device, verbose=True):
             - "y" (numpy.ndarray): Ground truth label for each proposal.
 
     """
+    # Initializations
+    n = dataloader.n_rounds
+    iterator = tqdm(dataloader, total=n) if verbose else dataloader
+
+    # Main
     keys, hat_y, y = list(), list(), list()
     with torch.no_grad():
         model.eval()
-        n = dataloader.n_rounds
-        iter = tqdm(dataloader, total=n, dynamic_ncols=True) if verbose else dataloader
-        for keys_i, x_i, y_i in iter:
+        for keys_i, x_i, y_i in iterator:
             # Forward pass
             x_i = x_i.to(device)
             hat_y_i = torch.sigmoid(model(x_i))
@@ -207,24 +209,60 @@ def branchiness_filtering(
     return filtered_accepts
 
 
-def is_branchy(img, voxel, patch_shape):
-    # Fit Gaussian
-    img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 400)
-    _, params = spg.gaussian_fitness(img_patch, r=3)
-    mean = tuple(params[0:3].astype(int))
+def is_branchy(img, voxel, patch_shape, branch_dist=12.0):
+    """
+    Checks whether the soma at the given voxel is "branchy", meaning there
+    exists a branch with length "branch_dist" microns extending from the soma.
 
-    # Branchiness Check
-    branch_dist = max(2.5 * np.sqrt(3 * np.min(params[3:6]**2)), 8)
-    if branch_dist < patch_shape[0] // 2 - 1 and branch_dist > 0:
-        img_patch = exposure.equalize_adapthist(img_patch, nbins=6)
-        if branch_search(img_patch, mean, branch_dist):
-            return True, voxel
-        else:
-            return False, voxel
-    return True, voxel
+    Parameters
+    ----------
+    img : zarr.core.Array
+        Array representing a 3D image of a whole brain.
+    voxel : Tuple[int]
+        Coordinate that represents the location of a soma.
+    patch_shape : Tuple[int]
+        Shape of the image patch to be extracted from "img" which is centered
+        at "voxel".
+    branch_dist : float, optional
+        Distance from center that determines if a detected somas is branchy.
+        The default is 12.0.
+
+    Returns
+    -------
+    tuple
+        A tuple that contains the following:
+            - voxel (Tuple[int]): Location of a soma.
+            - is_branchy (bool) : Indication of whether soma is branchy.
+    """
+    center = tuple([s // 2 for s in patch_shape])
+    img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 400)
+    img_patch = exposure.equalize_adapthist(img_patch, nbins=6)
+    return voxel, branch_search(img_patch, center, branch_dist)
 
 
 def branch_search(img_patch, root, min_dist):
+    """
+    Performs a breadth-first search (BFS) on a 3D image patch to check if
+    there is a voxel in the foreground object containing "root". Note: this
+    routine is used to check if a soma (i.e. root) is branchy.
+
+    Parameters
+    ----------
+    img_patch : numpy.ndarray
+        Image patch to be searched.
+    root : Tuple[int]
+        Voxel coordinates which is the root of the BFS.
+    min_dist : float
+        Distance from root that determines if the corresponding foreground
+        object is branchy.
+
+    Returns
+    -------
+    bool
+        Indication of whether the foreground object containing root is
+        branchy.
+
+    """
     if img_util.is_inbounds(root, img_patch.shape):
         # Run search
         max_dist = 0
@@ -243,6 +281,4 @@ def branch_search(img_patch, root, min_dist):
             for nb in img_util.get_nbs(voxel, img_patch.shape):
                 if nb not in visited and img_patch[nb] > 0.15:
                     queue.append(nb)
-        return False
-    else:
-        return True
+    return False

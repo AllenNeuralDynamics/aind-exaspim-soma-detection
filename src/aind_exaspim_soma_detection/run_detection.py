@@ -173,7 +173,7 @@ def filter_accepts(accepts):
 
 if __name__ == "__main__":
     # Parameters
-    brain_id = "709222"
+    brain_id = "715347"
     save_proposals = False
     save_accepts = True
     save_filtered_accepts = True
@@ -181,7 +181,7 @@ if __name__ == "__main__":
     # Parameters - Proposal Generation
     multiscale_1 = 4
     patch_shape_1 = (64, 64, 64)
-    bright_threshold = 120
+    bright_threshold = 150
     overlap = (28, 28, 28)
 
     # Parameters - Proposal Classification
@@ -192,7 +192,7 @@ if __name__ == "__main__":
 
     # Parameters - Accepted Proposal Filtering
     multiscale_3 = 3
-    patch_shape_3 = (36, 36, 36)
+    patch_shape_3 = (40, 40, 40)
 
     # Initializations
     prefix_lookup_path = "/root/capsule/data/exaspim_image_prefixes.json"
