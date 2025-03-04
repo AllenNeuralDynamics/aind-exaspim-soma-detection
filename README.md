@@ -108,5 +108,8 @@ To use the software, in the root directory, run
 pip install -e .
 ```
 
+## Contact Information
+For any inquiries, feedback, or contributions, please do not hesitate to contact us. You can reach us via email at anna.grim@alleninstitute.org or connect on [LinkedIn](https://www.linkedin.com/in/anna-m-grim/).
+
 ## License
 aind-exaspim-soma-detection is licensed under the MIT License.
