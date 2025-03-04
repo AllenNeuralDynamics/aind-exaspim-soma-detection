@@ -26,38 +26,7 @@ The soma detection pipeline consists of three main steps:
   <b> Figure: </b>Visualization of soma detection pipeline, see Inference section for description of each step.
 </p>
 
-## Usage
-
-Here is an example of calling the main routine to run the full pipeline.
-
-```python
-
-if __name__ == "__main__":
-    # Initializations
-    brain_id = "unique-identifier-of-dataset"
-    img_prefix = "path-to-image"
-
-    # Parameters - Proposal Generation
-    multiscale_1 = 4
-    patch_shape_1 = (64, 64, 64)
-    bright_threshold = 100
-    overlap = (28, 28, 28)
-    save_proposals_bool = True
-
-    # Parameters - Proposal Classification
-    multiscale_2 = 1
-    patch_shape_2 = (102, 102, 102)
-    accept_threshold = 0.4
-    model_path = "path-to-model"
-    save_somas_bool = True
-
-    # Main
-    main()
-
-```
-
-
-## Inference
+## Method
 
 ### Step 1: Proposal Generation
 
@@ -103,6 +72,35 @@ Finally, the remaining proposals are classified by a neural network that generat
   <b> Figure: </b>Detected somas across a large region.
 </p>
 
+## Usage
+
+Here is an example of calling the main routine to run the full pipeline.
+
+```python
+
+if __name__ == "__main__":
+    # Initializations
+    brain_id = "unique-identifier-of-dataset"
+    img_prefix = "path-to-image"
+
+    # Parameters - Proposal Generation
+    multiscale_1 = 4
+    patch_shape_1 = (64, 64, 64)
+    bright_threshold = 100
+    overlap = (28, 28, 28)
+    save_proposals_bool = True
+
+    # Parameters - Proposal Classification
+    multiscale_2 = 1
+    patch_shape_2 = (102, 102, 102)
+    accept_threshold = 0.4
+    model_path = "path-to-model"
+    save_somas_bool = True
+
+    # Main
+    main()
+
+```
 
 ## Installation
 To use the software, in the root directory, run
