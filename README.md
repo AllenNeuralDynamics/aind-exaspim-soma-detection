@@ -72,6 +72,12 @@ Finally, the remaining proposals are classified by a neural network that generat
   <b> Figure: </b>Detected somas across a large region.
 </p>
 
+## Installation
+To use the software, in the root directory, run
+```bash
+pip install -e .
+```
+
 ## Usage
 
 Here is an example of calling the main routine to run the full pipeline.
@@ -100,12 +106,6 @@ if __name__ == "__main__":
     # Main
     main()
 
-```
-
-## Installation
-To use the software, in the root directory, run
-```bash
-pip install -e .
 ```
 
 ## Contact Information
