@@ -80,9 +80,17 @@ pip install -e .
 
 ## Usage
 
-Here is an example of calling the main routine to run the full pipeline.
+Here is an example of calling the main routine in "run_detection.py" to run the full pipeline.
 
 ```python
+def main():
+    # Run pipeline
+    proposals = generate_proposals()
+    accepts = classify_proposals(proposals)
+
+    # Save results
+    path = os.path.join(output_dir, f"somas-{brain_id}.txt")
+    util.write_list_to_file(path, accepts)
 
 if __name__ == "__main__":
     # Initializations
