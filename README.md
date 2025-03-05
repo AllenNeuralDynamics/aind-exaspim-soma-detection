@@ -51,7 +51,7 @@ The initial proposal generation step prioritizes high recall, which results in m
 
 <blockquote>
   <p>a. Merges proposals within a given distance threshold.</p>
-  <p>b. If the number of proposals exceeds a certain threshold, the top k brightest proposals are kept.</p>
+  <p>b. If the number of proposals exceeds a certain threshold in an image patch, the top k brightest proposals are kept.</p>
   <p>c. Fit Gaussian to neighborhood centered at proposal and compute fitness score by comparing fitted Gaussian to image values.
         Proposals are discarded if (1) fitness score is below threshold or (2) estimated standard deviation is out of range.</p>
 </blockquote>
