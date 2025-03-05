@@ -34,6 +34,8 @@ from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
 from tqdm import tqdm
 
+from random import sample
+
 import numpy as np
 
 from aind_exaspim_soma_detection.utils import img_util
@@ -43,9 +45,9 @@ from aind_exaspim_soma_detection.utils.img_util import get_patch
 # --- Wrappers ---
 def generate_proposals(
     img_prefix,
-    overlap,
     multiscale,
     patch_shape,
+    patch_overlap,
     bright_threshold=150,
 ):
     """
@@ -57,12 +59,12 @@ def generate_proposals(
     ----------
     img_prefix : str
         Prefix (or path) of a whole brain image stored in a S3 bucket.
-    overlap : int
-        Overlap between adjacent image patches in each dimension.
     multiscale : int
         Level in the image pyramid that image patches are read from.
     patch_shape : Tuple[int]
         Shape of each image patch.
+    patch_overlap : int
+        Overlap between adjacent image patches in each dimension.
     bright_threshold : int, optional
         Brightness threshold used to filter proposals and image patches. The
         default is 150.
@@ -70,19 +72,21 @@ def generate_proposals(
     Returns
     -------
     List[Tuple[float]]
-        List of physical coordinates of proposals.
+        Physical coordinates of proposals.
 
     """
     # Initializations
     img = img_util.open_img(img_prefix)
-    margin = np.min(overlap) // 4
-    offsets = img_util.sliding_window_coords_3d(img, patch_shape, overlap)
+    margin = np.min(patch_overlap) // 4
+    offsets = img_util.sliding_window_coords_3d(
+        img, patch_shape, patch_overlap
+    )
 
     # Generate proposals
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = list()
-        for offset in offsets:
+        for offset in sample(offsets, 200):
             threads.append(
                 executor.submit(
                     generate_proposals_patch,
@@ -102,7 +106,7 @@ def generate_proposals(
             proposals.extend(thread.result())
             pbar.update(1)
         pbar.update(1)
-    return spatial_filtering(proposals, 50)
+    return spatial_filtering(proposals, 60)
 
 
 def generate_proposals_patch(
@@ -137,7 +141,7 @@ def generate_proposals_patch(
     Returns
     -------
     List[Tuple[float]]
-        List of physical coordinates of proposals.
+        Physical coordinates of proposals.
 
     """
     # Get image patch
@@ -182,7 +186,7 @@ def detect_blobs(img_patch, bright_threshold, LoG_sigma, margin):
     Returns
     -------
     List[Tuple[int]]
-        List of voxel coordinates of detected blobs.
+        Voxel coordinates of detected blobs.
 
     """
     blobs = list()
