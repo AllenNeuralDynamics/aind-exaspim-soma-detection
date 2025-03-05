@@ -92,6 +92,7 @@ def main():
     path = os.path.join(output_dir, f"somas-{brain_id}.txt")
     util.write_list_to_file(path, accepts)
 
+
 if __name__ == "__main__":
     # Initializations
     brain_id = "unique-identifier-of-dataset"
