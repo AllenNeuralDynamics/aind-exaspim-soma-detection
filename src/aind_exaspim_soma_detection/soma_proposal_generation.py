@@ -34,8 +34,6 @@ from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
 from tqdm import tqdm
 
-from random import sample
-
 import numpy as np
 
 from aind_exaspim_soma_detection.utils import img_util
@@ -48,7 +46,7 @@ def generate_proposals(
     multiscale,
     patch_shape,
     patch_overlap,
-    bright_threshold=150,
+    bright_threshold=0,
 ):
     """
     Generates somas proposals across a whole brain 3D image by dividing the
@@ -67,7 +65,7 @@ def generate_proposals(
         Overlap between adjacent image patches in each dimension.
     bright_threshold : int, optional
         Brightness threshold used to filter proposals and image patches. The
-        default is 150.
+        default is 0.
 
     Returns
     -------
@@ -86,7 +84,7 @@ def generate_proposals(
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = list()
-        for offset in sample(offsets, 200):
+        for offset in offsets:
             threads.append(
                 executor.submit(
                     generate_proposals_patch,
