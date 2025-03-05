@@ -24,53 +24,106 @@ warnings.filterwarnings("ignore", category=OptimizeWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
-def main():
+def run_pipeline(
+    brain_id,
+    img_prefix,
+    output_dir,
+    proposal_params,
+    classify_params,
+    filter_params=None
+):
     """
     Runs the soma proposal generation and classification pipeline for a
     whole-brain image dataset.
 
     Parameters
     ----------
-    None
+    brain_id : str
+        Unique identifier for the whole-brain dataset.
+    img_prefix : str
+        Prefix (or path) of a whole brain image stored in a S3 bucket.
+    output_dir : str
+        Path to directory that results will be written to.
+    proposal_params : dict
+        Dictionary containing values for optional parameters used by the
+        routine "generate_proposals".
+    classify_params : dict
+        Dictionary containing values for optional parameters used by the
+        routine "classify_proposls".
+    filter_params : dict, optional
+        Dictionary containing values for optional parameters used by the
+        routine "filter_accepts". The default is None.
 
     Returns
     -------
     None
 
     """
+    # Sanity checks
+    model_path_exists = os.path.exists(classify_params["model_path"])
+    assert model_path_exists, "model_path does not exist!"
+    assert os.path.exists(output_dir), "output_dir does not exist!"
+    util.mkdir(output_dir, delete=True)
+
     # Run pipeline
-    print("\nBrain_ID:", brain_id)
-    proposals = generate_proposals()
-    accepts = classify_proposals(proposals)
-    filtered_accepts = filter_accepts(accepts)
+    proposals = generate_proposals(img_prefix, **proposal_params)
+    accepts = classify_proposls(img_prefix, proposals, **classify_params)
+    filtered_accepts = filter_accepts(img_prefix, accepts, **filter_params)
 
-    # Save result
-    path = os.path.join(output_dir, f"somas-xyz-{brain_id}.txt")
-    util.write_list_to_file(path, filtered_accepts)
+    # Save results
+    path_1 = os.path.join(output_dir, f"somas-{brain_id}.txt")
+    path_2 = os.path.join(output_dir, f"filtered-somas-{brain_id}.txt")
+    util.write_list_to_file(path_1, accepts)
+    util.write_list_to_file(path_2, filtered_accepts)
 
 
-def generate_proposals():
+def generate_proposals(
+    img_prefix,
+    multiscale=4,
+    patch_shape=(64, 64, 64),
+    patch_overlap=(32, 32, 32),
+    bright_threshold=0,
+    output_dir=None,
+    save_swcs=False
+):
     """
-    Generates soma proposals and saves the results if applicable.
+    Generates soma proposals and saves the each proposal coordinate as an SWC
+    file if applicable.
 
     Parameters
     ----------
-    None
+    img_prefix : str
+        Prefix (or path) of a whole brain image stored in a S3 bucket.
+    multiscale : int, optional
+        Level in the image pyramid that image patches are read from. The
+        default is 4.
+    patch_shape : Tuple[int], optional
+        Shape of each image patch. The default is (64, 64, 64).
+    patch_overlap : int, optional
+        Overlap between adjacent image patches in each dimension. The default
+        is (32, 32, 32).
+    bright_threshold : int, optional
+        Brightness threshold used to filter proposals and image patches. The
+        default is 0.
+    save_swcs : bool, optional
+        Indication of whether to save each proposal coordinate as an SWC file.
+        The default is False.
 
     Returns
     -------
-    None
+    List[Tuple[float]]
+        Physical coordinates of proposals.
 
     """
     # Main
     t0 = time()
     print("\nSteps 1-2: Generate and Filter Proposals")
-    img_prefix = img_prefixes[brain_id] + str(multiscale_1)
+    img_prefix += str(multiscale)
     proposals = spg.generate_proposals(
         img_prefix,
-        overlap,
-        multiscale_1,
-        patch_shape_1,
+        multiscale,
+        patch_shape,
+        patch_overlap,
         bright_threshold=bright_threshold,
     )
     t, unit = util.time_writer(time() - t0)
@@ -78,7 +131,7 @@ def generate_proposals():
     # Report results
     print("\n# Proposals Generated:", len(proposals))
     print(f"Runtime: {round(t, 4)} {unit}")
-    if save_proposals:
+    if save_swcs:
         util.write_points(
             os.path.join(output_dir, "proposals"),
             proposals,
@@ -89,31 +142,54 @@ def generate_proposals():
     return proposals
 
 
-def classify_proposals(proposals):
+def classify_proposls(
+    img_prefix,
+    proposals,
+    accept_threshold=0.4,
+    model_path=None,
+    multiscale=1,
+    patch_shape=(102, 102, 102),
+    save_swcs=False,
+):
     """
     Classifies a list of soma proposals and saves the results if applicable.
 
     Parameters
     ----------
+    img_prefix : str
+        Prefix (or path) of a whole brain image stored in a S3 bucket.
     proposals : List[Tuple[float]]
         List of proposals, where each is represented by an xyz coordinate.
+    accept_threshold : float, optional
+        Threshold applied to model predictions, above which a proposal is
+        classified as a soma. The default is 0.4.
+    model_path : str
+        Path to the pre-trained model that is used to classify the proposals.
+    multiscale : int
+        Level in the image pyramid that the voxel coordinate must index into.
+    patch_shape : tuple of int
+        Shape of image patches to be used for inference.
+    save_swcs : bool, optional
+        Indication of whether to save each proposal coordinate as an SWC file.
+        The default is False.
 
     Returns
     -------
-    None
+    List[Tuple[float]]
+        Physical coordinates of accepted proposals.
 
     """
     # Main
     t0 = time()
     print("\nStep 3: Classify Proposals")
-    img_prefix = img_prefixes[brain_id] + str(multiscale_2)
+    img_prefix += str(multiscale)
     accepts = spc.classify_proposals(
-        brain_id,
+        -1,
         proposals,
         img_prefix,
         model_path,
-        multiscale_2,
-        patch_shape_2,
+        multiscale,
+        patch_shape,
         accept_threshold,
     )
     t, unit = util.time_writer(time() - t0)
@@ -122,7 +198,7 @@ def classify_proposals(proposals):
     print("\n# Proposals Accepted:", len(accepts))
     print("% Proposals Accepted:", round(len(accepts) / len(proposals), 4))
     print(f"Runtime: {round(t, 4)} {unit}")
-    if save_accepts:
+    if save_swcs:
         util.write_points(
             os.path.join(output_dir, "accepts"),
             accepts,
@@ -133,7 +209,13 @@ def classify_proposals(proposals):
     return accepts
 
 
-def filter_accepts(accepts):
+def filter_accepts(
+    img_prefix,
+    accepts,
+    multiscale=3,
+    patch_shape=(40, 40, 40),
+    save_swcs=False,
+):
     """
     Filters a list of accpeted soma proposals and saves the results if
     applicable.
@@ -141,27 +223,27 @@ def filter_accepts(accepts):
     Parameters
     ----------
     accepts : List[Tuple[float]]
-        List of accepted proposals, where each is represented by an xyz
-        coordinate.
+        Physical coordinates of accepted proposals.
 
     Returns
     -------
-    None
+    List[Tuple[float]]
+        Physical coordinates of accepted proposals that passed filtering step.
 
     """
     # Main
     t0 = time()
     print("\nStep 4: Filter Accepted Proposals")
-    img_prefix = img_prefixes[brain_id] + str(multiscale_3)
+    img_prefix += str(multiscale)
     filtered_accepts = spc.branchiness_filtering(
-        img_prefix, accepts, multiscale_3, patch_shape_3
+        img_prefix, accepts, multiscale, patch_shape
     )
     t, unit = util.time_writer(time() - t0)
 
     # Report results
     print("# Filtered Accepts:", len(filtered_accepts))
     print(f"Runtime: {round(t, 4)} {unit}")
-    if save_filtered_accepts:
+    if save_swcs:
         util.write_points(
             os.path.join(output_dir, "filtered_accepts"),
             filtered_accepts,
@@ -172,33 +254,41 @@ def filter_accepts(accepts):
 
 
 if __name__ == "__main__":
-    # Parameters
-    brain_id = "715347"
-    save_proposals = False
-    save_accepts = True
-    save_filtered_accepts = True
-
-    # Parameters - Proposal Generation
-    multiscale_1 = 4
-    patch_shape_1 = (64, 64, 64)
-    bright_threshold = 150
-    overlap = (28, 28, 28)
-
-    # Parameters - Proposal Classification
-    multiscale_2 = 1
-    patch_shape_2 = (102, 102, 102)
-    accept_threshold = 0.9
-    model_path = "/root/capsule/data/benchmarked_models/model_v1_cosine-sch_f1=0.9667.pth"
-
-    # Parameters - Accepted Proposal Filtering
-    multiscale_3 = 3
-    patch_shape_3 = (40, 40, 40)
-
     # Initializations
-    prefix_lookup_path = "/root/capsule/data/exaspim_image_prefixes.json"
-    img_prefixes = util.read_json(prefix_lookup_path)
+    root_dir = "/root/capsule/data"
+    model_path = f"{root_dir}/benchmarked_models/model_v1_cosine-sch_f1=0.9667.pth"
+    img_prefixes = util.read_json(f"{root_dir}/exaspim_image_prefixes.json")
+
+    # Parameters
+    brain_id = "709222"
+    img_prefix = img_prefixes[brain_id]
     output_dir = f"/root/capsule/scratch/soma-detection-{brain_id}"
-    util.mkdir(output_dir, delete=True)
+    proposal_params = {
+        "multiscale": 4,
+        "patch_shape": (64, 64, 64),
+        "bright_threshold": 150,
+        "patch_overlap":(28, 28, 28),
+        "save_swcs": False,
+    }
+    classify_params = {
+        "multiscale": 1,
+        "patch_shape": (102, 102, 102),
+        "accept_threshold": 0.4,
+        "model_path": model_path,
+        "save_swcs": False,
+    }
+    filter_params = {
+        "multiscale": 3,
+        "patch_shape": (40, 40, 40),
+        "save_swcs": False,
+    }
 
     # Main
-    main()
+    run_pipeline(
+        brain_id,
+        img_prefix,
+        output_dir,
+        proposal_params,
+        classify_params,
+        filter_params
+    )

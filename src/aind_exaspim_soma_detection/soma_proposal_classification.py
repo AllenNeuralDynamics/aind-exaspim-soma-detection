@@ -43,11 +43,11 @@ def classify_proposals(
     Parameters
     ----------
     brain_id : str
-        Unique identifier for the whole brain dataset.
+        Unique identifier for the whole-brain dataset.
     proposals : List[Tuple[float]]
         List of proposals, where each is represented by an xyz coordinate.
     img_prefix : str
-        Prefix (or path) of a whole brain image stored in a S3 bucket.
+        Prefix (or path) of a whole-brain image stored in a S3 bucket.
     model_path : str
         Path to the pre-trained model that is used to classify the proposals.
     multiscale : int
@@ -99,7 +99,7 @@ def run_inference(dataloader, model, device, verbose=True):
         Neural network model that is used to generate predictions.
     device : str
         Name of device where model should be loaded and run.
-    verbose : bool, optional, default=True
+    verbose : bool, optional
         Indication of whether to display a progress bar during inference. The
         default is True.
 
@@ -170,7 +170,7 @@ def branchiness_filtering(
     Parameters
     ----------
     img_prefix : str
-        Prefix (or path) of a whole brain image stored in a S3 bucket.
+        Prefix (or path) of a whole-brain image stored in a S3 bucket.
     accepted_proposals : List[Tuple[float]]
         List of accepted proposals, where each is represented by an xyz
         coordinate.
@@ -201,7 +201,7 @@ def branchiness_filtering(
         filtered_accepts = list()
         with tqdm(total=len(threads)) as pbar:
             for thread in as_completed(threads):
-                branchy_bool, voxel = thread.result()
+                voxel, branchy_bool = thread.result()
                 if branchy_bool:
                     xyz = img_util.to_physical(voxel, multiscale)
                     filtered_accepts.append(xyz)
@@ -217,7 +217,7 @@ def is_branchy(img, voxel, patch_shape, branch_dist=12.0):
     Parameters
     ----------
     img : zarr.core.Array
-        Array representing a 3D image of a whole brain.
+        Array representing a 3D image of a whole-brain.
     voxel : Tuple[int]
         Coordinate that represents the location of a soma.
     patch_shape : Tuple[int]
@@ -235,7 +235,7 @@ def is_branchy(img, voxel, patch_shape, branch_dist=12.0):
             - is_branchy (bool) : Indication of whether soma is branchy.
     """
     center = tuple([s // 2 for s in patch_shape])
-    img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 400)
+    img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 250)
     img_patch = exposure.equalize_adapthist(img_patch, nbins=6)
     return voxel, branch_search(img_patch, center, branch_dist)
 
