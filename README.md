@@ -16,7 +16,7 @@ The soma detection pipeline consists of three main steps:
 <blockquote>
   <p>a. <strong>Proposal Generation</strong>: Detects blob-like structures to generate initial soma proposals and filter trivial false positives.</p>
   <p>b. <strong>Proposal Classification</strong>: Classify proposals with a convolutional neural network.</p>
-  <p>c. <strong>Accepted Proposal Filtering</strong>: Extract accepted proposals with axons and dendrites extending from soma.</p>
+  <p>c. <strong>Accepted Proposal Filtering</strong>: Optionally, extract accepted proposals with axons and dendrites extending from soma.</p>
 </blockquote>
 <br>
 
