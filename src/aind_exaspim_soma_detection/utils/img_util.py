@@ -72,10 +72,10 @@ def get_patch(img, voxel, shape, from_center=True):
         return np.ones(shape)
 
 
-def sliding_window_coords_3d(img, window_shape, overlap):
+def calculate_offsets(img, window_shape, overlap):
     """
     Generates a list of 3D coordinates representing the front-top-left corner
-    of each sliding window over a 3D image, given a specified window size and
+    by sliding a window over a 3D image, given a specified window size and
     overlap between adjacent windows.
 
     Parameters
