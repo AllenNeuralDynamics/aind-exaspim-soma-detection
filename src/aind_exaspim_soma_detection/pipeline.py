@@ -60,21 +60,19 @@ def run_pipeline(
 
     """
     # Sanity checks
+    util.mkdir(output_dir, delete=True)
     model_path_exists = os.path.exists(classify_params["model_path"])
     assert model_path_exists, "model_path does not exist!"
-    assert os.path.exists(output_dir), "output_dir does not exist!"
-    util.mkdir(output_dir, delete=True)
 
-    # Run pipeline
+    # Detect somas
     proposals = generate_proposals(img_prefix, **proposal_params)
     accepts = classify_proposls(img_prefix, proposals, **classify_params)
-    filtered_accepts = filter_accepts(img_prefix, accepts, **filter_params)
+    util.write_list(f"{output_dir}/somas-{brain_id}.txt", accepts)
 
-    # Save results
-    path_1 = os.path.join(output_dir, f"somas-{brain_id}.txt")
-    path_2 = os.path.join(output_dir, f"filtered-somas-{brain_id}.txt")
-    util.write_list_to_file(path_1, accepts)
-    util.write_list_to_file(path_2, filtered_accepts)
+    # Filter detected somas (optional)
+    if filter_params is not None:
+        filtered_accepts = filter_accepts(img_prefix, accepts, **filter_params)
+        util.write_list(f"{output_dir}/filtered-somas-{brain_id}.txt", accepts)
 
 
 def generate_proposals(
