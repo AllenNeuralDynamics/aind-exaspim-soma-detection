@@ -45,32 +45,22 @@ The goal of this step is to generate initial proposals for soma locations by det
   <b> Figure: </b>Proposals generated across a large region.
 </p>
 
-### Step 2: Proposal Filtering
+The initial proposal generation step prioritizes high recall, which results in many false positives. The proposals are filtered by leveraging prior knowledge, such as the Gaussian-like appearance and expected size of somas, to remove trivial false positives.
 
-The initial proposal generation step prioritizes high recall, which results in many false positives. This step leverages prior knowledge, such as the Gaussian-like appearance and expected size of somas, to filter out trivial false positives.
 
-<blockquote>
-  <p>a. Merges proposals within a given distance threshold.</p>
-  <p>b. If the number of proposals exceeds a certain threshold in an image patch, the top k brightest are kept.</p>
-  <p>c. Fit Gaussian to neighborhood centered at proposal and compute fitness score by comparing fitted Gaussian to image values.
-        Proposals are discarded if (1) fitness score is below threshold or (2) estimated standard deviation is out of range.</p>
-</blockquote>
+### Step 2: Proposal Classification
 
-<p>
-  <img src="imgs/filtered_proposals_example.png" width="750" alt="proposals">
-  <br>
-  <b> Figure: </b>Examples of filtered proposals.
-</p>
-
-### Step 3: Proposal Classification
-
-Finally, the remaining proposals are classified by a neural network that generates soma likelihoods. Proposals with a likelihood above a given threshold are *accepted* as soma locations.
+The proposals are classified by a neural network that generates soma likelihoods. Proposals with a likelihood above a given threshold are *accepted* as soma locations.
 
 <p>
   <img src="imgs/detections.png" width="750" alt="detections">
   <br>
   <b> Figure: </b>Detected somas across a large region.
 </p>
+
+### Step 3: Filter Accepted Proposals (Optional)
+
+To do...
 
 ## Installation
 To use the software, in the root directory, run
