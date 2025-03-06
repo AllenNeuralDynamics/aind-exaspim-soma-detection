@@ -76,7 +76,7 @@ def generate_proposals(
     # Initializations
     img = img_util.open_img(img_prefix)
     margin = np.min(patch_overlap) // 4
-    offsets = img_util.sliding_window_coords_3d(
+    offsets = img_util.calculate_offsets(
         img, patch_shape, patch_overlap
     )
 
