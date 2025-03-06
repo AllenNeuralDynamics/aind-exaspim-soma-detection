@@ -23,7 +23,7 @@ dependencies = [
     'scikit-image',
     'scikit-learn',
     'scipy',
-    'torch'
+    'torch',
     'torchvision',
     'tqdm',
     'zarr'
