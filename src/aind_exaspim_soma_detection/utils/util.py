@@ -146,7 +146,7 @@ def read_json(path):
         return json.load(file)
 
 
-def write_list_to_file(path, my_list):
+def write_to_list(path, my_list):
     """
     Writes each item in a list to a text file, with each item on a new line.
 
