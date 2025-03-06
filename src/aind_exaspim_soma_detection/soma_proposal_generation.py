@@ -18,12 +18,12 @@ Code that generates soma proposals.
 
         2. Filter Initial Proposals - filter_proposals()
             a. Merges proposals within a given distance threshold.
-            b. If the number of proposals exceeds a certain threshold, the top
-               k brightest proposals are kept.
-            c. Fit Gaussian to neighborhood centered at proposal and compute
-               fitness score by comparing fitted Gaussian to image values.
-               Proposals are discarded if (1) fitness score is below threshold
-               or (2) estimated standard deviation is out of range.
+            b. If the number of proposals exceeds a certain threshold in an image
+               patch, the top k brightest are kept.
+            c. Fit Gaussian to neighborhood centered at proposal and compute fitness
+            score by comparing fitted Gaussian to image values. Proposals are discarded
+            if (1) fitness score is below threshold or (2) estimated standard deviation
+            is out of range.
 
 """
 
