@@ -80,7 +80,7 @@ pip install -e .
 
 ## Usage
 
-Here is an example of calling the main routine in "run_detection.py" to run the full pipeline.
+Here is an example of running the full soma detection pipeline.
 
 ```python
 from aind_exaspim_soma_detection.pipeline import run_pipeline
