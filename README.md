@@ -21,7 +21,7 @@ The soma detection pipeline consists of three main steps:
 <br>
 
 <p>
-  <img src="imgs/pipeline.png" width="900" alt="pipeline">
+  <img src="imgs/pipeline.png" width="800" alt="pipeline">
   <br>
   <b> Figure: </b>Visualization of soma detection pipeline, see Method section for description of each step.
 </p>
@@ -40,7 +40,7 @@ The goal of this step is to generate initial proposals for soma locations by det
 </blockquote>
 
 <p>
-  <img src="imgs/proposals_example.png" width="800" alt="proposals">
+  <img src="imgs/proposals_example.png" width="750" alt="proposals">
   <br>
   <b> Figure: </b>Proposals generated across a large region.
 </p>
@@ -57,7 +57,7 @@ The initial proposal generation step prioritizes high recall, which results in m
 </blockquote>
 
 <p>
-  <img src="imgs/filtered_proposals_example.png" width="800" alt="proposals">
+  <img src="imgs/filtered_proposals_example.png" width="750" alt="proposals">
   <br>
   <b> Figure: </b>Examples of filtered proposals.
 </p>
@@ -67,7 +67,7 @@ The initial proposal generation step prioritizes high recall, which results in m
 Finally, the remaining proposals are classified by a neural network that generates soma likelihoods. Proposals with a likelihood above a given threshold are *accepted* as soma locations.
 
 <p>
-  <img src="imgs/detections.png" width="800" alt="detections">
+  <img src="imgs/detections.png" width="750" alt="detections">
   <br>
   <b> Figure: </b>Detected somas across a large region.
 </p>
