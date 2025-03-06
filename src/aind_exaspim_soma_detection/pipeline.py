@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 def run_pipeline(
     brain_id,
-    img_prefix,
+    img_path,
     output_dir,
     proposal_params,
     classify_params,
@@ -40,16 +40,16 @@ def run_pipeline(
     ----------
     brain_id : str
         Unique identifier for the whole-brain dataset.
-    img_prefix : str
+    img_path : str
         Prefix (or path) of a whole brain image stored in a S3 bucket.
     output_dir : str
-        Path to directory that results will be written to.
+        Path to directory that results are written to.
     proposal_params : dict
         Dictionary containing values for optional parameters used by the
         routine "generate_proposals".
     classify_params : dict
         Dictionary containing values for optional parameters used by the
-        routine "classify_proposls".
+        routine "classify_proposals".
     filter_params : dict, optional
         Dictionary containing values for optional parameters used by the
         routine "filter_accepts". The default is None.
@@ -59,24 +59,32 @@ def run_pipeline(
     None
 
     """
-    # Sanity checks
+    # Initializations
+    t0 = time()
     util.mkdir(output_dir, delete=True)
+    update_log(output_dir, f"Brain_ID: {brain_id}")
     model_path_exists = os.path.exists(classify_params["model_path"])
     assert model_path_exists, "model_path does not exist!"
 
     # Detect somas
-    proposals = generate_proposals(img_prefix, **proposal_params)
-    accepts = classify_proposls(img_prefix, proposals, **classify_params)
+    proposals = generate_proposals(img_path, **proposal_params)
+    accepts = classify_proposals(img_path, proposals, **classify_params)
     write_results(output_dir, f"somas-{brain_id}.txt", accepts)
 
-    # Filter detected somas (optional)
+    # Filter detected somas (if applicable)
     if filter_params is not None:
-        accepts = filter_accepts(img_prefix, accepts, **filter_params)
-        write_results(output_dir, f"filtered-somas-{brain_id}.txt", accepts)
+        filtered_accepts = filter_accepts(img_path, accepts, **filter_params)
+        write_results(
+            output_dir, f"filtered-somas-{brain_id}.txt", filtered_accepts
+        )
+
+    # Report runtime
+    t, unit = util.time_writer(time() - t0)
+    update_log(output_dir, f"\nTotal Runtime: {round(t, 4)} {unit}")
 
 
 def generate_proposals(
-    img_prefix,
+    img_path,
     multiscale=4,
     patch_shape=(64, 64, 64),
     patch_overlap=(32, 32, 32),
@@ -90,8 +98,8 @@ def generate_proposals(
 
     Parameters
     ----------
-    img_prefix : str
-        Prefix (or path) of a whole brain image stored in a S3 bucket.
+    img_path : str
+        Path to whole brain image stored in a S3 bucket.
     multiscale : int, optional
         Level in the image pyramid that image patches are read from. The
         default is 4.
@@ -103,6 +111,8 @@ def generate_proposals(
     bright_threshold : int, optional
         Brightness threshold used to filter proposals and image patches. The
         default is 0.
+    output_dir : str, optional
+        Path to directory that results are written to. The default is None.
     save_swcs : bool, optional
         Indication of whether to save each proposal coordinate as an SWC file.
         The default is False.
@@ -115,10 +125,10 @@ def generate_proposals(
     """
     # Main
     t0 = time()
-    print("\nSteps 1-2: Generate and Filter Proposals")
-    img_prefix += str(multiscale)
+    update_log(output_dir, "\nSteps 1: Generate Proposals")
+    img_path += str(multiscale)
     proposals = spg.generate_proposals(
-        img_prefix,
+        img_path,
         multiscale,
         patch_shape,
         patch_overlap,
@@ -127,8 +137,8 @@ def generate_proposals(
     t, unit = util.time_writer(time() - t0)
 
     # Report results
-    print("\n# Proposals Generated:", len(proposals))
-    print(f"Runtime: {round(t, 4)} {unit}")
+    update_log(output_dir, f"# Proposals: {len(proposals)}")
+    update_log(output_dir, f"Runtime: {round(t, 4)} {unit}")
     if save_swcs:
         util.write_points(
             os.path.join(output_dir, "proposals"),
@@ -140,13 +150,14 @@ def generate_proposals(
     return proposals
 
 
-def classify_proposls(
-    img_prefix,
+def classify_proposals(
+    img_path,
     proposals,
     accept_threshold=0.4,
     model_path=None,
     multiscale=1,
     patch_shape=(102, 102, 102),
+    output_dir=None,
     save_swcs=False,
 ):
     """
@@ -154,19 +165,24 @@ def classify_proposls(
 
     Parameters
     ----------
-    img_prefix : str
-        Prefix (or path) of a whole brain image stored in a S3 bucket.
+    img_path : str
+        Path to whole brain image stored in a S3 bucket.
     proposals : List[Tuple[float]]
         List of proposals, where each is represented by an xyz coordinate.
     accept_threshold : float, optional
         Threshold applied to model predictions, above which a proposal is
         classified as a soma. The default is 0.4.
-    model_path : str
+    model_path : str, optional
         Path to the pre-trained model that is used to classify the proposals.
-    multiscale : int
+        The default is None.
+    multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
-    patch_shape : tuple of int
-        Shape of image patches to be used for inference.
+        The default is 1.
+    patch_shape : Tuple[int], optional
+        Shape of image patches to be used for inference. The default is
+        (102, 102, 102).
+    output_dir : str, optional
+        Path to directory that results are written to. The default is None.
     save_swcs : bool, optional
         Indication of whether to save each proposal coordinate as an SWC file.
         The default is False.
@@ -179,12 +195,12 @@ def classify_proposls(
     """
     # Main
     t0 = time()
-    print("\nStep 3: Classify Proposals")
-    img_prefix += str(multiscale)
+    update_log(output_dir, "\nStep 2: Classify Proposals")
+    img_path += str(multiscale)
     accepts = spc.classify_proposals(
         -1,
         proposals,
-        img_prefix,
+        img_path,
         model_path,
         multiscale,
         patch_shape,
@@ -193,9 +209,10 @@ def classify_proposls(
     t, unit = util.time_writer(time() - t0)
 
     # Report results
-    print("\n# Proposals Accepted:", len(accepts))
-    print("% Proposals Accepted:", round(len(accepts) / len(proposals), 4))
-    print(f"Runtime: {round(t, 4)} {unit}")
+    percent_accept = round(len(accepts) / len(proposals), 4)
+    update_log(output_dir, f"# Accepts: {len(accepts)}")
+    update_log(output_dir, f"% Accepted: {percent_accept}")
+    update_log(output_dir, f"Runtime: {round(t, 4)} {unit}")
     if save_swcs:
         util.write_points(
             os.path.join(output_dir, "accepts"),
@@ -208,10 +225,11 @@ def classify_proposls(
 
 
 def filter_accepts(
-    img_prefix,
+    img_path,
     accepts,
     multiscale=3,
     patch_shape=(40, 40, 40),
+    output_dir=None,
     save_swcs=False,
 ):
     """
@@ -220,8 +238,20 @@ def filter_accepts(
 
     Parameters
     ----------
+    img_path : str
+        Path to whole brain image stored in a S3 bucket.
     accepts : List[Tuple[float]]
         Physical coordinates of accepted proposals.
+    multiscale : int, optional
+        Level in the image pyramid that the voxel coordinate must index into.
+        The default is 3.
+    patch_shape : Tuple[int]
+        Shape of image patches to be used. The default is (40, 40, 40).
+    output_dir : str, optional
+        Path to directory that results are written to. The default is None.
+    save_swcs : bool, optional
+        Indication of whether to save each proposal coordinate as an SWC file.
+        The default is False.
 
     Returns
     -------
@@ -231,16 +261,16 @@ def filter_accepts(
     """
     # Main
     t0 = time()
-    print("\nStep 4: Filter Accepted Proposals")
-    img_prefix += str(multiscale)
+    update_log(output_dir, "\nStep 3: Filter Accepted Proposals")
+    img_path += str(multiscale)
     filtered_accepts = spc.branchiness_filtering(
-        img_prefix, accepts, multiscale, patch_shape
+        img_path, accepts, multiscale, patch_shape
     )
     t, unit = util.time_writer(time() - t0)
 
     # Report results
-    print("# Filtered Accepts:", len(filtered_accepts))
-    print(f"Runtime: {round(t, 4)} {unit}")
+    update_log(output_dir, f"# Filtered Accepts: {len(filtered_accepts)}")
+    update_log(output_dir, f"Runtime: {round(t, 4)} {unit}")
     if save_swcs:
         util.write_points(
             os.path.join(output_dir, "filtered_accepts"),
@@ -249,6 +279,29 @@ def filter_accepts(
             radius=25,
         )
     return filtered_accepts
+
+
+def update_log(output_dir, log_info):
+    """
+    Appends log information to a specified text file.
+
+    Parameters
+    ----------
+    output_dir : str
+        Path to directory that results will be written to.
+    log_info : str
+        Information to be written to the file.
+
+    Returns
+    -------
+    None
+
+    """
+    print(log_info)
+    if output_dir is not None:
+        path = os.path.join(output_dir, "log.txt")
+        with open(path, 'a') as file:
+            file.write(log_info + "\n")
 
 
 def write_results(output_dir, filename, coords_list):
@@ -276,18 +329,20 @@ def write_results(output_dir, filename, coords_list):
 if __name__ == "__main__":
     # Initializations
     root_dir = "/root/capsule/data"
-    model_path = f"{root_dir}/benchmarked_models/model_v1_cosine-sch_f1=0.9667.pth"
-    img_prefixes = util.read_json(f"{root_dir}/exaspim_image_prefixes.json")
+    model_name = "model_v1_cosine-sch_f1=0.9667.pth"
+    model_path = f"{root_dir}/benchmarked_models/{model_name}"
+    img_pathes = util.read_json(f"{root_dir}/exaspim_image_prefixes.json")
 
     # Parameters
     brain_id = "709222"
-    img_prefix = img_prefixes[brain_id]
+    img_path = img_pathes[brain_id]
     output_dir = f"/root/capsule/scratch/soma-detection-{brain_id}"
     proposal_params = {
         "multiscale": 4,
         "patch_shape": (64, 64, 64),
         "bright_threshold": 150,
-        "patch_overlap":(28, 28, 28),
+        "patch_overlap": (28, 28, 28),
+        "output_dir": output_dir,
         "save_swcs": False,
     }
     classify_params = {
@@ -295,18 +350,20 @@ if __name__ == "__main__":
         "patch_shape": (102, 102, 102),
         "accept_threshold": 0.4,
         "model_path": model_path,
+        "output_dir": output_dir,
         "save_swcs": False,
     }
     filter_params = {
         "multiscale": 3,
         "patch_shape": (40, 40, 40),
+        "output_dir": output_dir,
         "save_swcs": False,
     }
 
     # Main
     run_pipeline(
         brain_id,
-        img_prefix,
+        img_path,
         output_dir,
         proposal_params,
         classify_params,
