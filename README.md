@@ -83,37 +83,36 @@ pip install -e .
 Here is an example of calling the main routine in "run_detection.py" to run the full pipeline.
 
 ```python
-def main():
-    # Run pipeline
-    proposals = generate_proposals()
-    accepts = classify_proposals(proposals)
-
-    # Save results
-    path = os.path.join(output_dir, f"somas-{brain_id}.txt")
-    util.write_list_to_file(path, accepts)
+from aind_exaspim_soma_detection.pipeline import run_pipeline
 
 
-if __name__ == "__main__":
-    # Initializations
-    brain_id = "unique-identifier-of-dataset"
-    img_prefix = "path-to-image"
+# Initializations
+brain_id = "unique-identifier-of-dataset"
+img_path = "path-to-image"
+output_dir = "directory-to-write-results"
 
-    # Parameters - Proposal Generation
-    multiscale_1 = 4
-    patch_shape_1 = (64, 64, 64)
-    bright_threshold = 100
-    overlap = (28, 28, 28)
-    save_proposals_bool = True
+# Parameters
+proposal_params = {
+    "multiscale": 4,
+    "patch_shape": (64, 64, 64),
+    "bright_threshold": 150,
+    "patch_overlap":(28, 28, 28),
+}
+classify_params = {
+    "multiscale": 1,
+    "patch_shape": (102, 102, 102),
+    "accept_threshold": 0.4,
+    "model_path": "path-to-model",
+}
 
-    # Parameters - Proposal Classification
-    multiscale_2 = 1
-    patch_shape_2 = (102, 102, 102)
-    accept_threshold = 0.4
-    model_path = "path-to-model"
-    save_somas_bool = True
-
-    # Main
-    main()
+# Main
+run_pipeline(
+    brain_id,
+    img_path,
+    output_dir,
+    proposal_params,
+    classify_params,
+)
 
 ```
 
