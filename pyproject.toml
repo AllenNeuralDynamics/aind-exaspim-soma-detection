@@ -17,6 +17,16 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
+    'boto3',
+    'pandas',
+    's3fs',
+    'scikit-image',
+    'scikit-learn',
+    'scipy',
+    'torch'
+    'torchvision',
+    'tqdm',
+    'zarr'
 ]
 
 [project.optional-dependencies]
