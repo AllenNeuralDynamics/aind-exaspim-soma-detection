@@ -67,12 +67,12 @@ def run_pipeline(
     # Detect somas
     proposals = generate_proposals(img_prefix, **proposal_params)
     accepts = classify_proposls(img_prefix, proposals, **classify_params)
-    util.write_list(f"{output_dir}/somas-{brain_id}.txt", accepts)
+    write_results(output_dir, f"somas-{brain_id}.txt", accepts)
 
     # Filter detected somas (optional)
     if filter_params is not None:
         filtered_accepts = filter_accepts(img_prefix, accepts, **filter_params)
-        util.write_list(f"{output_dir}/filtered-somas-{brain_id}.txt", accepts)
+        write_results(output_dir, f"filtered-somas-{brain_id}.txt", accepts)
 
 
 def generate_proposals(
@@ -249,6 +249,28 @@ def filter_accepts(
             radius=25,
         )
     return filtered_accepts
+
+
+def write_results(output_dir, filename, coords_list):
+    """
+    Writes a list of xyz coordinates to a txt file.
+
+    Parameters
+    ----------
+    output_dir : str
+        Path to directory that results will be written to.
+    filename : str
+        Name of txt file to be written.
+    xyz_list : List[Tuple[float]]
+        List of 3D coordinates to write to txt file.
+
+    Returns
+    -------
+    None
+
+    """
+    path = os.path.join(output_dir, filename)
+    util.write_to_list(path, accepts)
 
 
 if __name__ == "__main__":
