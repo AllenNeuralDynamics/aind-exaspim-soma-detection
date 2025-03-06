@@ -71,7 +71,7 @@ def run_pipeline(
 
     # Filter detected somas (optional)
     if filter_params is not None:
-        filtered_accepts = filter_accepts(img_prefix, accepts, **filter_params)
+        accepts = filter_accepts(img_prefix, accepts, **filter_params)
         write_results(output_dir, f"filtered-somas-{brain_id}.txt", accepts)
 
 
@@ -270,7 +270,7 @@ def write_results(output_dir, filename, coords_list):
 
     """
     path = os.path.join(output_dir, filename)
-    util.write_to_list(path, accepts)
+    util.write_to_list(path, coords_list)
 
 
 if __name__ == "__main__":
