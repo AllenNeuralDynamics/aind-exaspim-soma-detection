@@ -32,6 +32,7 @@ from scipy.ndimage import gaussian_filter, gaussian_laplace, maximum_filter
 from scipy.optimize import curve_fit
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
+from random import sample
 from tqdm import tqdm
 
 import numpy as np
@@ -84,7 +85,7 @@ def generate_proposals(
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = list()
-        for offset in offsets:
+        for offset in sample(offsets, 400):
             threads.append(
                 executor.submit(
                     generate_proposals_patch,
