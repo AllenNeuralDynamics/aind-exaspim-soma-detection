@@ -45,7 +45,7 @@ The goal of this step is to generate initial proposals for soma locations by det
   <b> Figure: </b>Proposals generated across a large region.
 </p>
 
-The initial proposal generation step prioritizes high recall, which results in many false positives. The proposals are filtered by leveraging prior knowledge, such as the Gaussian-like appearance and expected size of somas, to remove trivial false positives.
+This algorithm prioritizes high recall, which results in many false positives. The proposals are filtered by leveraging prior knowledge, such as the Gaussian-like appearance and expected size of somas, to remove trivial false positives.
 
 
 ### Step 2: Proposal Classification
