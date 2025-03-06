@@ -58,7 +58,7 @@ The proposals are classified by a neural network that generates soma likelihoods
   <b> Figure: </b>Detected somas across a large region.
 </p>
 
-### Step 3: Filter Accepted Proposals (Optional)
+### Step 3: Accepted Proposals Filtering (Optional)
 
 To do...
 
