@@ -323,7 +323,7 @@ def write_results(output_dir, filename, coords_list):
 
     """
     path = os.path.join(output_dir, filename)
-    util.write_to_list(path, coords_list)
+    util.write_list(path, coords_list)
 
 
 if __name__ == "__main__":
