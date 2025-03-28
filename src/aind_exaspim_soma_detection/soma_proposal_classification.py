@@ -209,7 +209,7 @@ def branchiness_filtering(
     return filtered_accepts
 
 
-def is_branchy(img, voxel, patch_shape, branch_dist=12.0):
+def is_branchy(img, voxel, patch_shape, branch_dist=20.0):
     """
     Checks whether the soma at the given voxel is "branchy", meaning there
     exists a branch with length "branch_dist" microns extending from the soma.
@@ -225,7 +225,7 @@ def is_branchy(img, voxel, patch_shape, branch_dist=12.0):
         at "voxel".
     branch_dist : float, optional
         Distance from center that determines if a detected somas is branchy.
-        The default is 12.0.
+        The default is 20.0.
 
     Returns
     -------
