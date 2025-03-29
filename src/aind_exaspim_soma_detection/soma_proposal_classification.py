@@ -236,7 +236,7 @@ def is_branchy(img, voxel, patch_shape, branch_dist=20.0):
     """
     center = tuple([s // 2 for s in patch_shape])
     try:
-        img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 250)
+        img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 300)
         img_patch = exposure.equalize_adapthist(img_patch, nbins=6)
         return voxel, branch_search(img_patch, center, branch_dist)
     except:
