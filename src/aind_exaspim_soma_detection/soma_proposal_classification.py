@@ -218,9 +218,8 @@ def is_branchy(img, voxel, patch_shape, branch_dist=10):
         fg_brightness = branch_search(img_patch, center, branch_dist)
         bg_brightness = np.percentile(img_patch, 20)
         if fg_brightness:
-            contrast_score_1 = np.mean(fg_brightness) - bg_brightness
-            contrast_score_2 = np.mean(fg_brightness) / bg_brightness
-            return voxel, contrast_score_1 >= 50
+            contrast_score = np.mean(fg_brightness) - bg_brightness
+            return voxel, contrast_score >= 50
         else:
             return voxel, False
     except:
