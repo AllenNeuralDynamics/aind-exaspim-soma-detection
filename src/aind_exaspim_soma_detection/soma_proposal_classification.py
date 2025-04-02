@@ -213,7 +213,7 @@ def is_branchy(img, voxel, patch_shape, branch_dist=10):
     center = tuple([s // 2 for s in patch_shape])
     try:
         img_patch = img_util.get_patch(img, voxel, patch_shape)
-        img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 250)
+        img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 300)
     
         fg_brightness = branch_search(img_patch, center, branch_dist)
         bg_brightness = np.percentile(img_patch, 20)
@@ -229,7 +229,7 @@ def is_branchy(img, voxel, patch_shape, branch_dist=10):
 
 def branch_search(img_patch, root, min_dist):
     # Initializations
-    binarized = exposure.equalize_adapthist(img_patch, nbins=6) > 0.15
+    binarized = exposure.equalize_adapthist(img_patch, nbins=5) > 0.15
     fg_brightness = list()
     max_dist = 0
 
