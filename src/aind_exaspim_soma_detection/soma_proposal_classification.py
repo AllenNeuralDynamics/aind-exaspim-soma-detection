@@ -17,6 +17,7 @@ from tqdm import tqdm
 import numpy as np
 import torch
 
+from aind_exaspim_soma_detection import soma_proposal_generation as spg
 from aind_exaspim_soma_detection.utils import img_util, ml_util
 from aind_exaspim_soma_detection.machine_learning.models import FastConvNet3d
 from aind_exaspim_soma_detection.machine_learning.data_handling import (
@@ -209,50 +210,7 @@ def branchiness_filtering(
     return filtered_accepts
 
 
-def is_branchy(img, voxel, patch_shape, branch_dist=10):
-    center = tuple([s // 2 for s in patch_shape])
-    try:
-        img_patch = img_util.get_patch(img, voxel, patch_shape)
-        img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 300)
-    
-        fg_brightness = branch_search(img_patch, center, branch_dist)
-        bg_brightness = np.percentile(img_patch, 20)
-        if fg_brightness:
-            contrast_score = np.mean(fg_brightness) - bg_brightness
-            return voxel, contrast_score >= 50
-        else:
-            return voxel, False
-    except:
-        print(f"Failed on {center} for img.shape {img.shape}")
-        return voxel, False
-
-
-def branch_search(img_patch, root, min_dist):
-    # Initializations
-    binarized = exposure.equalize_adapthist(img_patch, nbins=5) > 0.15
-    fg_brightness = list()
-    max_dist = 0
-
-    # Search
-    if img_util.is_inbounds(root, img_patch.shape):
-        queue = [root]
-        visited = set({root})
-        while len(queue) > 0:
-            # Visit voxel
-            voxel = queue.pop()
-            max_dist = max(max_dist, euclidean(voxel, root))
-            if euclidean(voxel, root) >= min_dist:
-                fg_brightness.append(img_patch[voxel])
-    
-            # Update queue
-            for nb in img_util.get_nbs(voxel, img_patch.shape):
-                if nb not in visited and binarized[nb]:
-                    queue.append(nb)
-                    visited.add(nb)
-    return fg_brightness
-
-
-def is_branchy_old(img, voxel, patch_shape, branch_dist=20.0):
+def is_branchy(img, voxel, patch_shape, branch_dist=14.0):
     """
     Checks whether the soma at the given voxel is "branchy", meaning there
     exists a branch with length "branch_dist" microns extending from the soma.
@@ -287,7 +245,7 @@ def is_branchy_old(img, voxel, patch_shape, branch_dist=20.0):
         return voxel, False
 
 
-def branch_search_old(img_patch, root, min_dist):
+def branch_search(img_patch, root, min_dist):
     """
     Performs a breadth-first search (BFS) on a 3D image patch to check if
     there is a voxel in the foreground object containing "root". Note: this
@@ -329,3 +287,51 @@ def branch_search_old(img_patch, root, min_dist):
                 if nb not in visited and img_patch[nb] > 0.15:
                     queue.append(nb)
     return False
+
+
+def brightness_filtering(
+    img_prefix, accepted_proposals, multiscale, patch_shape, max_accepts=2000
+):
+    # Initializations
+    img = img_util.open_img(img_prefix)
+    voxels = [img_util.to_voxels(p, multiscale) for p in accepted_proposals]
+    with ThreadPoolExecutor() as executor:
+        # Assign threads
+        threads = list()
+        for voxel in voxels:
+            threads.append(
+                executor.submit(compute_brightness, img, voxel, patch_shape)
+            )
+
+        # Process results
+        brightness_list = list()
+        filtered_accepts = list()
+        with tqdm(total=len(threads)) as pbar:
+            for thread in as_completed(threads):
+                voxel, brightness = thread.result()
+                if brightness > 0:
+                    xyz = img_util.to_physical(voxel, multiscale)
+                    brightness_list.append(brightness)
+                    filtered_accepts.append(xyz)
+                pbar.update(1)
+
+    # Get brightest accepts
+    idxs = np.argsort(brightness_list)
+    idxs.reverse()
+    return filtered_accepts[0:min(max_accepts, len(idxs))]  
+
+
+def compute_brightness(img, voxel, patch_shape):
+    # Read image patch
+    img_patch = img_util.get_patch(img, voxel, patch_shape)
+    _, params = spg.gaussian_fitness(img_patch)
+    voxels = reformat_coords(spg.generate_grid_coords(img_patch.shape))
+    mean = np.array(params[0:3]).reshape(1, -1)
+
+    # Compute score
+    distances = cdist(voxels, mean, metric='euclidean')
+    std_dist = np.sqrt(2 * np.sum(np.min(params[3:6])**2))
+    within_one_sigma = distances < std_dist
+    img_vals = img_patch.flatten()[within_one_sigma.flatten()]
+    score = np.percentile(img_vals, 80) if len(img_vals) > 0 else np.inf
+    return voxel, score

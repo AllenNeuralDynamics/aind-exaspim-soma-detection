@@ -266,6 +266,10 @@ def filter_accepts(
     filtered_accepts = spc.branchiness_filtering(
         img_path, accepts, multiscale, patch_shape
     )
+    if len(filter_accepts) > 2000:
+        filtered_accepts = spc.brightness_filtering(
+            img_prefix, filtered_accepts, multiscale, patch_shape
+        )
     t, unit = util.time_writer(time() - t0)
 
     # Report results
@@ -323,7 +327,7 @@ def write_results(output_dir, filename, coords_list):
 
     """
     path = os.path.join(output_dir, filename)
-    util.write_list(path, coords_list)
+    util.write_to_list(path, coords_list)
 
 
 if __name__ == "__main__":

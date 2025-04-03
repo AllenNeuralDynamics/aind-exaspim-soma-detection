@@ -18,12 +18,12 @@ Code that generates soma proposals.
 
         2. Filter Initial Proposals - filter_proposals()
             a. Merges proposals within a given distance threshold.
-            b. If the number of proposals exceeds a certain threshold in an image
-               patch, the top k brightest are kept.
-            c. Fit Gaussian to neighborhood centered at proposal and compute fitness
-            score by comparing fitted Gaussian to image values. Proposals are discarded
-            if (1) fitness score is below threshold or (2) estimated standard deviation
-            is out of range.
+            b. If the number of proposals exceeds a certain threshold, the top
+               k brightest proposals are kept.
+            c. Fit Gaussian to neighborhood centered at proposal and compute
+               fitness score by comparing fitted Gaussian to image values.
+               Proposals are discarded if (1) fitness score is below threshold
+               or (2) estimated standard deviation is out of range.
 
 """
 
@@ -33,6 +33,8 @@ from scipy.optimize import curve_fit
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
 from tqdm import tqdm
+
+from random import sample
 
 import numpy as np
 
@@ -76,9 +78,7 @@ def generate_proposals(
     # Initializations
     img = img_util.open_img(img_prefix)
     margin = np.min(patch_overlap) // 4
-    offsets = img_util.calculate_offsets(
-        img, patch_shape, patch_overlap
-    )
+    offsets = img_util.calculate_offsets(img, patch_shape, patch_overlap)
 
     # Generate proposals
     with ThreadPoolExecutor() as executor:
