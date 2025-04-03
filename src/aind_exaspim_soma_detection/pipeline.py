@@ -268,7 +268,7 @@ def filter_accepts(
     )
     if len(filtered_accepts) > 2000:
         filtered_accepts = spc.brightness_filtering(
-            img_prefix, filtered_accepts, multiscale, patch_shape
+            img_path, filtered_accepts, multiscale, patch_shape
         )
     t, unit = util.time_writer(time() - t0)
 
