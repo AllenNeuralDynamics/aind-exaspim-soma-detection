@@ -10,7 +10,7 @@ neural network.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from scipy.spatial.distance import euclidean
+from scipy.spatial.distance import cdist, euclidean
 from skimage import exposure
 from tqdm import tqdm
 
