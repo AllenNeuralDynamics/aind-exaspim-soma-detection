@@ -317,8 +317,8 @@ def brightness_filtering(
 
     # Get brightest accepts
     idxs = np.argsort(brightness_list)
-    idxs.reverse()
-    return filtered_accepts[0:min(max_accepts, len(idxs))]  
+    idxs = np.flip(idxs)[0:max_accepts]
+    return filtered_accepts[idxs]  
 
 
 def compute_brightness(img, voxel, patch_shape):
