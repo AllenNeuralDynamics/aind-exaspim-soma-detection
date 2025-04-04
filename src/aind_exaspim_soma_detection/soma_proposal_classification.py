@@ -317,7 +317,7 @@ def brightness_filtering(
 
     # Get brightest accepts
     idxs = np.argsort(brightness_list)
-    idxs = np.flip(idxs)[0:max_accepts]
+    idxs = np.flip(idxs)[0:max_accepts].astype(int)
     return filtered_accepts[idxs]  
 
 
