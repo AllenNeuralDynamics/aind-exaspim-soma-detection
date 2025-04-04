@@ -335,3 +335,10 @@ def compute_brightness(img, voxel, patch_shape):
     img_vals = img_patch.flatten()[within_one_sigma.flatten()]
     score = np.percentile(img_vals, 80) if len(img_vals) > 0 else np.inf
     return voxel, score
+
+
+def reformat_coords(coords):
+    coord_list = list()
+    for i in range(len(coords[0])):
+        coord_list.append((coords[0][i], coords[1][i], coords[2][i]))
+    return np.array(coord_list)
