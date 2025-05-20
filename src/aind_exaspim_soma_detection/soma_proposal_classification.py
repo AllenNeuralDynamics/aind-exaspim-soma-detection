@@ -290,7 +290,7 @@ def branch_search(img_patch, root, min_dist):
 
 
 def brightness_filtering(
-    img_prefix, accepted_proposals, multiscale, patch_shape, max_accepts=2000
+    img_prefix, accepted_proposals, multiscale, patch_shape, max_accepts=1000
 ):
     # Initializations
     img = img_util.open_img(img_prefix)
