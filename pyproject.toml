@@ -23,6 +23,7 @@ dependencies = [
     'scikit-image',
     'scikit-learn',
     'scipy',
+    'smartsheet-python-sdk',
     'torch',
     'torchvision',
     'tqdm',
