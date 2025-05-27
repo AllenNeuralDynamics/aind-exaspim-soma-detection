@@ -430,6 +430,7 @@ def is_file_in_prefix(bucket_name, prefix, filename):
             return True
     return False
 
+
 def upload_dir_to_s3(bucket_name, prefix, source_dir):
     """
     Uploads the contents of a directory to S3.
