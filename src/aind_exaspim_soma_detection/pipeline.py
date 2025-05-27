@@ -266,7 +266,7 @@ def filter_accepts(
     filtered_accepts = spc.branchiness_filtering(
         img_path, accepts, multiscale, patch_shape
     )
-    if len(filtered_accepts) > 2000:
+    if len(filtered_accepts) > 1000:
         filtered_accepts = spc.brightness_filtering(
             img_path, filtered_accepts, multiscale, patch_shape
         )

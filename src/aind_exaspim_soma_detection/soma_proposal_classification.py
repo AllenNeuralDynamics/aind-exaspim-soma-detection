@@ -290,7 +290,7 @@ def branch_search(img_patch, root, min_dist):
 
 
 def brightness_filtering(
-    img_prefix, accepted_proposals, multiscale, patch_shape, max_accepts=1000
+    img_prefix, accepted_proposals, multiscale, patch_shape, max_accepts=800
 ):
     # Initializations
     img = img_util.open_img(img_prefix)
@@ -318,7 +318,7 @@ def brightness_filtering(
     # Get brightest accepts
     idxs = np.argsort(brightness_list)
     idxs = np.flip(idxs)[0:max_accepts]
-    return np.array(filtered_accepts)[idxs]  
+    return np.array(filtered_accepts)[idxs]
 
 
 def compute_brightness(img, voxel, patch_shape):

@@ -34,8 +34,6 @@ from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
 from tqdm import tqdm
 
-from random import sample
-
 import numpy as np
 
 from aind_exaspim_soma_detection.utils import img_util
