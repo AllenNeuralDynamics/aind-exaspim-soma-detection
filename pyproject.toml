@@ -27,6 +27,7 @@ dependencies = [
     'torch',
     'torchvision',
     'tqdm',
+    'urllib3',
     'zarr'
 ]
 
