@@ -145,6 +145,25 @@ def read_json(path):
     with open(path, "r") as file:
         return json.load(file)
 
+def write_json(path, my_dict):
+    """
+    Writes the contents in the given dictionary to a json file at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path where JSON file is stored.
+    my_dict : dict
+        Dictionary to be written to a JSON.
+
+    Returns
+    -------
+    None
+
+    """
+    with open(path, 'w') as file:
+        json.dump(my_dict, file, indent=4)
+
 
 def write_to_list(path, my_list):
     """
