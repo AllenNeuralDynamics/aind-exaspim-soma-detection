@@ -9,12 +9,14 @@ Miscellaneous helper routines.
 """
 
 from concurrent.futures import as_completed, ThreadPoolExecutor
+from datetime import datetime
 from random import sample
 
 import boto3
 import json
 import os
 import shutil
+import smartsheet
 
 
 # --- OS utils ---
@@ -499,6 +501,49 @@ def upload_file_to_s3(bucket_name, source_path, destination_path):
     """
     s3 = boto3.client("s3")
     s3.upload_file(source_path, bucket_name, destination_path)
+
+
+# --- SmartSheet utils ---
+def find_row_id(brain_id, sheet):
+    for row in sheet.rows:
+        for cell in row.cells:
+            if cell.display_value == brain_id:
+                return row.id
+    raise Exception(f"Row not found for brain_id={brain_id}")
+
+
+def find_sheet_id(access_token, sheet_name):
+    smartsheet_client = smartsheet.Smartsheet(access_token)
+    response = smartsheet_client.Sheets.list_sheets()
+    for sheet in response.data:
+        if sheet.name == sheet_name:
+            return sheet.id
+
+
+def update_smartsheet(access_token, brain_id):
+    # Open smartsheet
+    sheet_id = find_sheet_id(access_token, "ExM Dataset Summary")
+    smartsheet_client = smartsheet.Smartsheet(access_token)
+    sheet = smartsheet_client.Sheets.get_sheet(sheet_id)
+    column_map = {col.title: col.id for col in sheet.columns}
+    today = datetime.today()
+
+    # Updated row object
+    updated_row = smartsheet.models.Row()
+    updated_row.id = find_row_id(brain_id, sheet)
+    updated_row.cells.append({
+        'column_id': column_map.get('Soma Detection'),
+        'value': True,
+        'strict': False
+    })
+    updated_row.cells.append({
+        'column_id': column_map.get('Soma Detection Date'),
+        'value': today.strftime("%m/%d/%Y"),
+        'strict': False
+    })
+
+    # Send the update
+    smartsheet_client.Sheets.update_rows(sheet_id, [updated_row])
 
 
 # --- Miscellaneous ---
