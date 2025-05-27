@@ -10,8 +10,11 @@ Helper routines for working with images.
 
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 import s3fs
 import zarr
+
+from aind_exaspim_soma_detection.utils import util
 
 ANISOTROPY = [0.748, 0.748, 1.0]
 
@@ -210,8 +213,74 @@ def local_to_physical(local_voxel, offset, multiscale):
     return to_physical(global_voxel, multiscale)
 
 
+# --- Image Prefix Search ---
+def get_img_prefix(brain_id, img_prefix_path=None):
+    # Check prefix path
+    if img_prefix_path:
+        prefix_lookup = util.read_json(img_prefix_path)
+        if brain_id in prefix_lookup:
+            return prefix_lookup[brain_id]
+
+    # Search for prefix path
+    result = find_img_prefix(brain_id)
+    if len(result) == 1:
+        prefix = result[0] + "/"
+        if img_prefix_path:
+            prefix_lookup[brain_id] = prefix
+            util.write_json(img_prefix_path, prefix_lookup)
+        return prefix
+
+    raise Exception(f"Image Prefixes Found - {result}")
+
+
+def find_img_prefix(brain_id):
+    # Get possible prefixes
+    bucket_name = "aind-open-data"
+    prefixes = util.list_s3_bucket_prefixes(bucket_name, keyword="exaspim")
+    valid_prefixes = list()
+    for prefix in prefixes:
+        if is_valid_prefix(bucket_name, prefix, brain_id):
+            valid_prefixes.append(
+                os.path.join(f"s3://{bucket_name}", prefix, "fused.zarr")
+            )
+    return find_functional_img_prefix(valid_prefixes)
+
+
+def is_valid_prefix(bucket_name, prefix, brain_id):
+    # Quick checks
+    is_test = "test" in prefix.lower()
+    has_correct_id = str(brain_id) in prefix
+    if not has_correct_id or is_test:
+        return False
+
+    # Check inside prefix
+    if util.exists_in_prefix(bucket_name, prefix, "fused.zarr"):
+        img_prefix = os.path.join(prefix, "fused.zarr")
+        subprefixes = util.list_s3_prefixes(bucket_name, img_prefix)
+        subprefixes = [p.split("/")[-2] for p in subprefixes]
+        for i in range(0, 7):
+            if str(i) not in subprefixes:
+                return False
+    return True
+
+
+def find_functional_img_prefix(prefixes):
+    # Filter img prefixes that fail to open
+    functional_prefixes = list()
+    for prefix in prefixes:
+        try:
+            root = os.path.join(prefix, str(0))
+            store = s3fs.S3Map(root=root, s3=s3fs.S3FileSystem(anon=True))
+            img = zarr.open(store, mode="r")
+            if np.max(img.shape) > 25000:
+                functional_prefixes.append(prefix)
+        except:
+            pass
+    return functional_prefixes
+
+
 # --- Visualizations ---
-def plot_mips(img, clip_bool=False):
+def plot_mips(img, vmax=None):
     """
     Plots the Maximum Intensity Projections (MIPs) of a 3D image along the XY,
     XZ, and YZ axes.
@@ -220,50 +289,23 @@ def plot_mips(img, clip_bool=False):
     ----------
     img : numpy.ndarray
         Input 3D image to generate MIPs from.
-    clip_bool : bool, optional
-        If True, the resulting MIP will be clipped to the range [0, 1] during
-        rescaling. If False, no clipping is applied. The default is False.
 
     Returns
     -------
     None
 
     """
+    vmax = vmax or np.percentile(img, 99.9)
     fig, axs = plt.subplots(1, 3, figsize=(10, 4))
     axs_names = ["XY", "XZ", "YZ"]
     for i in range(3):
-        axs[i].imshow(get_mip(img, axis=i, clip_bool=clip_bool))
+        mip = np.max(img, axis=i)
+        axs[i].imshow(mip, vmax=vmax)
         axs[i].set_title(axs_names[i], fontsize=16)
         axs[i].set_xticks([])
         axs[i].set_yticks([])
     plt.tight_layout()
     plt.show()
-
-
-def get_mip(img_patch, axis=0, clip_bool=False):
-    """
-    Computes the Maximum Intensity Projection (MIP) along a specified axis and
-    rescales the resulting image.
-
-    Parameters
-    ----------
-    img_patch : numpy.ndarray
-        Image to generate MIPs from.
-    axis : int, optional
-        The axis along which to compute the MIP. The default is 0.
-    clip_bool : bool, optional
-        If True, the resulting MIP will be clipped to the range [0, 1] during
-        rescaling. If False, no clipping is applied. The default is False.
-
-    Returns
-    -------
-    numpy.ndarray
-        Maximum Intensity Projection (MIP) along the specified axis, after
-        rescaling.
-
-    """
-    mip = np.max(img_patch, axis=axis)
-    return rescale(mip, clip_bool=clip_bool)
 
 
 def get_detections_img(shape, voxels):
@@ -372,31 +414,3 @@ def normalize(img_patch):
     """
     img_patch -= np.min(img_patch)
     return img_patch / np.max(img_patch)
-
-
-def rescale(img_patch, clip_bool=True):
-    """
-    Rescales the input image to a [0, 2**16 - 1] intensity range, with optional
-    clipping at the 99th percentile.
-
-    Parameters
-    ----------
-    img_patch : numpy.ndarray
-        Image patch to be rescaled.
-    clip_bool : bool, optional
-        If True, the resulting MIP will be clipped at the 99th percentile. The
-        default is True.
-
-    Returns
-    -------
-    numpy.ndarray
-        Rescaled image.
-
-    """
-    # Clip image
-    if clip_bool:
-        img_patch = np.clip(img_patch, 0, np.percentile(img_patch, 99))
-
-    # Rescale image
-    img_patch = (2**16 - 1) * normalize(img_patch)
-    return img_patch.astype(np.uint16)

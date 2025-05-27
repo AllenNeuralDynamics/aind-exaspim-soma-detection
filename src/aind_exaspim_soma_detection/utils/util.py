@@ -17,7 +17,7 @@ import os
 import shutil
 
 
-# --- os utils ---
+# --- OS utils ---
 def mkdir(path, delete=False):
     """
     Creates a directory at "path".
@@ -146,7 +146,7 @@ def read_json(path):
         return json.load(file)
 
 
-def write_list(path, my_list):
+def write_to_list(path, my_list):
     """
     Writes each item in a list to a text file, with each item on a new line.
 
@@ -167,7 +167,7 @@ def write_list(path, my_list):
             file.write(f"{item}\n")
 
 
-# --- swc utils ---
+# --- SWC utils ---
 def read_swc_dir(swc_dir):
     """
     Reads all SWC files in a given directory and returns the content. Note
@@ -332,6 +332,29 @@ def list_s3_prefixes(bucket_name, prefix):
         return [cp["Prefix"] for cp in response["CommonPrefixes"]]
     else:
         return list()
+
+
+def exists_in_prefix(bucket_name, prefix, name):
+    """
+    Checks if a given filename is in a prefix.
+
+    Parameters
+    ----------
+    bucket_name : str
+        Name of the S3 bucket to search.
+    prefix : str
+        S3 prefix to search within.
+    name : str
+        Filename to search for.
+
+    Returns
+    -------
+    bool
+        Indiciation of whether a given file is in a prefix.
+
+    """
+    prefixes = list_s3_prefixes(bucket_name, prefix)
+    return sum([1 for prefix in prefixes if name in prefix]) > 0
 
 
 def list_s3_bucket_prefixes(bucket_name, keyword=None):
