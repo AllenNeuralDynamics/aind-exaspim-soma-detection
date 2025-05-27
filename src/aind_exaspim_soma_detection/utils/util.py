@@ -302,6 +302,29 @@ def write_point(path, xyz, radius=5, color=None):
 
 
 # --- S3 utils ---
+def exists_in_prefix(bucket_name, prefix, name):
+    """
+    Checks if a given filename is in a prefix.
+
+    Parameters
+    ----------
+    bucket_name : str
+        Name of the S3 bucket to search.
+    prefix : str
+        S3 prefix to search within.
+    name : str
+        Filename to search for.
+
+    Returns
+    -------
+    bool
+        Indiciation of whether a given file is in a prefix.
+
+    """
+    prefixes = list_s3_prefixes(bucket_name, prefix)
+    return sum([1 for prefix in prefixes if name in prefix]) > 0
+
+
 def list_s3_prefixes(bucket_name, prefix):
     """
     Lists all immediate subdirectories of a given S3 path (prefix).
@@ -332,29 +355,6 @@ def list_s3_prefixes(bucket_name, prefix):
         return [cp["Prefix"] for cp in response["CommonPrefixes"]]
     else:
         return list()
-
-
-def exists_in_prefix(bucket_name, prefix, name):
-    """
-    Checks if a given filename is in a prefix.
-
-    Parameters
-    ----------
-    bucket_name : str
-        Name of the S3 bucket to search.
-    prefix : str
-        S3 prefix to search within.
-    name : str
-        Filename to search for.
-
-    Returns
-    -------
-    bool
-        Indiciation of whether a given file is in a prefix.
-
-    """
-    prefixes = list_s3_prefixes(bucket_name, prefix)
-    return sum([1 for prefix in prefixes if name in prefix]) > 0
 
 
 def list_s3_bucket_prefixes(bucket_name, keyword=None):
@@ -430,19 +430,47 @@ def is_file_in_prefix(bucket_name, prefix, filename):
             return True
     return False
 
-
-def write_to_s3(local_path, bucket_name, prefix):
+def upload_dir_to_s3(bucket_name, prefix, source_dir):
     """
-    Writes a single file on local machine to an s3 bucket.
+    Uploads the contents of a directory to S3.
 
     Parameters
     ----------
-    local_path : str
-        Path to file to be written to s3.
     bucket_name : str
-        Name of s3 bucket.
+        Name of S3 bucket.
     prefix : str
-        Path within s3 bucket.
+        Name of S3 prefix to be written to.
+    source_dir : str
+        Path to local directory to be written to S3.
+
+    Returns
+    -------
+    None
+
+    """
+    for name in os.listdir(source_dir):
+        source_path = os.path.join(source_dir, name)
+        if os.path.isdir(source_path):
+            subprefix = os.path.join(prefix, name)
+            upload_dir_to_s3(bucket_name, subprefix, source_path)
+        else:
+            destination_path = os.path.join(prefix, name)
+            upload_file_to_s3(bucket_name, source_path, destination_path)
+    print("Results uploaded to", f"s3://{bucket_name}/{prefix}")
+
+
+def upload_file_to_s3(bucket_name, source_path, destination_path):
+    """
+    Uploads single file on local machine to S3.
+
+    Parameters
+    ----------
+    bucket_name : str
+        Name of S3 bucket.
+    source_path : str
+        Path to local file to be written to S3.
+    destination_path : str
+        Path within S3 bucket that file is to be written to.
 
     Returns
     -------
@@ -450,7 +478,7 @@ def write_to_s3(local_path, bucket_name, prefix):
 
     """
     s3 = boto3.client("s3")
-    s3.upload_file(local_path, bucket_name, prefix)
+    s3.upload_file(source_path, bucket_name, destination_path)
 
 
 # --- Miscellaneous ---
