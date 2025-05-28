@@ -13,7 +13,6 @@ from datetime import datetime
 from random import sample
 
 import boto3
-import datetime
 import json
 import os
 import shutil
