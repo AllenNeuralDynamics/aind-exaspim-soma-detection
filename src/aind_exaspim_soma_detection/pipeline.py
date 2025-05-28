@@ -141,7 +141,7 @@ def generate_proposals(
     update_log(output_dir, f"Runtime: {round(t, 4)} {unit}")
     if save_swcs:
         util.write_points(
-            os.path.join(output_dir, "proposals"),
+            os.path.join(output_dir, "proposals.zip"),
             proposals,
             color="0.0 1.0 0.0",
             prefix="proposal_",
@@ -215,7 +215,7 @@ def classify_proposals(
     update_log(output_dir, f"Runtime: {round(t, 4)} {unit}")
     if save_swcs:
         util.write_points(
-            os.path.join(output_dir, "accepts"),
+            os.path.join(output_dir, "accepts.zip"),
             accepts,
             color="0.0 0.0 1.0",
             prefix="accept_",
@@ -277,7 +277,7 @@ def filter_accepts(
     update_log(output_dir, f"Runtime: {round(t, 4)} {unit}")
     if save_swcs:
         util.write_points(
-            os.path.join(output_dir, "filtered_accepts"),
+            os.path.join(output_dir, "filtered_accepts.zip"),
             filtered_accepts,
             color="1.0 0.0 0.0",
             radius=25,
