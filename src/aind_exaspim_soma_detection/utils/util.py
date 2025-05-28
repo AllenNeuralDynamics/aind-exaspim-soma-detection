@@ -16,7 +16,6 @@ from zipfile import ZipFile
 
 import ast
 import boto3
-import datetime
 import json
 import os
 import shutil
