@@ -167,7 +167,7 @@ def write_json(path, my_dict):
         json.dump(my_dict, file, indent=4)
 
 
-def write_to_list(path, my_list):
+def write_list(path, my_list):
     """
     Writes each item in a list to a text file, with each item on a new line.
 
