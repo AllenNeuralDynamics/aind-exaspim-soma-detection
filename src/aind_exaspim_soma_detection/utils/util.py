@@ -10,9 +10,13 @@ Miscellaneous helper routines.
 
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from datetime import datetime
+from io import StringIO
 from random import sample
+from zipfile import ZipFile
 
+import ast
 import boto3
+import datetime
 import json
 import os
 import shutil
@@ -147,6 +151,14 @@ def read_json(path):
     with open(path, "r") as file:
         return json.load(file)
 
+
+def read_soma_locations(path):
+    xyz_list = list()
+    for xyz_str in read_txt(path):
+        xyz_list.append(ast.literal_eval(xyz_str))
+    return xyz_list
+
+
 def write_json(path, my_dict):
     """
     Writes the contents in the given dictionary to a json file at "path".
@@ -185,7 +197,7 @@ def write_list(path, my_list):
     """
     with open(path, "w") as file:
         for item in my_list:
-            file.write(f"{item}\n")
+            file.write(f"{tuple(item)}\n")
 
 
 # --- SWC utils ---
@@ -252,15 +264,15 @@ def read_swc(path):
     return path, [float(xyz_str[i]) + offset[i] for i in range(3)]
 
 
-def write_points(output_dir, points, color=None, prefix="", radius=20):
+def write_points(zip_path, points, color=None, prefix="", radius=20):
     """
     Writes a list of 3D points to individual SWC files in the specified
     directory.
 
     Parameters
     -----------
-    output_dir : str
-        Directory where the SWC files will be saved.
+    zip_path : str
+        Path to ZIP archive where the SWC files will be saved.
     points : list
         A list of 3D points to be saved.
     color : str, optional
@@ -277,49 +289,47 @@ def write_points(output_dir, points, color=None, prefix="", radius=20):
     None
 
     """
-    mkdir(output_dir, delete=True)
-    with ThreadPoolExecutor() as executor:
-        # Assign Threads
-        threads = list()
-        for i, xyz in enumerate(points):
-            filename = prefix + str(i + 1) + ".swc"
-            path = os.path.join(output_dir, filename)
-            threads.append(
-                executor.submit(write_point, path, xyz, radius, color=color)
-            )
+    zip_writer = ZipFile(zip_path, "w")
+    for i, xyz in enumerate(points):
+        filename = prefix + str(i + 1) + ".swc"
+        to_zipped_point(zip_writer, filename, xyz, color=color, radius=radius)
 
 
-def write_point(path, xyz, radius=5, color=None):
+def to_zipped_point(zip_writer, filename, xyz, color=None, radius=5):
     """
-    Writes an SWC file.
+    Writes a point to an SWC file format, which is then stored in a ZIP
+    archive.
 
     Parameters
     ----------
-    path : str
-        Path on local machine that SWC file will be written to.
+    zip_writer : zipfile.ZipFile
+        A ZipFile object that will store the generated SWC file.
+    filename : str
+        Filename of SWC file.
     xyz : ArrayLike
-        xyz coordinate to be written to an SWC file.
-    radius : float, optional
-        Radius of point. The default is 5um.
+        Point to be written to SWC file.
     color : str, optional
         Color of nodes. The default is None.
+    radius : float, optional
+        Radius of point. The default is 5um.
 
     Returns
     -------
-    None.
+    None
 
     """
-    with open(path, "w") as f:
+    with StringIO() as text_buffer:
         # Preamble
-        if color is not None:
-            f.write("# COLOR " + color)
-        else:
-            f.write("# id, type, x, y, z, r, pid")
-        f.write("\n")
+        if color:
+            text_buffer.write("# COLOR " + color)
+        text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
 
-        # Entry
+        # Write entry
         x, y, z = tuple(xyz)
-        f.write(f"1 5 {x} {y} {z} {radius} -1")
+        text_buffer.write("\n" + f"1 5 {x} {y} {z} {radius} -1")
+
+        # Finish
+        zip_writer.writestr(filename, text_buffer.getvalue())
 
 
 # --- S3 utils ---
