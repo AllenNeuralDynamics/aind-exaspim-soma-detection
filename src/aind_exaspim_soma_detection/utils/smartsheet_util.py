@@ -94,8 +94,13 @@ def extract_somas_by_brain(df, idx):
 
 
 # --- ExM Dataset Summary Utils ---
-def update_soma_detection(client, brain_id):
+def update_soma_detection(brain_id, access_token):
+    # Initialize client
+    sheet_name = "ExM Dataset Summary"
+    client = SmartSheetClient(access_token, sheet_name)
     column_map = {col.title: col.id for col in client.sheet.columns}
+
+    # Update SmartSheet
     updated_row = smartsheet.models.Row()
     updated_row.id = client.find_row_id(brain_id)
     updated_row.cells.append({
