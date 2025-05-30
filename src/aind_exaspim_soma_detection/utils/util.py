@@ -8,8 +8,10 @@ Miscellaneous helper routines.
 
 """
 
+from botocore import UNSIGNED
+from botocore.config import Config
 from concurrent.futures import as_completed, ThreadPoolExecutor
-from datetime import datetime
+
 from io import StringIO
 from random import sample
 from zipfile import ZipFile
@@ -19,7 +21,6 @@ import boto3
 import json
 import os
 import shutil
-import smartsheet
 
 
 # --- OS utils ---
@@ -355,6 +356,32 @@ def exists_in_prefix(bucket_name, prefix, name):
     return sum([1 for prefix in prefixes if name in prefix]) > 0
 
 
+def is_file_in_prefix(bucket_name, prefix, filename):
+    """
+    Checks if a specific file exists within a given S3 prefix.
+
+    Parameters
+    -----------
+    bucket_name : str
+        Name of the S3 bucket to searched.
+    prefix : str
+        S3 prefix (path) under which to look for the file.
+    filename : str
+        Name of the file to search for within the specified prefix.
+
+    Returns:
+    --------
+    bool
+        Returns "True" if the file exists within the given prefix,
+        otherwise "False".
+
+    """
+    for sub_prefix in list_s3_prefixes(bucket_name, prefix):
+        if filename in sub_prefix:
+            return True
+    return False
+
+
 def list_s3_prefixes(bucket_name, prefix):
     """
     Lists all immediate subdirectories of a given S3 path (prefix).
@@ -435,30 +462,10 @@ def list_s3_bucket_prefixes(bucket_name, keyword=None):
     return prefixes
 
 
-def is_file_in_prefix(bucket_name, prefix, filename):
-    """
-    Checks if a specific file exists within a given S3 prefix.
-
-    Parameters
-    -----------
-    bucket_name : str
-        Name of the S3 bucket to searched.
-    prefix : str
-        S3 prefix (path) under which to look for the file.
-    filename : str
-        Name of the file to search for within the specified prefix.
-
-    Returns:
-    --------
-    bool
-        Returns "True" if the file exists within the given prefix,
-        otherwise "False".
-
-    """
-    for sub_prefix in list_s3_prefixes(bucket_name, prefix):
-        if filename in sub_prefix:
-            return True
-    return False
+def read_s3_txt_file(bucket_name, file_path):
+    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+    response = s3.get_object(Bucket=bucket_name, Key=file_path)
+    return response['Body'].read().decode('utf-8').splitlines()
 
 
 def upload_dir_to_s3(bucket_name, prefix, source_dir):
@@ -512,50 +519,60 @@ def upload_file_to_s3(bucket_name, source_path, destination_path):
     s3.upload_file(source_path, bucket_name, destination_path)
 
 
-# --- SmartSheet utils ---
-def find_row_id(brain_id, sheet):
-    for row in sheet.rows:
-        for cell in row.cells:
-            if cell.display_value == brain_id:
-                return row.id
-    raise Exception(f"Row not found for brain_id={brain_id}")
+# --- S3 Soma utils ---
+def load_somas_locations(brain_id, filtered=False):
+    bucket_name = 'aind-msma-morphology-data'
+    file_path = find_soma_result_prefix(brain_id, filtered=filtered)
+    lines = read_s3_txt_file(bucket_name, file_path)
+    return [ast.literal_eval(xyz) for xyz in lines]
 
 
-def find_sheet_id(access_token, sheet_name):
-    smartsheet_client = smartsheet.Smartsheet(access_token)
-    response = smartsheet_client.Sheets.list_sheets()
-    for sheet in response.data:
-        if sheet.name == sheet_name:
-            return sheet.id
+def find_soma_result_prefix(brain_id, filtered=False):
+    # Find soma results for brain_id
+    bucket_name = 'aind-msma-morphology-data'
+    soma_prefix = f"exaspim_soma_detection/{brain_id}"
+    prefix_list = list_s3_prefixes(bucket_name, soma_prefix)
 
+    # Find most recent result
+    if prefix_list:
+        dirname = find_most_recent_dirname(prefix_list)
+        pre = "filtered-" if filtered else ""
+        filename = f"{pre}somas-{brain_id}.txt"
+        return os.path.join(soma_prefix, dirname, filename)
+    else:
+        return None
 
-def update_smartsheet(access_token, brain_id):
-    # Open smartsheet
-    sheet_id = find_sheet_id(access_token, "ExM Dataset Summary")
-    smartsheet_client = smartsheet.Smartsheet(access_token)
-    sheet = smartsheet_client.Sheets.get_sheet(sheet_id)
-    column_map = {col.title: col.id for col in sheet.columns}
-    today = datetime.today()
-
-    # Updated row object
-    updated_row = smartsheet.models.Row()
-    updated_row.id = find_row_id(brain_id, sheet)
-    updated_row.cells.append({
-        'column_id': column_map.get('Soma Detection'),
-        'value': True,
-        'strict': False
-    })
-    updated_row.cells.append({
-        'column_id': column_map.get('Soma Detection Date'),
-        'value': today.strftime("%m/%d/%Y"),
-        'strict': False
-    })
-
-    # Send the update
-    smartsheet_client.Sheets.update_rows(sheet_id, [updated_row])
+    
+def find_most_recent_dirname(results_prefix_list):
+    dates = list()
+    for prefix in results_prefix_list:
+        dirname = prefix.split("/")[-2]
+        dates.append(dirname.replace("results_", ""))
+    return "results_" + sorted(dates)[-1]
 
 
 # --- Miscellaneous ---
+def find_key_intersection(dict_1, dict_2):
+    keys_1 = find_key_subset(dict_1, dict_2)
+    keys_2 = find_key_subset(dict_2, dict_1)
+    return keys_1.intersection(keys_2)
+
+
+def find_key_subset(dict_1, dict_2):
+    subset = set()
+    for key in dict_1:
+        if key in dict_2:
+            subset.add(key)
+    return subset
+
+
+def get_subdict(my_dict, keys):
+    subdict = dict()
+    for key in keys:
+        subdict[key] = my_dict[key]
+    return subdict
+
+
 def sample_once(my_container):
     """
     Samples a single element from "my_container".
