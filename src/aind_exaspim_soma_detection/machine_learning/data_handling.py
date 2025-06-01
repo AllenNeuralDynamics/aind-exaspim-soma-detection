@@ -315,7 +315,7 @@ class ProposalDataset(Dataset):
 
         """
         _, img_patch, _ = self[key]
-        img_util.plot_mips(img_patch, clip_bool=True)
+        img_util.plot_mips(img_patch)
 
     def visualize_augmented_proposal(self, key):
         """
@@ -351,7 +351,7 @@ class MultiThreadedDataLoader:
 
     """
 
-    def __init__(self, dataset, batch_size, shuffle=True):
+    def __init__(self, dataset, batch_size=64, shuffle=True):
         """
         Constructs a multithreaded data loader.
 
@@ -359,8 +359,8 @@ class MultiThreadedDataLoader:
         ----------
         dataset : Dataset.ProposalDataset
             Instance of custom dataset.
-        batch_size : int
-            Number of samples per batch.
+        batch_size : int, optional
+            Number of samples per batch. The default is 64.
 
         Returns
         -------
