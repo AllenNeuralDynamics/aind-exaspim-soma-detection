@@ -224,7 +224,7 @@ def branchiness_filtering(
     # Process results
     filtered_accepts, filtered_scores = list(), list()
     for voxel, score in zip(voxels, scores):
-        brightness, branchiness = score
+        branchiness, brightness = score
         if branchiness > min_branchiness_score:
             filtered_accepts.append(img_util.to_physical(voxel, multiscale))
             filtered_scores.append(score)
@@ -234,17 +234,16 @@ def branchiness_filtering(
 def compute_branchiness(img, voxel, patch_shape, return_mask=False):
     center = tuple([s // 2 for s in patch_shape])
     img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 1000)
-    brightness, branchiness, object_mask = branch_search(img_patch, center)
+    branchiness, brightness, object_mask = branch_search(img_patch, center)
     if return_mask:
-        return voxel, brightness, branchiness, object_mask
+        return voxel, branchiness, brightness, object_mask
     else:
-        return voxel, (brightness, branchiness)
+        return voxel, (branchiness, brightness)
 
 
 def branch_search(img_patch, root):
     # Compute foreground
     relabeled = kmeans_intensity_clustering(img_patch)
-    img_patch = img_patch - np.mean(img_patch[relabeled == 0])
     foreground = (relabeled > 0).astype(int)
 
     # Search center object
@@ -266,7 +265,7 @@ def branch_search(img_patch, root):
 
     # Process results
     brightness = np.sum(object_mask * img_patch)
-    return brightness, max_dist, object_mask
+    return max_dist, brightness, object_mask
 
 
 def brightness_filtering(
@@ -302,9 +301,12 @@ def compute_brightness(img, voxel, patch_shape):
 
 # --- Helpers ---
 def kmeans_intensity_clustering(img_patch, n_clusters=3):
-    kmeans = KMeans(n_clusters=n_clusters, n_init=15)
-    kmeans.fit(img_patch.reshape(-1, 1))
-    return kmeans.labels_.reshape(img_patch.shape)
+    try:
+        kmeans = KMeans(n_clusters=n_clusters, n_init=15)
+        kmeans.fit(img_patch.reshape(-1, 1))
+        return kmeans.labels_.reshape(img_patch.shape)
+    except:
+        return np.zeros_like(img_patch)
 
 
 def reformat_coords(coords):
