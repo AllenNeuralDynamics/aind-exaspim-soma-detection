@@ -11,7 +11,7 @@ neural network.
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.spatial.distance import cdist, euclidean
-from skimage import exposure
+from sklearn.cluster import KMeans
 from tqdm import tqdm
 
 import numpy as np
@@ -87,7 +87,7 @@ def classify_proposals(
     return soma_xyz_list
 
 
-def run_inference(dataloader, model, device, verbose=True):
+def run_inference(dataloader, model, device="cuda", verbose=True):
     """
     Runs inference on a given dataset using the provided model, then returns
     the predictions and ground truth labels.
@@ -98,8 +98,9 @@ def run_inference(dataloader, model, device, verbose=True):
         DataLoader object that loads the dataset in batches.
     model : torch.nn.Module
         Neural network model that is used to generate predictions.
-    device : str
-        Name of device where model should be loaded and run.
+    device : str, optional
+        Name of device where model should be loaded and run. The default is
+        "cuda".
     verbose : bool, optional
         Indication of whether to display a progress bar during inference. The
         default is True.
@@ -134,7 +135,7 @@ def run_inference(dataloader, model, device, verbose=True):
     return keys, np.vstack(hat_y)[:, 0], np.vstack(y)[:, 0]
 
 
-def load_model(path, patch_shape, device):
+def load_model(path, patch_shape, device="cuda"):
     """
     Loads a pre-trained model from the given, then transfers the model to the
     specified device (i.e. CPU or GPU).
@@ -145,8 +146,9 @@ def load_model(path, patch_shape, device):
         Path to the saved model weights.
     patch_shape : Tuple[int]
         Shape of the input patches expected by the model expects.
-    device : str
-        Name of device where model should be loaded and run.
+    device : str, optional
+        Name of device where model should be loaded and run. The default is
+        "cuda".
 
     Returns
     -------
@@ -161,8 +163,33 @@ def load_model(path, patch_shape, device):
 
 
 # --- Accepted Proposal Filtering ---
+def compute_scores(score_func, img, voxels, patch_shape):
+    with ThreadPoolExecutor() as executor:
+        # Assign threads
+        threads = list()
+        for voxel in voxels:
+            threads.append(
+                executor.submit(score_func, img, voxel, patch_shape)
+            )
+
+        # Process results
+        voxels, scores = list(), list()
+        pbar = tqdm(total=len(threads)) 
+        for thread in as_completed(threads):
+            voxel, score = thread.result()
+            if score is not None:
+                voxels.append(voxel)
+                scores.append(score)
+            pbar.update(1)
+    return voxels, scores
+
+
 def branchiness_filtering(
-    img_prefix, accepted_proposals, multiscale, patch_shape
+    img_prefix,
+    accepts,
+    multiscale,
+    patch_shape,
+    min_branchiness_score=25
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
@@ -172,7 +199,7 @@ def branchiness_filtering(
     ----------
     img_prefix : str
         Prefix (or path) of a whole-brain image stored in a S3 bucket.
-    accepted_proposals : List[Tuple[float]]
+    accepts : List[Tuple[float]]
         List of accepted proposals, where each is represented by an xyz
         coordinate.
     multiscale : int
@@ -187,138 +214,74 @@ def branchiness_filtering(
         center.
 
     """
-    # Initializations
+    # Compute scores
     img = img_util.open_img(img_prefix)
-    voxels = [img_util.to_voxels(p, multiscale) for p in accepted_proposals]
-    with ThreadPoolExecutor() as executor:
-        # Assign threads
-        threads = list()
-        for voxel in voxels:
-            threads.append(
-                executor.submit(is_branchy, img, voxel, patch_shape)
-            )
+    voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
+    voxels, scores = compute_scores(
+        compute_branchiness, img, voxels, patch_shape
+    )
 
-        # Process results
-        filtered_accepts = list()
-        with tqdm(total=len(threads)) as pbar:
-            for thread in as_completed(threads):
-                voxel, branchy_bool = thread.result()
-                if branchy_bool:
-                    xyz = img_util.to_physical(voxel, multiscale)
-                    filtered_accepts.append(xyz)
-                pbar.update(1)
+    # Process results
+    filtered_accepts, filtered_scores = list(), list()
+    for voxel, score in zip(voxels, scores):
+        brightness, branchiness = score
+        if branchiness > min_branchiness_score:
+            filtered_accepts.append(img_util.to_physical(voxel, multiscale))
+            filtered_scores.append(score)
     return filtered_accepts
 
 
-def is_branchy(img, voxel, patch_shape, branch_dist=14.0):
-    """
-    Checks whether the soma at the given voxel is "branchy", meaning there
-    exists a branch with length "branch_dist" microns extending from the soma.
-
-    Parameters
-    ----------
-    img : zarr.core.Array
-        Array representing a 3D image of a whole-brain.
-    voxel : Tuple[int]
-        Coordinate that represents the location of a soma.
-    patch_shape : Tuple[int]
-        Shape of the image patch to be extracted from "img" which is centered
-        at "voxel".
-    branch_dist : float, optional
-        Distance from center that determines if a detected somas is branchy.
-        The default is 20.0.
-
-    Returns
-    -------
-    tuple
-        A tuple that contains the following:
-            - voxel (Tuple[int]): Location of a soma.
-            - is_branchy (bool) : Indication of whether soma is branchy.
-    """
+def compute_branchiness(img, voxel, patch_shape, return_mask=False):
     center = tuple([s // 2 for s in patch_shape])
-    try:
-        img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 250)
-        img_patch = exposure.equalize_adapthist(img_patch, nbins=6)
-        return voxel, branch_search(img_patch, center, branch_dist)
-    except:
-        print(f"Failed on center {center} for img.shape {img.shape}")
-        return voxel, False
+    img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 1000)
+    brightness, branchiness, object_mask = branch_search(img_patch, center)
+    if return_mask:
+        return voxel, brightness, branchiness, object_mask
+    else:
+        return voxel, (brightness, branchiness)
 
 
-def branch_search(img_patch, root, min_dist):
-    """
-    Performs a breadth-first search (BFS) on a 3D image patch to check if
-    there is a voxel in the foreground object containing "root". Note: this
-    routine is used to check if a soma (i.e. root) is branchy.
+def branch_search(img_patch, root):
+    # Compute foreground
+    relabeled = kmeans_intensity_clustering(img_patch)
+    img_patch = img_patch - np.mean(img_patch[relabeled == 0])
+    foreground = (relabeled > 0).astype(int)
 
-    Parameters
-    ----------
-    img_patch : numpy.ndarray
-        Image patch to be searched.
-    root : Tuple[int]
-        Voxel coordinates which is the root of the BFS.
-    min_dist : float
-        Distance from root that determines if the corresponding foreground
-        object is branchy.
+    # Search center object
+    max_dist = 0
+    object_mask = np.zeros_like(foreground)
+    queue = [root]
+    visited = set([root])
+    while len(queue) > 0:
+        # Visit voxel
+        voxel = queue.pop()
+        max_dist = max(euclidean(voxel, root), max_dist)
+        object_mask[voxel] = 1
 
-    Returns
-    -------
-    bool
-        Indication of whether the foreground object containing root is
-        branchy.
+        # Update queue
+        for nb in img_util.get_nbs(voxel, img_patch.shape):
+            if nb not in visited and foreground[nb] > 0:
+                queue.append(nb)
+                visited.add(nb)
 
-    """
-    if img_util.is_inbounds(root, img_patch.shape):
-        # Run search
-        max_dist = 0
-        queue = [root]
-        visited = set()
-        while len(queue) > 0:
-            # Visit voxel
-            voxel = queue.pop()
-            if euclidean(voxel, root) >= min_dist:
-                return True
-            if euclidean(voxel, root) > max_dist:
-                max_dist = euclidean(voxel, root)
-            visited.add(voxel)
-
-            # Update queue
-            for nb in img_util.get_nbs(voxel, img_patch.shape):
-                if nb not in visited and img_patch[nb] > 0.15:
-                    queue.append(nb)
-    return False
+    # Process results
+    brightness = np.sum(object_mask * img_patch)
+    return brightness, max_dist, object_mask
 
 
 def brightness_filtering(
-    img_prefix, accepted_proposals, multiscale, patch_shape, max_accepts=800
+    img_prefix, accepts, multiscale, patch_shape, max_accepts=800
 ):
-    # Initializations
+    # Compute scores
     img = img_util.open_img(img_prefix)
-    voxels = [img_util.to_voxels(p, multiscale) for p in accepted_proposals]
-    with ThreadPoolExecutor() as executor:
-        # Assign threads
-        threads = list()
-        for voxel in voxels:
-            threads.append(
-                executor.submit(compute_brightness, img, voxel, patch_shape)
-            )
+    voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
+    voxels, scores = compute_scores(
+        compute_brightness, img, voxels, patch_shape
+    )
 
-        # Process results
-        brightness_list = list()
-        filtered_accepts = list()
-        with tqdm(total=len(threads)) as pbar:
-            for thread in as_completed(threads):
-                voxel, brightness = thread.result()
-                if brightness > 0:
-                    xyz = img_util.to_physical(voxel, multiscale)
-                    brightness_list.append(brightness)
-                    filtered_accepts.append(xyz)
-                pbar.update(1)
-
-    # Get brightest accepts
-    idxs = np.argsort(brightness_list)
-    idxs = np.flip(idxs)[0:max_accepts]
-    return np.array(filtered_accepts)[idxs]
+    # Process results
+    idxs = np.flip(np.argsort(scores))[0:max_accepts]
+    return np.array(accepts)[idxs]
 
 
 def compute_brightness(img, voxel, patch_shape):
@@ -335,6 +298,13 @@ def compute_brightness(img, voxel, patch_shape):
     img_vals = img_patch.flatten()[within_one_sigma.flatten()]
     score = np.percentile(img_vals, 80) if len(img_vals) > 0 else np.inf
     return voxel, score
+
+
+# --- Helpers ---
+def kmeans_intensity_clustering(img_patch, n_clusters=3):
+    kmeans = KMeans(n_clusters=n_clusters, n_init=15)
+    kmeans.fit(img_patch.reshape(-1, 1))
+    return kmeans.labels_.reshape(img_patch.shape)
 
 
 def reformat_coords(coords):

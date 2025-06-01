@@ -62,8 +62,11 @@ def run_pipeline(
     # Initializations
     t0 = time()
     util.mkdir(output_dir, delete=True)
+    model_path = classify_params["model_path"]
     update_log(output_dir, f"Brain_ID: {brain_id}")
-    model_path_exists = os.path.exists(classify_params["model_path"])
+    update_log(output_dir, f"Image Prefix: {img_path}")
+    update_log(output_dir, f"Model Name: {model_path}")
+    model_path_exists = os.path.exists(model_path)
     assert model_path_exists, "model_path does not exist!"
 
     # Detect somas
@@ -228,7 +231,7 @@ def filter_accepts(
     img_path,
     accepts,
     multiscale=3,
-    patch_shape=(40, 40, 40),
+    patch_shape=(42, 42, 42),
     output_dir=None,
     save_swcs=False,
 ):
@@ -266,10 +269,10 @@ def filter_accepts(
     filtered_accepts = spc.branchiness_filtering(
         img_path, accepts, multiscale, patch_shape
     )
-    if len(filtered_accepts) > 1000:
-        filtered_accepts = spc.brightness_filtering(
-            img_path, filtered_accepts, multiscale, patch_shape
-        )
+    #if len(filtered_accepts) > 1000:
+    #    filtered_accepts = spc.brightness_filtering(
+    #        img_path, filtered_accepts, multiscale, patch_shape
+    #    )
     t, unit = util.time_writer(time() - t0)
 
     # Report results
