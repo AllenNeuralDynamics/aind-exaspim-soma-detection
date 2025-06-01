@@ -542,7 +542,7 @@ def find_soma_result_prefix(brain_id, filtered=False):
     else:
         return None
 
-    
+
 def find_most_recent_dirname(results_prefix_list):
     dates = list()
     for prefix in results_prefix_list:

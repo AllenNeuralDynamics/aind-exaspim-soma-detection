@@ -114,4 +114,3 @@ def update_soma_detection(brain_id, access_token):
         'strict': False
     })
     client.update_rows(updated_row)
-    
