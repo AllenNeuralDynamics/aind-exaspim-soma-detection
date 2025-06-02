@@ -9,7 +9,7 @@ neural network.
 
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from scipy.spatial.distance import cdist, euclidean
 from sklearn.cluster import KMeans
 from tqdm import tqdm
@@ -164,14 +164,7 @@ def load_model(path, patch_shape, device="cuda"):
 
 # --- Accepted Proposal Filtering ---
 def compute_scores(score_func, img, voxels, patch_shape):
-    voxel_list, score_list = list(), list()
-    for voxel in tqdm(voxels):
-        voxel, score = score_func(img, voxel, patch_shape)
-        voxel_list.append(voxel)
-        score_list.append(score)
-    return voxel_list, score_list
-
-    with ThreadPoolExecutor() as executor:
+    with ProcessPoolExecutor() as executor:
         # Assign threads
         threads = list()
         for voxel in voxels:
@@ -196,7 +189,7 @@ def branchiness_filtering(
     accepts,
     multiscale,
     patch_shape,
-    min_branchiness_score=20
+    min_branchiness_score=24
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
@@ -255,7 +248,7 @@ def branch_search(img_patch, root):
 
     # Search center object
     max_dist = 0
-    object_mask = np.zeros_like(foreground)
+    object_mask = np.zeros_like(img_patch)
     queue = [root]
     visited = set([root])
     while len(queue) > 0:
@@ -266,7 +259,7 @@ def branch_search(img_patch, root):
 
         # Update queue
         for nb in img_util.get_nbs(voxel, img_patch.shape):
-            if nb not in visited and foreground[nb] > 0:
+            if nb not in visited and foreground[nb]:
                 queue.append(nb)
                 visited.add(nb)
 
@@ -309,11 +302,14 @@ def compute_brightness(img, voxel, patch_shape):
 # --- Helpers ---
 def kmeans_intensity_clustering(img_patch, n_clusters=3):
     try:
-        kmeans = KMeans(n_clusters=n_clusters, n_init=15)
+        kmeans = KMeans(n_clusters=n_clusters, n_init=20)
         kmeans.fit(img_patch.reshape(-1, 1))
-        return kmeans.labels_.reshape(img_patch.shape)
+        relabed = kmeans.labels_.reshape(img_patch.shape)
+        if relabed.shape == img_patch.shape:
+            return relabed
     except:
-        return np.ones_like(img_patch)
+        pass
+    return np.ones_like(img_patch)
 
 
 def reformat_coords(coords):
