@@ -9,7 +9,7 @@ neural network.
 
 """
 
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.spatial.distance import cdist, euclidean
 from sklearn.cluster import KMeans
 from tqdm import tqdm
@@ -163,27 +163,6 @@ def load_model(path, patch_shape, device="cuda"):
 
 
 # --- Accepted Proposal Filtering ---
-def compute_scores(score_func, img, voxels, patch_shape):
-    with ProcessPoolExecutor() as executor:
-        # Assign threads
-        threads = list()
-        for voxel in voxels:
-            threads.append(
-                executor.submit(score_func, img, voxel, patch_shape)
-            )
-
-        # Process results
-        voxels, scores = list(), list()
-        pbar = tqdm(total=len(threads)) 
-        for thread in as_completed(threads):
-            voxel, score = thread.result()
-            if score is not None:
-                voxels.append(voxel)
-                scores.append(score)
-            pbar.update(1)
-    return voxels, scores
-
-
 def branchiness_filtering(
     img_prefix,
     accepts,
@@ -228,7 +207,65 @@ def branchiness_filtering(
         if branchiness > min_branchiness_score:
             filtered_accepts.append(img_util.to_physical(voxel, multiscale))
             filtered_scores.append(score)
+
+    # Filter by brightness (if applicable)
+    n = len(filtered_accepts)
+    k = 80 if n > 5000 else 85 if n > 2000 else 98
+    filtered_accepts, filtered_scores = extract_top_k_percent(
+        filtered_accepts, filtered_scores, k
+    )
+
+    # Filter again by branchiness (if applicable)
+    if len(filtered_accepts) > 2000:
+        filtered_again = list()
+        for xyz, score in zip(filtered_accepts, filtered_scores):
+            branchiness, brightness = score
+            if branchiness > min_branchiness_score + 4:
+                filtered_again.append(xyz)
+        filtered_accepts = filtered_again
     return filtered_accepts
+
+
+def compute_scores(score_func, img, voxels, patch_shape):
+    voxel_list, score_list = list(), list()
+    for voxel in tqdm(voxels):
+        voxel, score = score_func(img, voxel, patch_shape)
+        voxel_list.append(voxel)
+        score_list.append(score)
+    return voxel_list, score_list
+
+    with ThreadPoolExecutor() as executor:
+        # Assign threads
+        threads = list()
+        for voxel in voxels:
+            threads.append(
+                executor.submit(score_func, img, voxel, patch_shape)
+            )
+
+        # Process results
+        voxels, scores = list(), list()
+        pbar = tqdm(total=len(threads))
+        for thread in as_completed(threads):
+            voxel, score = thread.result()
+            if score is not None:
+                voxels.append(voxel)
+                scores.append(score)
+            pbar.update(1)
+    return voxels, scores
+
+
+def extract_top_k_percent(voxels, scores, k):
+    # Get sorted idxs
+    if isinstance(scores[0], tuple):
+        sorted_idxs = np.flip(np.argsort([b for _, b in scores]))
+    else:
+        sorted_idxs = np.flip(np.argsort(scores))
+
+    # Sort results
+    n = int(len(voxels) * k / 100)
+    voxels = [voxels[i] for i in sorted_idxs[0:n]]
+    scores = [scores[i] for i in sorted_idxs[0:n]]
+    return voxels, scores
 
 
 def compute_branchiness(img, voxel, patch_shape, return_mask=False):
