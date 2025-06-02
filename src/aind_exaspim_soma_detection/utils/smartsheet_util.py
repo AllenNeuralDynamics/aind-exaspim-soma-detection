@@ -59,7 +59,7 @@ class SmartSheetClient:
 
 
 # --- Neuron Reconstruction Utils ---
-def extract_somas(df):
+def extract_somas(df, return_completed=False):
     idx = 0
     soma_locations = dict()
     while idx < len(df["Horta Coordinates"]):
@@ -67,22 +67,26 @@ def extract_somas(df):
         if type(microscope) is str:
             if "spim" in microscope.lower():
                 brain_id = str(df["ID"][idx]).split(".")[0]
-                xyz_list = extract_somas_by_brain(df, idx + 1)
-                if len(xyz_list) > 0:
-                    soma_locations[brain_id] = xyz_list
+                coords = extract_somas_by_brain(df, idx + 1, return_completed)
+                if len(coords) > 0:
+                    soma_locations[brain_id] = coords
         idx += 1
     return soma_locations
 
 
-def extract_somas_by_brain(df, idx):
+def extract_somas_by_brain(df, idx, return_completed):
     xyz_list = list()
     while isinstance(df["Horta Coordinates"][idx], str):
         # Check whether to add idx
         entry = df["Horta Coordinates"][idx]
         is_coord = "[" in entry and "]" in entry
+        is_complete = df["Status 1"][idx] == "Completed"
         if is_coord:
             try:
-                xyz_list.append(ast.literal_eval(entry))
+                if return_completed and is_complete:
+                    xyz_list.append(ast.literal_eval(entry))
+                elif not return_completed:
+                    xyz_list.append(ast.literal_eval(entry))
             except:
                 pass
 
