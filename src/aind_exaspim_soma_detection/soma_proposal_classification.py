@@ -164,6 +164,13 @@ def load_model(path, patch_shape, device="cuda"):
 
 # --- Accepted Proposal Filtering ---
 def compute_scores(score_func, img, voxels, patch_shape):
+    voxel_list, score_list = list(), list()
+    for voxel in tqdm(voxels):
+        voxel, score = score_func(img, voxel, patch_shape)
+        voxel_list.append(voxel)
+        score_list.append(score)
+    return voxel_list, score_list
+
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = list()
@@ -306,7 +313,7 @@ def kmeans_intensity_clustering(img_patch, n_clusters=3):
         kmeans.fit(img_patch.reshape(-1, 1))
         return kmeans.labels_.reshape(img_patch.shape)
     except:
-        return np.zeros_like(img_patch)
+        return np.ones_like(img_patch)
 
 
 def reformat_coords(coords):
