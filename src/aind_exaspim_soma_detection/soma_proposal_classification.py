@@ -9,7 +9,7 @@ neural network.
 
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from scipy.spatial.distance import cdist, euclidean
 from sklearn.cluster import KMeans
 from tqdm import tqdm
@@ -227,13 +227,6 @@ def branchiness_filtering(
 
 
 def compute_scores(score_func, img, voxels, patch_shape):
-    voxel_list, score_list = list(), list()
-    for voxel in tqdm(voxels):
-        voxel, score = score_func(img, voxel, patch_shape)
-        voxel_list.append(voxel)
-        score_list.append(score)
-    return voxel_list, score_list
-
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = list()
