@@ -196,7 +196,7 @@ def branchiness_filtering(
     accepts,
     multiscale,
     patch_shape,
-    min_branchiness_score=25
+    min_branchiness_score=20
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
