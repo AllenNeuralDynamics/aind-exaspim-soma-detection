@@ -227,6 +227,12 @@ def branchiness_filtering(
 
 
 def compute_scores(score_func, img, voxels, patch_shape):
+    for voxel in tqdm(voxels):
+        try:
+            score_func(img, voxel, patch_shape)
+        except:
+            print(voxel)
+
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = list()
@@ -236,15 +242,15 @@ def compute_scores(score_func, img, voxels, patch_shape):
             )
 
         # Process results
-        voxels, scores = list(), list()
         pbar = tqdm(total=len(threads))
+        voxel_list, score_list = list(), list()
         for thread in as_completed(threads):
             voxel, score = thread.result()
             if score is not None:
-                voxels.append(voxel)
-                scores.append(score)
+                voxel_list.append(voxel)
+                score_list.append(score)
             pbar.update(1)
-    return voxels, scores
+    return voxel_list, score_list
 
 
 def extract_top_k_percent(voxels, scores, k):
@@ -332,7 +338,7 @@ def compute_brightness(img, voxel, patch_shape):
 # --- Helpers ---
 def kmeans_intensity_clustering(img_patch, n_clusters=3):
     try:
-        kmeans = KMeans(n_clusters=n_clusters, n_init=20)
+        kmeans = KMeans(n_clusters=n_clusters, n_init=20, random_state=0)
         kmeans.fit(img_patch.reshape(-1, 1))
         relabed = kmeans.labels_.reshape(img_patch.shape)
         if relabed.shape == img_patch.shape:
