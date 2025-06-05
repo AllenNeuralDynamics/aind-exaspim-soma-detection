@@ -9,12 +9,13 @@ neural network.
 
 """
 
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.spatial.distance import cdist, euclidean
 from sklearn.cluster import KMeans
 from tqdm import tqdm
 
 import numpy as np
+import pandas as pd
 import torch
 
 from aind_exaspim_soma_detection import soma_proposal_generation as spg
@@ -163,12 +164,12 @@ def load_model(path, patch_shape, device="cuda"):
 
 
 # --- Accepted Proposal Filtering ---
-def branchiness_filtering(
+def compute_metrics(
     img_prefix,
     accepts,
     multiscale,
     patch_shape,
-    min_branchiness_score=24
+    min_branchiness_score=15
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
@@ -193,98 +194,56 @@ def branchiness_filtering(
         center.
 
     """
-    # Compute scores
-    img = img_util.open_img(img_prefix)
     voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
-    voxels, scores = compute_scores(
-        compute_branchiness, img, voxels, patch_shape
-    )
-
-    # Process results
-    filtered_accepts, filtered_scores = list(), list()
-    for voxel, score in zip(voxels, scores):
-        branchiness, brightness = score
-        if branchiness > min_branchiness_score:
-            filtered_accepts.append(img_util.to_physical(voxel, multiscale))
-            filtered_scores.append(score)
-
-    # Filter by brightness (if applicable)
-    n = len(filtered_accepts)
-    k = 80 if n > 5000 else 85 if n > 2000 else 98
-    filtered_accepts, filtered_scores = extract_top_k_percent(
-        filtered_accepts, filtered_scores, k
-    )
-
-    # Filter again by branchiness (if applicable)
-    if len(filtered_accepts) > 2000:
-        filtered_again = list()
-        for xyz, score in zip(filtered_accepts, filtered_scores):
-            branchiness, brightness = score
-            if branchiness > min_branchiness_score + 4:
-                filtered_again.append(xyz)
-        filtered_accepts = filtered_again
-    return filtered_accepts
-
-
-def compute_scores(score_func, img, voxels, patch_shape):
-    for voxel in tqdm(voxels):
-        try:
-            score_func(img, voxel, patch_shape)
-        except:
-            print(voxel)
-
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = list()
         for voxel in voxels:
             threads.append(
-                executor.submit(score_func, img, voxel, patch_shape)
+                executor.submit(
+                    compute_soma_metrics, img_prefix, voxel, patch_shape
+                )
             )
 
         # Process results
-        pbar = tqdm(total=len(threads))
-        voxel_list, score_list = list(), list()
+        results = list()
+        pbar = tqdm(total=len(voxels))
         for thread in as_completed(threads):
-            voxel, score = thread.result()
-            if score is not None:
-                voxel_list.append(voxel)
-                score_list.append(score)
+            voxel, result = thread.result()
+            branchiness, brightness = result
+            xyz = img_util.to_physical(voxel, multiscale=multiscale)
+            if branchiness > min_branchiness_score:
+                results.append(
+                    {
+                        "xyz": xyz,
+                        "Brightness": brightness,
+                        "Branchiness": branchiness
+                    }
+                )
             pbar.update(1)
-    return voxel_list, score_list
+    return pd.DataFrame(results)
 
 
-def extract_top_k_percent(voxels, scores, k):
-    # Get sorted idxs
-    if isinstance(scores[0], tuple):
-        sorted_idxs = np.flip(np.argsort([b for _, b in scores]))
-    else:
-        sorted_idxs = np.flip(np.argsort(scores))
+def compute_soma_metrics(img_prefix, voxel, patch_shape):
+    # Read image patch
+    img = img_util.open_img(img_prefix)
+    img_patch = img_util.get_patch(img, voxel, patch_shape)
 
-    # Sort results
-    n = int(len(voxels) * k / 100)
-    voxels = [voxels[i] for i in sorted_idxs[0:n]]
-    scores = [scores[i] for i in sorted_idxs[0:n]]
-    return voxels, scores
-
-
-def compute_branchiness(img, voxel, patch_shape, return_mask=False):
+    # Compute metrics
     center = tuple([s // 2 for s in patch_shape])
-    img_patch = np.minimum(img_util.get_patch(img, voxel, patch_shape), 1000)
-    branchiness, brightness, object_mask = branch_search(img_patch, center)
-    if return_mask:
-        return voxel, branchiness, brightness, object_mask
-    else:
-        return voxel, (branchiness, brightness)
+    branch_dist = compute_branch_dist(img_patch, center)
+    brightness = compute_soma_brightness(img_patch)
+    return voxel, (branch_dist, brightness)
 
 
-def branch_search(img_patch, root):
+def compute_branch_dist(img_patch, root, return_mask=False):
     # Compute foreground
-    relabeled = kmeans_intensity_clustering(img_patch)
+    relabeled = kmeans_intensity_clustering(np.minimum(img_patch, 1000))
     foreground = (relabeled > 0).astype(int)
+    object_mask = np.zeros_like(img_patch)
 
     # Search center object
     max_dist = 0
-    object_mask = np.zeros_like(img_patch)
     queue = [root]
     visited = set([root])
     while len(queue) > 0:
@@ -299,40 +258,25 @@ def branch_search(img_patch, root):
                 queue.append(nb)
                 visited.add(nb)
 
-    # Process results
-    brightness = np.sum(object_mask * img_patch)
-    return max_dist, brightness, object_mask
+    # Return result
+    if return_mask:
+        return max_dist, object_mask
+    else:
+        return max_dist
 
 
-def brightness_filtering(
-    img_prefix, accepts, multiscale, patch_shape, max_accepts=800
-):
-    # Compute scores
-    img = img_util.open_img(img_prefix)
-    voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
-    voxels, scores = compute_scores(
-        compute_brightness, img, voxels, patch_shape
-    )
-
-    # Process results
-    idxs = np.flip(np.argsort(scores))[0:max_accepts]
-    return np.array(accepts)[idxs]
-
-
-def compute_brightness(img, voxel, patch_shape):
-    # Read image patch
-    img_patch = img_util.get_patch(img, voxel, patch_shape)
+def compute_soma_brightness(img_patch):
+    # Fit Gaussian
     _, params = spg.gaussian_fitness(img_patch)
     voxels = reformat_coords(spg.generate_grid_coords(img_patch.shape))
     mean = np.array(params[0:3]).reshape(1, -1)
 
-    # Compute score
+    # Compute brightness
     distances = cdist(voxels, mean, metric='euclidean')
     std_dist = np.sqrt(2 * np.sum(np.min(params[3:6])**2))
     within_one_sigma = distances < std_dist
     img_vals = img_patch.flatten()[within_one_sigma.flatten()]
-    score = np.percentile(img_vals, 80) if len(img_vals) > 0 else np.inf
-    return voxel, score
+    return np.percentile(img_vals, 80) if len(img_vals) > 0 else np.inf
 
 
 # --- Helpers ---

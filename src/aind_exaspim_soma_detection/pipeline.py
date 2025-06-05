@@ -13,6 +13,7 @@ from scipy.optimize import OptimizeWarning
 from time import time
 
 import os
+import pandas as pd
 import warnings
 
 from aind_exaspim_soma_detection import soma_proposal_classification as spc
@@ -52,7 +53,7 @@ def run_pipeline(
         routine "classify_proposals".
     filter_params : dict, optional
         Dictionary containing values for optional parameters used by the
-        routine "filter_accepts". The default is None.
+        routine "quantify_accepts". The default is None.
 
     Returns
     -------
@@ -72,14 +73,11 @@ def run_pipeline(
     # Detect somas
     proposals = generate_proposals(img_path, **proposal_params)
     accepts = classify_proposals(img_path, proposals, **classify_params)
-    write_results(output_dir, f"somas-{brain_id}.txt", accepts)
 
-    # Filter detected somas (if applicable)
-    if filter_params is not None:
-        filtered_accepts = filter_accepts(img_path, accepts, **filter_params)
-        write_results(
-            output_dir, f"filtered-somas-{brain_id}.txt", filtered_accepts
-        )
+    # Compute soma metrics
+    accepts_df = quantify_accepts(img_path, accepts, **filter_params)
+    path = os.path.join(output_dir, f"somas-{brain_id}.csv")
+    pd.DataFrame(accepts_df).to_csv(path, index=False)
 
     # Report runtime
     t, unit = util.time_writer(time() - t0)
@@ -227,7 +225,7 @@ def classify_proposals(
     return accepts
 
 
-def filter_accepts(
+def quantify_accepts(
     img_path,
     accepts,
     multiscale=3,
@@ -266,26 +264,22 @@ def filter_accepts(
     t0 = time()
     update_log(output_dir, "\nStep 3: Filter Accepted Proposals")
     img_path += str(multiscale)
-    filtered_accepts = spc.branchiness_filtering(
+    filtered_accepts_df = spc.compute_metrics(
         img_path, accepts, multiscale, patch_shape
     )
-    #if len(filtered_accepts) > 1000:
-    #    filtered_accepts = spc.brightness_filtering(
-    #        img_path, filtered_accepts, multiscale, patch_shape
-    #    )
     t, unit = util.time_writer(time() - t0)
 
     # Report results
-    update_log(output_dir, f"# Filtered Accepts: {len(filtered_accepts)}")
+    update_log(output_dir, f"# Filtered Accepts: {len(filtered_accepts_df)}")
     update_log(output_dir, f"Runtime: {round(t, 4)} {unit}")
     if save_swcs:
         util.write_points(
             os.path.join(output_dir, "filtered_accepts.zip"),
-            filtered_accepts,
+            filtered_accepts_df["xyz"],
             color="1.0 0.0 0.0",
             radius=25,
         )
-    return filtered_accepts
+    return filtered_accepts_df
 
 
 def update_log(output_dir, log_info):
@@ -309,28 +303,6 @@ def update_log(output_dir, log_info):
         path = os.path.join(output_dir, "log.txt")
         with open(path, 'a') as file:
             file.write(log_info + "\n")
-
-
-def write_results(output_dir, filename, coords_list):
-    """
-    Writes a list of xyz coordinates to a txt file.
-
-    Parameters
-    ----------
-    output_dir : str
-        Path to directory that results will be written to.
-    filename : str
-        Name of txt file to be written.
-    xyz_list : List[Tuple[float]]
-        List of 3D coordinates to write to txt file.
-
-    Returns
-    -------
-    None
-
-    """
-    path = os.path.join(output_dir, filename)
-    util.write_list(path, coords_list)
 
 
 if __name__ == "__main__":
