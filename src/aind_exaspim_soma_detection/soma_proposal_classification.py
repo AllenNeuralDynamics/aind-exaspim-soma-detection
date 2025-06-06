@@ -195,7 +195,7 @@ def compute_metrics(
 
     """
     voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
-    with ThreadPoolExecutor(max_workers=16) as executor:
+    with ThreadPoolExecutor(max_workers=2) as executor:
         # Assign threads
         threads = list()
         for voxel in voxels:
