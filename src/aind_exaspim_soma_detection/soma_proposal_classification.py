@@ -195,7 +195,7 @@ def compute_metrics(
 
     """
     voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
-    with ThreadPoolExecutor(max_workers=40) as executor:
+    with ThreadPoolExecutor(max_workers=16) as executor:
         # Assign threads
         threads = list()
         for voxel in voxels:
@@ -226,13 +226,18 @@ def compute_metrics(
 
 def compute_soma_metrics(img_prefix, voxel, patch_shape):
     # Read image patch
+    print("Processing voxel:", voxel)
     img = img_util.open_img(img_prefix)
+    print("image opened")
     img_patch = img_util.get_patch(img, voxel, patch_shape)
+    print("patch read")
 
     # Compute metrics
     center = tuple([s // 2 for s in patch_shape])
     branch_dist = compute_branch_dist(img_patch, center)
+    print("branch dist computed")
     brightness = compute_soma_brightness(img_patch)
+    print("brightness computed")
     return voxel, (branch_dist, brightness)
 
 
