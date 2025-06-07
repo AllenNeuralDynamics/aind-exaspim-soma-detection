@@ -9,12 +9,11 @@ neural network.
 
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from scipy.spatial.distance import cdist, euclidean
 from sklearn.cluster import KMeans
 from tqdm import tqdm
 
-import logging
 import numpy as np
 import pandas as pd
 import torch
@@ -170,7 +169,8 @@ def compute_metrics(
     accepts,
     multiscale,
     patch_shape,
-    min_branchiness_score=15
+    batch_size=64,
+    min_branchiness_score=75
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
@@ -195,58 +195,56 @@ def compute_metrics(
         center.
 
     """
-    voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        # Assign threads
-        threads = list()
-        for voxel in voxels:
-            threads.append(
-                executor.submit(
-                    compute_soma_metrics, img_prefix, voxel, patch_shape
-                )
-            )
+    def load_patch(voxel):
+        patch = img_util.get_patch(img, voxel, patch_shape)
+        return (voxel, patch)
 
-        # Process results
-        results = list()
-        pbar = tqdm(total=len(voxels))
-        for thread in as_completed(threads):
-            voxel, result = thread.result()
-            branchiness, brightness = result
-            xyz = img_util.to_physical(voxel, multiscale=multiscale)
-            if branchiness > min_branchiness_score:
-                results.append(
-                    {
+    # Initializations
+    pbar = tqdm(total=len(accepts))
+    img = img_util.open_img(img_prefix)
+    voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
+
+    # Main
+    results = []
+    for batch_voxels in generate_batches(voxels, batch_size):
+        # Phase 1: Read patches concurrently
+        with ThreadPoolExecutor() as exec:
+            voxel_patches = list(exec.map(load_patch, batch_voxels))
+
+        # Phase 2: Analyze patches concurrently
+        with ProcessPoolExecutor() as exec:
+            for voxel, scores in exec.map(process_patch, voxel_patches):
+                branchiness, brightness = scores
+                xyz = img_util.to_physical(voxel, multiscale=multiscale)
+                if branchiness > min_branchiness_score:
+                    results.append({
                         "xyz": xyz,
-                        "Brightness": brightness,
-                        "Branchiness": branchiness
-                    }
-                )
-            pbar.update(1)
+                        "Brightness": round(brightness, 2),
+                        "Branchiness": fround(branchiness, 2)
+                    })
+                pbar.update(1)
     return pd.DataFrame(results)
 
 
-def compute_soma_metrics(img_prefix, voxel, patch_shape):
-    # Read image patch
-    logging.info(f"Processing voxel: {voxel}")
-    img = img_util.open_img(img_prefix)
-    logging.info(f"Image opened for voxel: {voxel}")
-    
-    img_patch = img_util.get_patch(img, voxel, patch_shape)
-    logging.info(f"Patch read for voxel: {voxel}")
-
-    branch_dist = compute_branch_dist(img_patch, tuple([s // 2 for s in patch_shape]))
-    logging.info(f"Branch dist computed for voxel: {voxel}, value: {branch_dist}")
-
-    brightness = compute_soma_brightness(img_patch)
-    logging.info(f"Brightness computed for voxel: {voxel}, value: {brightness}")
-    return voxel, (branch_dist, brightness)
+def process_patch(args):
+    voxel, img_patch = args
+    try:
+        branchiness = compute_branch_dist(img_patch)
+        brightness = compute_soma_brightness(img_patch)
+        return voxel, (branchiness, brightness)
+    except Exception as e:
+        print(f"[ERROR] Voxel {voxel} failed with error: {e}")
+        return voxel, (0, float('inf'))
 
 
-def compute_branch_dist(img_patch, root, return_mask=False):
+def compute_branch_dist(img_patch, return_mask=False):
     # Compute foreground
     relabeled = kmeans_intensity_clustering(np.minimum(img_patch, 1000))
     foreground = (relabeled > 0).astype(int)
     object_mask = np.zeros_like(img_patch)
+
+    root = center = tuple([s // 2 for s in img_patch.shape])
+    root_xyz = img_util.to_physical(root, multiscale=3)
 
     # Search center object
     max_dist = 0
@@ -255,7 +253,8 @@ def compute_branch_dist(img_patch, root, return_mask=False):
     while len(queue) > 0:
         # Visit voxel
         voxel = queue.pop()
-        max_dist = max(euclidean(voxel, root), max_dist)
+        xyz = img_util.to_physical(voxel, multiscale=3)
+        max_dist = max(euclidean(xyz, root_xyz), max_dist)
         object_mask[voxel] = 1
 
         # Update queue
@@ -286,6 +285,15 @@ def compute_soma_brightness(img_patch):
 
 
 # --- Helpers ---
+def generate_batches(iterable, batch_size):
+    """
+    Yield successive batches from iterable.
+    """
+    for i in range(0, len(iterable), batch_size):
+        n = min(i + batch_size, len(iterable) - 1)
+        yield iterable[i:n]
+
+
 def kmeans_intensity_clustering(img_patch, n_clusters=3):
     try:
         kmeans = KMeans(n_clusters=n_clusters, n_init=20, random_state=0)
