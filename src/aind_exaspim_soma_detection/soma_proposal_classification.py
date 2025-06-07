@@ -14,6 +14,7 @@ from scipy.spatial.distance import cdist, euclidean
 from sklearn.cluster import KMeans
 from tqdm import tqdm
 
+import logging
 import numpy as np
 import pandas as pd
 import torch
@@ -226,18 +227,18 @@ def compute_metrics(
 
 def compute_soma_metrics(img_prefix, voxel, patch_shape):
     # Read image patch
-    print("Processing voxel:", voxel)
+    logging.info(f"Processing voxel: {voxel}")
     img = img_util.open_img(img_prefix)
-    print("image opened")
+    logging.info(f"Image opened for voxel: {voxel}")
+    
     img_patch = img_util.get_patch(img, voxel, patch_shape)
-    print("patch read")
+    logging.info(f"Patch read for voxel: {voxel}")
 
-    # Compute metrics
-    center = tuple([s // 2 for s in patch_shape])
-    branch_dist = compute_branch_dist(img_patch, center)
-    print("branch dist computed")
+    branch_dist = compute_branch_dist(img_patch, tuple([s // 2 for s in patch_shape]))
+    logging.info(f"Branch dist computed for voxel: {voxel}, value: {branch_dist}")
+
     brightness = compute_soma_brightness(img_patch)
-    print("brightness computed")
+    logging.info(f"Brightness computed for voxel: {voxel}, value: {brightness}")
     return voxel, (branch_dist, brightness)
 
 
