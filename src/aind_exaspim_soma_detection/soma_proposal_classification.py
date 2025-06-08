@@ -170,7 +170,7 @@ def compute_metrics(
     multiscale,
     patch_shape,
     batch_size=64,
-    min_branchiness_score=75
+    min_branch_dist=60
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
@@ -216,7 +216,7 @@ def compute_metrics(
             for voxel, scores in exec.map(process_patch, voxel_patches):
                 branchiness, brightness = scores
                 xyz = img_util.to_physical(voxel, multiscale=multiscale)
-                if branchiness > min_branchiness_score:
+                if branchiness > min_branch_dist:
                     results.append({
                         "xyz": xyz,
                         "Brightness": round(brightness, 2),
