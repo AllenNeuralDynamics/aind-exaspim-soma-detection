@@ -220,7 +220,7 @@ def compute_metrics(
                     results.append({
                         "xyz": xyz,
                         "Brightness": round(brightness, 2),
-                        "Branchiness": fround(branchiness, 2)
+                        "Branchiness": round(branchiness, 2)
                     })
                 pbar.update(1)
     return pd.DataFrame(results)
