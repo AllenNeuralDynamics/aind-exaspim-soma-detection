@@ -15,9 +15,9 @@ This repository implements a pipeline for detecting somas in whole-brain images.
 The soma detection pipeline consists of three main steps:
 
 <blockquote>
-  <p>a. <strong>Proposal Generation</strong>: Detects blob-like structures to generate initial soma proposals and filter trivial false positives.</p>
-  <p>b. <strong>Proposal Classification</strong>: Classify proposals with a convolutional neural network.</p>
-  <p>c. <strong>Accepted Proposal Filtering</strong>: Optionally, extract accepted proposals with axons and dendrites extending from soma.</p>
+  <p>1. <strong>Proposal Generation</strong>: Detects blob-like structures to generate initial soma proposals and filter trivial false positives.</p>
+  <p>2. <strong>Proposal Filtering</strong>: Remove trivial false positives using heuristics and prior knowledge of soma characteristics. .</p>
+  <p>3. <strong>Proposal Classification</strong>: Classify proposals with a convolutional neural network.</p>
 </blockquote>
 <br>
 
@@ -46,10 +46,18 @@ The goal of this step is to generate initial proposals for soma locations by det
   <b> Figure: </b>Proposals generated across a large region.
 </p>
 
-This algorithm prioritizes high recall, which results in many false positives. The proposals are filtered by leveraging prior knowledge, such as the Gaussian-like appearance and expected size of somas, to remove trivial false positives.
+### Step 2: Proposal Filtering
+
+Proposals are filtered by leveraging prior knowledge, such as the Gaussian-like appearance and expected size of somas, to remove trivial false positives.
+
+<blockquote>
+  <p>a. Merges proposals within a given distance threshold.</p>
+  <p>b. Fit Gaussian to neighborhood centered at proposal and compute fitness score by comparing fitted Gaussian to image values. Proposals are discarded if 
+    (1) fitness score is below threshold or (2) estimated standard deviation is out of range.</p>
+</blockquote>
 
 
-### Step 2: Proposal Classification
+### Step 3: Proposal Classification
 
 The proposals are classified by a neural network that generates soma likelihoods. Proposals with a likelihood above a given threshold are *accepted* as soma locations.
 
@@ -59,9 +67,6 @@ The proposals are classified by a neural network that generates soma likelihoods
   <b> Figure: </b>Detected somas across a large region.
 </p>
 
-### Step 3: Accepted Proposals Filtering (Optional)
-
-To do...
 
 ## Installation
 To use the software, in the root directory, run
