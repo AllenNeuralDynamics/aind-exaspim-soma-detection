@@ -170,7 +170,7 @@ def compute_metrics(
     multiscale,
     patch_shape,
     batch_size=64,
-    min_branch_dist=60
+    min_branch_dist=60,
     min_brightness=250,
 ):
     """
