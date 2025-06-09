@@ -56,6 +56,11 @@ Proposals are filtered by leveraging prior knowledge, such as the Gaussian-like 
     (1) fitness score is below threshold or (2) estimated standard deviation is out of range.</p>
 </blockquote>
 
+<p>
+  <img src="imgs/filtered_proposals_example.png" width="750" alt="proposals">
+  <br>
+  <b> Figure: </b>Proposals generated across a large region.
+</p>
 
 ### Step 3: Proposal Classification
 
