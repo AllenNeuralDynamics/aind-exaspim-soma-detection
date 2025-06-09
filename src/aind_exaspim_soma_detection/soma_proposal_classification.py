@@ -171,6 +171,7 @@ def compute_metrics(
     patch_shape,
     batch_size=64,
     min_branch_dist=60
+    min_brightness=250,
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
@@ -216,7 +217,7 @@ def compute_metrics(
             for voxel, scores in exec.map(process_patch, voxel_patches):
                 branchiness, brightness = scores
                 xyz = img_util.to_physical(voxel, multiscale=multiscale)
-                if branchiness > min_branch_dist:
+                if branchiness > min_branch_dist and brightness > min_brightness:
                     results.append({
                         "xyz": xyz,
                         "Brightness": round(brightness, 2),
@@ -281,7 +282,7 @@ def compute_soma_brightness(img_patch):
     std_dist = np.sqrt(2 * np.sum(np.min(params[3:6])**2))
     within_one_sigma = distances < std_dist
     img_vals = img_patch.flatten()[within_one_sigma.flatten()]
-    return np.percentile(img_vals, 80) if len(img_vals) > 0 else np.inf
+    return np.percentile(img_vals, 80) if len(img_vals) > 0 else 0
 
 
 # --- Helpers ---
