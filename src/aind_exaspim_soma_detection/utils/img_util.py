@@ -8,6 +8,8 @@ Helper routines for working with images.
 
 """
 
+from skimage.filters import threshold_multiotsu
+
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -414,3 +416,22 @@ def normalize(img_patch):
     """
     img_patch -= np.min(img_patch)
     return img_patch / np.max(img_patch)
+
+
+def segment_3class_otsu(img_patch):
+    """
+    Segments an image into three classes using the multi-Otsu thresholding.
+
+    Parameters
+    ----------
+    img_patch : numpy.ndarray
+        Image patch to be segmented.
+
+    Returns
+    -------
+    numpy.ndarray
+        Segmented image patch, where each voxel is assigned a class label
+        based on intensity thresholds computed via multi-Otsu.
+    """
+    thresholds = threshold_multiotsu(img_patch, classes=3)
+    return np.digitize(img_patch, bins=thresholds)

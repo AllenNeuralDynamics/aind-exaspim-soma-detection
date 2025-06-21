@@ -8,7 +8,6 @@ Helper routines for training and inference.
 
 """
 
-import numpy as np
 from random import sample
 from sklearn.metrics import (
     accuracy_score,
@@ -16,6 +15,37 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
+
+import numpy as np
+import torch
+
+from aind_exaspim_soma_detection.machine_learning.models import FastConvNet3d
+
+
+def load_model(path, patch_shape, device="cuda"):
+    """
+    Loads a pre-trained model from the given, then transfers the model to the
+    specified device (i.e. CPU or GPU).
+
+    Parameters
+    ----------
+    path : str
+        Path to the saved model weights.
+    patch_shape : Tuple[int]
+        Shape of the input patches expected by the model expects.
+    device : str, optional
+        Name of device where model should be loaded and run. The default is
+        "cuda".
+
+    Returns
+    -------
+    FastConvNet3d
+        Model instance with the loaded weights.
+    """
+    model = FastConvNet3d(patch_shape)
+    model.load_state_dict(torch.load(path, map_location=device))
+    model = model.to(device)
+    return model
 
 
 def get_correct(keys, y, hat_y, threshold, verbose=True):
@@ -41,7 +71,6 @@ def get_correct(keys, y, hat_y, threshold, verbose=True):
     dict
         A dictionary with the keys "true_negatives" and "true_positives" and
         values that consist of tuples containing a key and predicted value.
-
     """
     # Extract incorrect
     correct = {"true_negatives": list(), "true_positives": list()}
@@ -83,7 +112,6 @@ def get_incorrect(keys, y, hat_y, threshold, verbose=True):
     dict
         A dictionary with the keys "false_negatives" and "false_positives" and
         values that consist of tuples containing a key and predicted value.
-
     """
     # Extract incorrect
     incorrect = {"false_negatives": list(), "false_positives": list()}
@@ -149,7 +177,6 @@ def split_train_validation(examples, train_ratio=0.85):
         A tuple containing two dictionaries:
             - Dictionary containing the training examples.
             - Dictionary containing the validation examples.
-
     """
     # Sample keys
     n_train_examples = int(train_ratio * len(examples))
@@ -180,7 +207,6 @@ def toCPU(tensor, return_numpy=True):
     numpy.ndarray or torch.Tensor
         Input tensor as a NumPy on the CPU if "return_numpy" is True.
         Otherwise, input tensor on the CPU.
-
     """
     tensor = tensor.detach().cpu()
     return np.array(tensor) if return_numpy else tensor

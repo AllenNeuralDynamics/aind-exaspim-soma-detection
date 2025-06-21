@@ -8,8 +8,6 @@ Miscellaneous helper routines.
 
 """
 
-from botocore import UNSIGNED
-from botocore.config import Config
 from concurrent.futures import as_completed, ThreadPoolExecutor
 
 from io import StringIO
@@ -19,7 +17,9 @@ from zipfile import ZipFile
 import ast
 import boto3
 import json
+import numpy as np
 import os
+import pandas as pd
 import shutil
 
 
@@ -150,13 +150,6 @@ def read_json(path):
     """
     with open(path, "r") as file:
         return json.load(file)
-
-
-def read_soma_locations(path):
-    xyz_list = list()
-    for xyz_str in read_txt(path):
-        xyz_list.append(ast.literal_eval(xyz_str))
-    return xyz_list
 
 
 def write_json(path, my_dict):
@@ -462,12 +455,6 @@ def list_s3_bucket_prefixes(bucket_name, keyword=None):
     return prefixes
 
 
-def read_s3_txt_file(bucket_name, file_path):
-    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
-    response = s3.get_object(Bucket=bucket_name, Key=file_path)
-    return response['Body'].read().decode('utf-8').splitlines()
-
-
 def upload_dir_to_s3(bucket_name, prefix, source_dir):
     """
     Uploads the contents of a directory to S3.
@@ -520,25 +507,17 @@ def upload_file_to_s3(bucket_name, source_path, destination_path):
 
 
 # --- S3 Soma utils ---
-def load_somas_locations(brain_id, filtered=False):
-    bucket_name = 'aind-msma-morphology-data'
-    file_path = find_soma_result_prefix(brain_id, filtered=filtered)
-    lines = read_s3_txt_file(bucket_name, file_path)
-    return [ast.literal_eval(xyz) for xyz in lines]
-
-
-def find_soma_result_prefix(brain_id, filtered=False):
+def load_somas_from_s3(brain_id):
     # Find soma results for brain_id
     bucket_name = 'aind-msma-morphology-data'
-    soma_prefix = f"exaspim_soma_detection/{brain_id}"
-    prefix_list = list_s3_prefixes(bucket_name, soma_prefix)
+    prefix = f"exaspim_soma_detection/{brain_id}"
+    prefix_list = list_s3_prefixes(bucket_name, prefix)
 
     # Find most recent result
     if prefix_list:
         dirname = find_most_recent_dirname(prefix_list)
-        pre = "filtered-" if filtered else ""
-        filename = f"{pre}somas-{brain_id}.txt"
-        return os.path.join(soma_prefix, dirname, filename)
+        path = f"s3://{bucket_name}/{prefix}/{dirname}/somas-{brain_id}.csv"
+        return list(pd.read_csv(path)["xyz"].apply(ast.literal_eval))
     else:
         return None
 
@@ -552,6 +531,31 @@ def find_most_recent_dirname(results_prefix_list):
 
 
 # --- Miscellaneous ---
+def compute_std(values, weights=None):
+    """
+    Compute weighted standard deviation.
+
+    Parameters
+    ----------
+    values : array-like
+        Data points.
+    weights : array-like
+        Weights corresponding to each data point.
+
+    Returns
+    -------
+    float
+        Weighted standard deviation.
+    """
+    weights = weights or np.ones_like(values)
+    values = np.array(values)
+    weights = np.array(weights)
+
+    weighted_mean = np.sum(weights * values) / np.sum(weights)
+    variance = np.sum(weights * (values - weighted_mean)**2) / np.sum(weights)
+    return np.sqrt(variance)
+
+
 def find_key_intersection(dict_1, dict_2):
     keys_1 = find_key_subset(dict_1, dict_2)
     keys_2 = find_key_subset(dict_2, dict_1)
