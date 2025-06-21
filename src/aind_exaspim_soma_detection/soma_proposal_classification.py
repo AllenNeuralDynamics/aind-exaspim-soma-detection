@@ -140,7 +140,7 @@ def compute_metrics(
     multiscale,
     patch_shape,
     batch_size=64,
-    min_branch_dist=150,
+    min_branch_dist=120,
     min_brightness=250,
 ):
     """
@@ -193,22 +193,22 @@ def compute_metrics(
     return pd.DataFrame(results)
 
 
-def process_patch(voxel_patch, multiscale=2):
+def process_patch(voxel_patch, multiscale=3):
     try:
         # Fit gaussian
         voxel, img_patch = voxel_patch
         params, voxels = fit_rotated_gaussian(img_patch)
-        radii = estimate_radii(params)
-        if (radii < 6).any():
+        radii = compute_radii(params, multiscale)
+        if (radii > 150).any():
             return None
 
         # Compute metrics
         result = {
             "xyz": img_util.to_physical(voxel, multiscale=multiscale),
             "Brightness": compute_soma_brightness(img_patch, params, voxels),
-            "Volume (μm^3)": int(np.prod(radii) * (4 / 3) * np.pi),
+            "Volume (µm³)": int(np.prod(radii) * (4 / 3) * np.pi),
             "Radii (μm)": tuple([round(r, 2) for r in radii]),
-            "Max_Branch_Dist": compute_branch_dist(img_patch),
+            "Max_Branch_Dist": compute_branch_dist(img_patch, multiscale),
         }
         return result
     except Exception as e:
@@ -216,13 +216,13 @@ def process_patch(voxel_patch, multiscale=2):
         return None
 
 
-def compute_branch_dist(img_patch):
+def compute_branch_dist(img_patch, multiscale):
     # Compute foreground
     relabeled = img_util.segment_3class_otsu(img_patch)
     object_mask = np.zeros_like(img_patch)
 
     root = tuple([s // 2 for s in img_patch.shape])
-    root_xyz = img_util.to_physical(root, multiscale=3)
+    root_xyz = img_util.to_physical(root, multiscale=multiscale)
 
     # Search center object
     max_dist = 0
@@ -231,7 +231,7 @@ def compute_branch_dist(img_patch):
     while len(queue) > 0:
         # Visit voxel
         voxel = queue.pop()
-        xyz = img_util.to_physical(voxel, multiscale=3)
+        xyz = img_util.to_physical(voxel, multiscale=multiscale)
         max_dist = max(euclidean(xyz, root_xyz), max_dist)
         object_mask[voxel] = 1
 
@@ -246,6 +246,31 @@ def compute_branch_dist(img_patch):
 def compute_soma_brightness(img_patch, params, voxels):
     mask = gaussian_mask(voxels, *params[:9]).reshape(img_patch.shape)
     return int(np.percentile(img_patch[mask], 80)) if mask.any() else 0
+
+
+def compute_radii(params, multiscale, anisotropy=(0.748, 0.748, 1.0)):
+    # Compute precision matrix
+    scaled_anisotropy = [a * 2**multiscale for a in anisotropy]
+    _, _, _, a11, a12, a13, a22, a23, a33, _, _ = params
+    P_voxel = np.array([
+        [a11, a12, a13],
+        [a12, a22, a23],
+        [a13, a23, a33]
+    ])
+
+    # Convert precision matrix from voxel to physical space
+    S = np.diag(scaled_anisotropy)
+    S_inv = np.linalg.inv(S)
+
+    # Adjusted precision matrix in physical units
+    P_physical = S_inv.T @ P_voxel @ S_inv
+    try:
+        cov_physical = np.linalg.inv(P_physical)
+        eigvals = np.linalg.eigvalsh(cov_physical)
+        radii = 2 * np.sqrt(np.abs(eigvals))
+        return radii
+    except np.linalg.LinAlgError:
+        return np.zeros([0, 0, 0])
 
 
 # --- Helpers ---
@@ -333,30 +358,6 @@ def gaussian_mask(
         a22*dy**2 + 2*a23*dy*dz + a33*dz**2
     )
     return quad <= threshold
-
-
-def estimate_radii(params, anisotropy=(2.992, 2.992, 4.0)):
-    # Compute precision matrix
-    _, _, _, a11, a12, a13, a22, a23, a33, _, _ = params
-    P_voxel = np.array([
-        [a11, a12, a13],
-        [a12, a22, a23],
-        [a13, a23, a33]
-    ])
-
-    # Convert precision matrix from voxel to physical space
-    S = np.diag(anisotropy)
-    S_inv = np.linalg.inv(S)
-
-    # Adjusted precision matrix in physical units
-    P_physical = S_inv.T @ P_voxel @ S_inv
-    try:
-        cov_physical = np.linalg.inv(P_physical)
-        eigvals = np.linalg.eigvalsh(cov_physical)
-        radii = 2 * np.sqrt(np.abs(eigvals))
-        return radii
-    except np.linalg.LinAlgError:
-        return np.zeros([0, 0, 0])
 
 
 def generate_batches(iterable, batch_size):
