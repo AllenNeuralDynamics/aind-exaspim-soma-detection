@@ -10,17 +10,16 @@ neural network.
 """
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from scipy.spatial.distance import cdist, euclidean
-from sklearn.cluster import KMeans
+from functools import partial
+from scipy.spatial.distance import euclidean
+from scipy.optimize import curve_fit
 from tqdm import tqdm
 
 import numpy as np
 import pandas as pd
 import torch
 
-from aind_exaspim_soma_detection import soma_proposal_generation as spg
 from aind_exaspim_soma_detection.utils import img_util, ml_util
-from aind_exaspim_soma_detection.machine_learning.models import FastConvNet3d
 from aind_exaspim_soma_detection.machine_learning.data_handling import (
     MultiThreadedDataLoader,
     ProposalDataset,
@@ -30,12 +29,12 @@ from aind_exaspim_soma_detection.machine_learning.data_handling import (
 def classify_proposals(
     brain_id,
     proposals,
-    img_prefix,
+    img_path,
     model_path,
     multiscale,
     patch_shape,
     threshold,
-    batch_size=16,
+    batch_size=64,
     device="cuda",
 ):
     """
@@ -48,8 +47,8 @@ def classify_proposals(
         Unique identifier for the whole-brain dataset.
     proposals : List[Tuple[float]]
         List of proposals, where each is represented by an xyz coordinate.
-    img_prefix : str
-        Prefix (or path) of a whole-brain image stored in a S3 bucket.
+    img_path : str
+        Path to whole-brain image stored in a S3 bucket.
     model_path : str
         Path to the pre-trained model that is used to classify the proposals.
     multiscale : int
@@ -67,24 +66,23 @@ def classify_proposals(
     Returns:
     --------
     List[Tuple[float]]
-        List of physical coordinates of the somas detected by the model.
-
+        Physical coordinates of somas detected by the model.
     """
     # Initialize dataset
     proposals = [img_util.to_voxels(p, multiscale) for p in proposals]
     dataset = ProposalDataset(patch_shape)
-    dataset.ingest_proposals(brain_id, img_prefix, proposals)
+    dataset.ingest_proposals(brain_id, img_path, proposals)
 
     # Generate predictions
     dataloader = MultiThreadedDataLoader(dataset, batch_size)
-    model = load_model(model_path, patch_shape, device)
-    keys, hat_y, _ = run_inference(dataloader, model, device)
+    model = ml_util.load_model(model_path, patch_shape, device)
+    id_voxel, hat_y, _ = run_inference(dataloader, model, device)
 
     # Extract predicted somas
     soma_xyz_list = list()
-    for key_i, hat_y_i in zip(keys, hat_y):
+    for (_, voxel), hat_y_i in zip(id_voxel, hat_y):
         if hat_y_i > threshold:
-            soma_xyz_list.append(img_util.to_physical(key_i[1], multiscale))
+            soma_xyz_list.append(img_util.to_physical(voxel, multiscale))
     return soma_xyz_list
 
 
@@ -110,67 +108,39 @@ def run_inference(dataloader, model, device="cuda", verbose=True):
     -------
     Tuple[list]
         Tuple that contains the following:
-            - "keys" (List[tuple]): Unique identifier for each proposal that
-               consists of the "brain_id" and "voxel" coordinate.
+            - "id_voxel" (List[tuple]): Unique identifier for each proposal
+            that consists of the "brain_id" and "voxel" coordinate.
             - "hat_y" (numpy.ndarray): Prediction for each proposal.
             - "y" (numpy.ndarray): Ground truth label for each proposal.
-
     """
     # Initializations
     n = dataloader.n_rounds
     iterator = tqdm(dataloader, total=n) if verbose else dataloader
 
     # Main
-    keys, hat_y, y = list(), list(), list()
+    id_voxel, hat_y, y = list(), list(), list()
     with torch.no_grad():
         model.eval()
-        for keys_i, x_i, y_i in iterator:
+        for id_voxel_i, x_i, y_i in iterator:
             # Forward pass
             x_i = x_i.to(device)
             hat_y_i = torch.sigmoid(model(x_i))
 
             # Store result
-            keys.extend(keys_i)
+            id_voxel.extend(id_voxel_i)
             hat_y.append(ml_util.toCPU(hat_y_i))
             y.append(np.array(y_i) if y_i[0] is not None else list())
-    return keys, np.vstack(hat_y)[:, 0], np.vstack(y)[:, 0]
-
-
-def load_model(path, patch_shape, device="cuda"):
-    """
-    Loads a pre-trained model from the given, then transfers the model to the
-    specified device (i.e. CPU or GPU).
-
-    Parameters
-    ----------
-    path : str
-        Path to the saved model weights.
-    patch_shape : Tuple[int]
-        Shape of the input patches expected by the model expects.
-    device : str, optional
-        Name of device where model should be loaded and run. The default is
-        "cuda".
-
-    Returns
-    -------
-    FastConvNet3d
-        Model instance with the loaded weights.
-
-    """
-    model = FastConvNet3d(patch_shape)
-    model.load_state_dict(torch.load(path, map_location=device))
-    model = model.to(device)
-    return model
+    return id_voxel, np.vstack(hat_y)[:, 0], np.vstack(y)[:, 0]
 
 
 # --- Accepted Proposal Filtering ---
 def compute_metrics(
-    img_prefix,
+    img_path,
     accepts,
     multiscale,
     patch_shape,
     batch_size=64,
-    min_branch_dist=60,
+    min_branch_dist=150,
     min_brightness=250,
 ):
     """
@@ -179,8 +149,8 @@ def compute_metrics(
 
     Parameters
     ----------
-    img_prefix : str
-        Prefix (or path) of a whole-brain image stored in a S3 bucket.
+    img_path : str
+        Path to whole-brain image stored in a S3 bucket.
     accepts : List[Tuple[float]]
         List of accepted proposals, where each is represented by an xyz
         coordinate.
@@ -191,10 +161,8 @@ def compute_metrics(
 
     Returns
     -------
-    List[Tuple[int]]
-        List of accepted proposals that have a branch emanating from the
-        center.
-
+    pd.DataFrame
+        Data frame containing metrics computed for each detected soma.
     """
     def load_patch(voxel):
         patch = img_util.get_patch(img, voxel, patch_shape)
@@ -202,7 +170,7 @@ def compute_metrics(
 
     # Initializations
     pbar = tqdm(total=len(accepts))
-    img = img_util.open_img(img_prefix)
+    img = img_util.open_img(img_path)
     voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
 
     # Main
@@ -213,44 +181,53 @@ def compute_metrics(
             voxel_patches = list(exec.map(load_patch, batch_voxels))
 
         # Phase 2: Analyze patches concurrently
+        process_patch_with_arg = partial(process_patch, multiscale=multiscale)
         with ProcessPoolExecutor() as exec:
-            for voxel, scores in exec.map(process_patch, voxel_patches):
-                branchiness, brightness = scores
-                xyz = img_util.to_physical(voxel, multiscale=multiscale)
-                if branchiness > min_branch_dist and brightness > min_brightness:
-                    results.append({
-                        "xyz": xyz,
-                        "Brightness": round(brightness, 2),
-                        "Branchiness": round(branchiness, 2)
-                    })
+            for result in exec.map(process_patch_with_arg, voxel_patches):
+                if result:
+                    is_branchy = result["Max_Branch_Dist"] > min_branch_dist
+                    is_bright = result["Brightness"] > min_brightness
+                    if is_branchy and is_bright:
+                        results.append(result)
                 pbar.update(1)
     return pd.DataFrame(results)
 
 
-def process_patch(args):
-    voxel, img_patch = args
+def process_patch(voxel_patch, multiscale=2):
     try:
-        branchiness = compute_branch_dist(img_patch)
-        brightness = compute_soma_brightness(img_patch)
-        return voxel, (branchiness, brightness)
+        # Fit gaussian
+        voxel, img_patch = voxel_patch
+        params, voxels = fit_rotated_gaussian(img_patch)
+        radii = estimate_radii(params)
+        if (radii < 6).any():
+            return None
+
+        # Compute metrics
+        result = {
+            "xyz": img_util.to_physical(voxel, multiscale=multiscale),
+            "Brightness": compute_soma_brightness(img_patch, params, voxels),
+            "Volume (μm^3)": int(np.prod(radii) * (4 / 3) * np.pi),
+            "Radii (μm)": tuple([round(r, 2) for r in radii]),
+            "Max_Branch_Dist": compute_branch_dist(img_patch),
+        }
+        return result
     except Exception as e:
         print(f"[ERROR] Voxel {voxel} failed with error: {e}")
-        return voxel, (0, float('inf'))
+        return None
 
 
-def compute_branch_dist(img_patch, return_mask=False):
+def compute_branch_dist(img_patch):
     # Compute foreground
-    relabeled = kmeans_intensity_clustering(np.minimum(img_patch, 1000))
-    foreground = (relabeled > 0).astype(int)
+    relabeled = img_util.segment_3class_otsu(img_patch)
     object_mask = np.zeros_like(img_patch)
 
-    root = center = tuple([s // 2 for s in img_patch.shape])
+    root = tuple([s // 2 for s in img_patch.shape])
     root_xyz = img_util.to_physical(root, multiscale=3)
 
     # Search center object
     max_dist = 0
     queue = [root]
-    visited = set([root])
+    visited = set(queue)
     while len(queue) > 0:
         # Visit voxel
         voxel = queue.pop()
@@ -260,32 +237,128 @@ def compute_branch_dist(img_patch, return_mask=False):
 
         # Update queue
         for nb in img_util.get_nbs(voxel, img_patch.shape):
-            if nb not in visited and foreground[nb]:
+            if nb not in visited and relabeled[nb]:
                 queue.append(nb)
                 visited.add(nb)
-
-    # Return result
-    if return_mask:
-        return max_dist, object_mask
-    else:
-        return max_dist
+    return round(max_dist, 2)
 
 
-def compute_soma_brightness(img_patch):
-    # Fit Gaussian
-    _, params = spg.gaussian_fitness(img_patch)
-    voxels = reformat_coords(spg.generate_grid_coords(img_patch.shape))
-    mean = np.array(params[0:3]).reshape(1, -1)
-
-    # Compute brightness
-    distances = cdist(voxels, mean, metric='euclidean')
-    std_dist = np.sqrt(2 * np.sum(np.min(params[3:6])**2))
-    within_one_sigma = distances < std_dist
-    img_vals = img_patch.flatten()[within_one_sigma.flatten()]
-    return np.percentile(img_vals, 80) if len(img_vals) > 0 else 0
+def compute_soma_brightness(img_patch, params, voxels):
+    mask = gaussian_mask(voxels, *params[:9]).reshape(img_patch.shape)
+    return int(np.percentile(img_patch[mask], 80)) if mask.any() else 0
 
 
 # --- Helpers ---
+def fit_rotated_gaussian(img_patch):
+    # Generate voxel coordinates
+    center = [dim // 2 for dim in img_patch.shape]
+    grid = np.meshgrid(
+        np.arange(img_patch.shape[0]),
+        np.arange(img_patch.shape[1]),
+        np.arange(img_patch.shape[2]),
+        indexing='ij'
+    )
+    voxels = np.stack(grid, axis=-1).reshape(-1, 3)
+
+    # Initial guess for Gaussian parameters
+    initial_guess = [
+        center[0], center[1], center[2],
+        1e-2, 0, 0,
+        1e-2, 0,
+        1e-2,
+        np.max(img_patch), np.min(img_patch)
+    ]
+
+    # Fit rotated 3D Gaussian
+    try:
+        params, _ = curve_fit(
+            gaussian_3d_rotated,
+            voxels,
+            img_patch.ravel(),
+            p0=initial_guess
+        )
+    except RuntimeError:
+        params = np.zeros(len(initial_guess))
+    return params, voxels
+
+
+def gaussian_3d_rotated(
+    coords, x0, y0, z0, a11, a12, a13, a22, a23, a33, A, B
+):
+    # Refactor coordinates
+    x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
+    dx = x - x0
+    dy = y - y0
+    dz = z - z0
+
+    # Construct quadratic form
+    quad = (
+        a11*dx**2 + 2*a12*dx*dy + 2*a13*dx*dz +
+        a22*dy**2 + 2*a23*dy*dz + a33*dz**2
+    )
+    return A * np.exp(-0.5 * quad) + B
+
+
+def gaussian_mask(
+    coords, x0, y0, z0, a11, a12, a13, a22, a23, a33, threshold=4.0
+):
+    """
+    Computes a binary mask of voxels within a specified Mahalanobis distance
+    (default: 2 standard deviations => threshold=4) from the Gaussian center.
+
+    Parameters
+    ----------
+    coords : ndarray of shape (N, 3)
+        Voxel coordinates.
+    x0, y0, z0 : float
+        Center of the Gaussian.
+    a11, a12, a13, a22, a23, a33 : float
+        Elements of the symmetric positive-definite matrix defining the
+        quadratic form. This matrix is the inverse of the covariance matrix.
+    threshold : float
+        Mahalanobis distance squared (e.g., 4.0 for 2 standard deviations).
+
+    Returns
+    -------
+    mask : ndarray of shape (N,)
+        Boolean array where True indicates the voxel is within the threshold.
+    """
+
+    x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
+    dx = x - x0
+    dy = y - y0
+    dz = z - z0
+    quad = (
+        a11*dx**2 + 2*a12*dx*dy + 2*a13*dx*dz +
+        a22*dy**2 + 2*a23*dy*dz + a33*dz**2
+    )
+    return quad <= threshold
+
+
+def estimate_radii(params, anisotropy=(2.992, 2.992, 4.0)):
+    # Compute precision matrix
+    _, _, _, a11, a12, a13, a22, a23, a33, _, _ = params
+    P_voxel = np.array([
+        [a11, a12, a13],
+        [a12, a22, a23],
+        [a13, a23, a33]
+    ])
+
+    # Convert precision matrix from voxel to physical space
+    S = np.diag(anisotropy)
+    S_inv = np.linalg.inv(S)
+
+    # Adjusted precision matrix in physical units
+    P_physical = S_inv.T @ P_voxel @ S_inv
+    try:
+        cov_physical = np.linalg.inv(P_physical)
+        eigvals = np.linalg.eigvalsh(cov_physical)
+        radii = 2 * np.sqrt(np.abs(eigvals))
+        return radii
+    except np.linalg.LinAlgError:
+        return np.zeros([0, 0, 0])
+
+
 def generate_batches(iterable, batch_size):
     """
     Yield successive batches from iterable.
@@ -293,18 +366,6 @@ def generate_batches(iterable, batch_size):
     for i in range(0, len(iterable), batch_size):
         n = min(i + batch_size, len(iterable) - 1)
         yield iterable[i:n]
-
-
-def kmeans_intensity_clustering(img_patch, n_clusters=3):
-    try:
-        kmeans = KMeans(n_clusters=n_clusters, n_init=20, random_state=0)
-        kmeans.fit(img_patch.reshape(-1, 1))
-        relabed = kmeans.labels_.reshape(img_patch.shape)
-        if relabed.shape == img_patch.shape:
-            return relabed
-    except:
-        pass
-    return np.ones_like(img_patch)
 
 
 def reformat_coords(coords):

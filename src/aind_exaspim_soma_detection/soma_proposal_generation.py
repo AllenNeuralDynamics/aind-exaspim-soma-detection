@@ -71,7 +71,6 @@ def generate_proposals(
     -------
     List[Tuple[float]]
         Physical coordinates of proposals.
-
     """
     # Initializations
     img = img_util.open_img(img_prefix)
@@ -138,7 +137,6 @@ def generate_proposals_patch(
     -------
     List[Tuple[float]]
         Physical coordinates of proposals.
-
     """
     # Get image patch
     img_patch = get_patch(img, offset, patch_shape, from_center=False)
@@ -183,7 +181,6 @@ def detect_blobs(img_patch, bright_threshold, LoG_sigma, margin):
     -------
     List[Tuple[int]]
         Voxel coordinates of detected blobs.
-
     """
     blobs = list()
     LoG = gaussian_laplace(img_patch, LoG_sigma)
@@ -214,7 +211,6 @@ def shift_to_brightest(img_patch, proposals, bright_threshold, d=5):
     -------
     List[Tuple[int]]
         Shifted proposals.
-
     """
     shifted_proposals = set()
     for proposal in proposals:
@@ -243,7 +239,6 @@ def find_argmax_in_nbhd(img_patch, voxel, d):
     -------
     Tuple[int]
         Coordinate of bright voxel in neighborhood.
-
     """
     # Initializations
     i, j, k = voxel
@@ -281,7 +276,6 @@ def filter_proposals(img_patch, proposals, max_proposals=10, radius=5):
     -------
     List[Tuple[float]]
         Filtered list of proposals.
-
     """
     # Filter by distance and brightness
     proposals = spatial_filtering(proposals, radius)
@@ -309,7 +303,6 @@ def spatial_filtering(proposals, radius):
     -------
     List[Tuple[float]]
         Filtered list of proposals.
-
     """
     filtered_proposals = list()
     if len(proposals) > 0:
@@ -347,7 +340,6 @@ def brightness_filtering(img_patch, proposals, k):
     -------
     List[Tuple[float]]
         Filtered list of proposals.
-
     """
     brightness = list()
     for proposal in proposals:
@@ -379,7 +371,6 @@ def gaussian_fitness_filtering(img_patch, proposals, r=4, min_score=0.7):
     -------
     List[Tuple[int]]
         Filtered and adjusted list of proposals.
-
     """
     filtered_proposals = list()
     for proposal in proposals:
@@ -420,7 +411,6 @@ def gaussian_fitness(img_patch, r=2.0):
     -------
     tuple
         Fitness score and parameters of the fitted Gaussian.
-
     """
     # Initialize guess for parameters
     shape = img_patch.shape
@@ -457,7 +447,6 @@ def fitness_score(img_patch, voxels, params):
     float
         Correlation coefficient between the image values and fitted Gaussian
         values.
-
     """
     fitted_gaussian = gaussian_3d(voxels, *params).reshape(img_patch.shape)
     fitted = fitted_gaussian.flatten()
@@ -488,7 +477,6 @@ def gaussian_3d(xyz, x0, y0, z0, sigma_x, sigma_y, sigma_z, amplitude, offset):
     numpy.ndarray
         Computed values of the 3D Gaussian at the given coordinates. Note that
         these values are flattened from a 3D grid to a 1D array.
-
     """
     x, y, z = xyz
     value = offset + amplitude * np.exp(
@@ -518,7 +506,6 @@ def is_inbounds(shape, voxel, margin):
     -------
     bool
         True if the voxel is outside of margins, and False otherwise.
-
     """
     for i in range(3):
         if voxel[i] < margin or voxel[i] > shape[i] - margin:
@@ -543,7 +530,6 @@ def generate_grid_coords(shape):
         - x (numpy.ndarray): 1D array of x-coordinates.
         - y (numpy.ndarray): 1D array of y-coordinates.
         - z (numpy.ndarray): 1D array of z-coordinates.
-
     """
     xyz = [np.linspace(0, shape[i], shape[i]) for i in range(3)]
     x, y, z = np.meshgrid(xyz[0], xyz[1], xyz[2], indexing="ij")
