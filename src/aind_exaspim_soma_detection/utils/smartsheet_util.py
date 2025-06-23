@@ -59,7 +59,7 @@ class SmartSheetClient:
 
 
 # --- Neuron Reconstruction Utils ---
-def extract_somas(df, return_completed=False):
+def extract_somas(df, return_complete=False):
     idx = 0
     soma_locations = dict()
     while idx < len(df["Horta Coordinates"]):
@@ -67,14 +67,14 @@ def extract_somas(df, return_completed=False):
         if type(microscope) is str:
             if "spim" in microscope.lower():
                 brain_id = str(df["ID"][idx]).split(".")[0]
-                coords = extract_somas_by_brain(df, idx + 1, return_completed)
-                if len(coords) > 0:
-                    soma_locations[brain_id] = coords
+                xyz_list = extract_somas_by_brain(df, idx + 1, return_complete)
+                if len(xyz_list) > 0:
+                    soma_locations[brain_id] = xyz_list
         idx += 1
     return soma_locations
 
 
-def extract_somas_by_brain(df, idx, return_completed):
+def extract_somas_by_brain(df, idx, return_complete):
     xyz_list = list()
     while isinstance(df["Horta Coordinates"][idx], str):
         # Check whether to add idx
@@ -82,19 +82,24 @@ def extract_somas_by_brain(df, idx, return_completed):
         is_coord = "[" in entry and "]" in entry
         is_complete = df["Status 1"][idx] == "Completed"
         if is_coord:
-            try:
-                if return_completed and is_complete:
-                    xyz_list.append(ast.literal_eval(entry))
-                elif not return_completed:
-                    xyz_list.append(ast.literal_eval(entry))
-            except:
-                pass
+            xyz = read_xyz(entry)
+            if is_complete:
+                xyz_list.append(xyz)
+            elif not return_complete:
+                xyz_list.append(xyz)
 
         # Check whether reached last row
         idx += 1
         if idx >= len(df["Horta Coordinates"]):
             break
     return xyz_list
+
+
+def read_xyz(xyz_str):
+    try:
+        return ast.literal_eval(xyz_str)
+    except:
+        return None
 
 
 # --- ExM Dataset Summary Utils ---
