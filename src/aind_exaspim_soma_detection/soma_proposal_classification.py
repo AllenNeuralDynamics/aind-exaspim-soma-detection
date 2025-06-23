@@ -11,8 +11,6 @@ neural network.
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import partial
-from scipy.spatial.distance import euclidean
-from scipy.optimize import curve_fit
 from tqdm import tqdm
 
 import numpy as np
@@ -140,8 +138,7 @@ def compute_metrics(
     multiscale,
     patch_shape,
     batch_size=64,
-    min_branch_dist=120,
-    min_brightness=250,
+    min_brightness=200,
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
@@ -185,67 +182,41 @@ def compute_metrics(
         with ProcessPoolExecutor() as exec:
             for result in exec.map(process_patch_with_arg, voxel_patches):
                 if result:
-                    is_branchy = result["Max_Branch_Dist"] > min_branch_dist
-                    is_bright = result["Brightness"] > min_brightness
-                    if is_branchy and is_bright:
+                    if result["Brightness"] > min_brightness:
                         results.append(result)
                 pbar.update(1)
     return pd.DataFrame(results)
 
 
-def process_patch(voxel_patch, multiscale=3):
+def process_patch(voxel_patch, multiscale=2):
     try:
         # Fit gaussian
         voxel, img_patch = voxel_patch
-        params, voxels = fit_rotated_gaussian(img_patch)
-        radii = compute_radii(params, multiscale)
-        if (radii > 150).any():
-            return None
+        params, voxels = img_util.fit_rotated_gaussian_3d(img_patch)
+        mask = img_util.rotated_gaussian_3d_mask(
+            img_patch.shape, voxels, *params[:9]
+        )
 
         # Compute metrics
-        result = {
-            "xyz": img_util.to_physical(voxel, multiscale=multiscale),
-            "Brightness": compute_soma_brightness(img_patch, params, voxels),
-            "Volume (µm³)": int(np.prod(radii) * (4 / 3) * np.pi),
-            "Radii (μm)": tuple([round(r, 2) for r in radii]),
-            "Max_Branch_Dist": compute_branch_dist(img_patch, multiscale),
-        }
+        brightness = np.percentile(img_patch[mask], 80) if mask.any() else 0
+        radii = compute_radii(params, multiscale)
+        score = img_util.compute_fit_score(img_patch, params, voxels)
+
+        # Compile results
+        feasible_radii = (radii > 6).any() or (radii < 140).any()
+        if feasible_radii and score > 0.85:
+            result = {
+                "xyz": img_util.to_physical(voxel, multiscale=multiscale),
+                "Brightness": int(brightness),
+                "Volume (µm³)": int(np.prod(radii) * (4 / 3) * np.pi),
+                "Radii (μm)": tuple([round(r, 2) for r in radii]),
+            }
+        else:
+            result = None
         return result
     except Exception as e:
         print(f"[ERROR] Voxel {voxel} failed with error: {e}")
         return None
-
-
-def compute_branch_dist(img_patch, multiscale):
-    # Compute foreground
-    relabeled = img_util.segment_3class_otsu(img_patch)
-    object_mask = np.zeros_like(img_patch)
-
-    root = tuple([s // 2 for s in img_patch.shape])
-    root_xyz = img_util.to_physical(root, multiscale=multiscale)
-
-    # Search center object
-    max_dist = 0
-    queue = [root]
-    visited = set(queue)
-    while len(queue) > 0:
-        # Visit voxel
-        voxel = queue.pop()
-        xyz = img_util.to_physical(voxel, multiscale=multiscale)
-        max_dist = max(euclidean(xyz, root_xyz), max_dist)
-        object_mask[voxel] = 1
-
-        # Update queue
-        for nb in img_util.get_nbs(voxel, img_patch.shape):
-            if nb not in visited and relabeled[nb]:
-                queue.append(nb)
-                visited.add(nb)
-    return round(max_dist, 2)
-
-
-def compute_soma_brightness(img_patch, params, voxels):
-    mask = gaussian_mask(voxels, *params[:9]).reshape(img_patch.shape)
-    return int(np.percentile(img_patch[mask], 80)) if mask.any() else 0
 
 
 def compute_radii(params, multiscale, anisotropy=(0.748, 0.748, 1.0)):
@@ -274,92 +245,6 @@ def compute_radii(params, multiscale, anisotropy=(0.748, 0.748, 1.0)):
 
 
 # --- Helpers ---
-def fit_rotated_gaussian(img_patch):
-    # Generate voxel coordinates
-    center = [dim // 2 for dim in img_patch.shape]
-    grid = np.meshgrid(
-        np.arange(img_patch.shape[0]),
-        np.arange(img_patch.shape[1]),
-        np.arange(img_patch.shape[2]),
-        indexing='ij'
-    )
-    voxels = np.stack(grid, axis=-1).reshape(-1, 3)
-
-    # Initial guess for Gaussian parameters
-    initial_guess = [
-        center[0], center[1], center[2],
-        1e-2, 0, 0,
-        1e-2, 0,
-        1e-2,
-        np.max(img_patch), np.min(img_patch)
-    ]
-
-    # Fit rotated 3D Gaussian
-    try:
-        params, _ = curve_fit(
-            gaussian_3d_rotated,
-            voxels,
-            img_patch.ravel(),
-            p0=initial_guess
-        )
-    except RuntimeError:
-        params = np.zeros(len(initial_guess))
-    return params, voxels
-
-
-def gaussian_3d_rotated(
-    coords, x0, y0, z0, a11, a12, a13, a22, a23, a33, A, B
-):
-    # Refactor coordinates
-    x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
-    dx = x - x0
-    dy = y - y0
-    dz = z - z0
-
-    # Construct quadratic form
-    quad = (
-        a11*dx**2 + 2*a12*dx*dy + 2*a13*dx*dz +
-        a22*dy**2 + 2*a23*dy*dz + a33*dz**2
-    )
-    return A * np.exp(-0.5 * quad) + B
-
-
-def gaussian_mask(
-    coords, x0, y0, z0, a11, a12, a13, a22, a23, a33, threshold=4.0
-):
-    """
-    Computes a binary mask of voxels within a specified Mahalanobis distance
-    (default: 2 standard deviations => threshold=4) from the Gaussian center.
-
-    Parameters
-    ----------
-    coords : ndarray of shape (N, 3)
-        Voxel coordinates.
-    x0, y0, z0 : float
-        Center of the Gaussian.
-    a11, a12, a13, a22, a23, a33 : float
-        Elements of the symmetric positive-definite matrix defining the
-        quadratic form. This matrix is the inverse of the covariance matrix.
-    threshold : float
-        Mahalanobis distance squared (e.g., 4.0 for 2 standard deviations).
-
-    Returns
-    -------
-    mask : ndarray of shape (N,)
-        Boolean array where True indicates the voxel is within the threshold.
-    """
-
-    x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
-    dx = x - x0
-    dy = y - y0
-    dz = z - z0
-    quad = (
-        a11*dx**2 + 2*a12*dx*dy + 2*a13*dx*dz +
-        a22*dy**2 + 2*a23*dy*dz + a33*dz**2
-    )
-    return quad <= threshold
-
-
 def generate_batches(iterable, batch_size):
     """
     Yield successive batches from iterable.
@@ -367,10 +252,3 @@ def generate_batches(iterable, batch_size):
     for i in range(0, len(iterable), batch_size):
         n = min(i + batch_size, len(iterable) - 1)
         yield iterable[i:n]
-
-
-def reformat_coords(coords):
-    coord_list = list()
-    for i in range(len(coords[0])):
-        coord_list.append((coords[0][i], coords[1][i], coords[2][i]))
-    return np.array(coord_list)
