@@ -8,6 +8,7 @@ Helper routines for working with SmartSheets
 
 """
 
+from collections import defaultdict
 from datetime import datetime
 
 import ast
@@ -24,6 +25,9 @@ class SmartSheetClient:
         self.sheet_id = self.find_sheet_id()
         self.sheet = self.client.Sheets.get_sheet(self.sheet_id)
 
+        # Lookups
+        self.column_name_to_id = {c.title: c.id for c in self.sheet.columns}
+
     # --- Lookup Routines ---
     def find_sheet_id(self):
         response = self.client.Sheets.list_sheets()
@@ -39,10 +43,38 @@ class SmartSheetClient:
                     return row.id
         raise Exception(f"Row Not Found - keyword={keyword}")
 
+    # --- Getters ---
+    def get_children_map(self):
+        children_map = defaultdict(list)
+        idx_lookup = {row.id: idx for idx, row in enumerate(self.sheet.rows)}
+        for row in self.sheet.rows:
+            if row.parent_id:
+                parent_idx = idx_lookup[row.parent_id]
+                child_idx = idx_lookup[row.id]
+                children_map[parent_idx].append(child_idx)
+        return children_map
+
+    def get_rows_in_column_with(self, column_name, row_value):
+        row_idxs = list()
+        col_id = self.column_name_to_id[column_name]
+        for idx, row in enumerate(self.sheet.rows):
+            cell = next((c for c in row.cells if c.column_id == col_id), None)
+            value = cell.display_value or cell.value
+            if isinstance(value, str):
+                if value.lower() == row_value.lower():
+                    row_idxs.append(idx)
+        return row_idxs
+
+    def get_value(self, row_idx, column_name):
+        row = self.sheet.rows[row_idx]
+        col_id = self.column_name_to_id[column_name]
+        cell = next((c for c in row.cells if c.column_id == col_id), None)
+        return cell.display_value or cell.value
+
     # --- Miscellaneous ---
-    def get_dataframe(self):
+    def to_dataframe(self):
         # Extract column titles
-        columns = [col.title for col in self.sheet.columns]
+        columns = list(self.column_name_to_id.keys())
 
         # Extract row data
         data = []
@@ -59,39 +91,43 @@ class SmartSheetClient:
 
 
 # --- Neuron Reconstruction Utils ---
-def extract_somas(df, return_complete=False):
-    idx = 0
+def extract_somas(smartsheet_client, microscope="ExaSPIM", status=None):
+    # Extract rows by microscope and brain_id
+    idxs = smartsheet_client.get_rows_in_column_with("Collection", microscope)
+    children_map = smartsheet_client.get_children_map()
+    children_map = {k: v for k, v in children_map.items() if k in idxs}
+
+    # Extract soma coordinates
     soma_locations = dict()
-    while idx < len(df["Horta Coordinates"]):
-        microscope = df["Horta Coordinates"][idx]
-        if type(microscope) is str:
-            if "spim" in microscope.lower():
-                brain_id = str(df["ID"][idx]).split(".")[0]
-                xyz_list = extract_somas_by_brain(df, idx + 1, return_complete)
-                if len(xyz_list) > 0:
-                    soma_locations[brain_id] = xyz_list
-        idx += 1
+    for parent_idx, child_idxs in children_map.items():
+        brain_id = smartsheet_client.get_value(parent_idx, "ID")
+        xyz_list = get_coordinates(smartsheet_client, child_idxs, status)
+        if len(xyz_list) > 0:
+            soma_locations[brain_id] = xyz_list
     return soma_locations
 
 
-def extract_somas_by_brain(df, idx, return_complete):
-    xyz_list = list()
-    while isinstance(df["Horta Coordinates"][idx], str):
-        # Check whether to add idx
-        entry = df["Horta Coordinates"][idx]
-        is_coord = "[" in entry and "]" in entry
-        is_complete = df["Status 1"][idx] == "Completed"
-        if is_coord:
-            xyz = read_xyz(entry)
-            if is_complete:
-                xyz_list.append(xyz)
-            elif not return_complete:
-                xyz_list.append(xyz)
+def get_coordinates(smartsheet_client, row_idxs, status=None):
+    # Initializations
+    status_column_id = smartsheet_client.column_name_to_id["Status 1"]
+    coord_column_id = smartsheet_client.column_name_to_id["Horta Coordinates"]
 
-        # Check whether reached last row
-        idx += 1
-        if idx >= len(df["Horta Coordinates"]):
-            break
+    # Parse rows
+    xyz_list = list()
+    for idx in row_idxs:
+        # Search row
+        soma_status, soma_xyz = None, None
+        for cell in smartsheet_client.sheet.rows[idx].cells:
+            if cell.column_id == status_column_id:
+                soma_status = cell.display_value or cell.value
+            elif cell.column_id == coord_column_id:
+                soma_xyz = read_xyz(cell.display_value or cell.value)
+
+        # Process result
+        if soma_status == status and soma_xyz:
+            xyz_list.append(soma_xyz)
+        elif status is None and soma_xyz:
+            xyz_list.append(soma_xyz)
     return xyz_list
 
 

@@ -9,7 +9,6 @@ Helper routines for working with images.
 """
 
 from scipy.optimize import curve_fit
-from skimage.filters import threshold_multiotsu
 
 import matplotlib.pyplot as plt
 import numpy as np
