@@ -203,7 +203,7 @@ def process_patch(voxel_patch, multiscale=2):
         score = img_util.compute_fit_score(img_patch, params, voxels)
 
         # Compile results
-        feasible_radii = (radii > 6).any() or (radii < 140).any()
+        feasible_radii = (radii > 6).any() or (radii < 180).any()
         if feasible_radii and score > 0.85:
             result = {
                 "xyz": img_util.to_physical(voxel, multiscale=multiscale),
