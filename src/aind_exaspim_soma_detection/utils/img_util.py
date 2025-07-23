@@ -242,14 +242,23 @@ def find_img_prefix(brain_id):
     str
         Image prefix corresponding to the given brain ID.
     """
-    # Get possible prefixes
+    # Initializations
     bucket_name = "aind-open-data"
-    prefixes = util.list_s3_bucket_prefixes(bucket_name, keyword="exaspim")
+    prefixes = util.list_s3_bucket_prefixes(
+        "aind-open-data", keyword="exaspim"
+    )
+
+    # Get possible prefixes
     valid_prefixes = list()
     for prefix in prefixes:
+        # Check for new naming convention
+        if util.exists_in_prefix(bucket_name, prefix, "fusion"):
+            prefix = os.path.join(prefix, "fusion")
+        
+        # Check if prefix is valid
         if is_valid_prefix(bucket_name, prefix, brain_id):
             valid_prefixes.append(
-                os.path.join(f"s3://{bucket_name}", prefix, "fused.zarr")
+                os.path.join("s3://aind-open-data", prefix, "fused.zarr")
             )
     return find_functional_img_prefix(valid_prefixes)
 
@@ -261,13 +270,13 @@ def is_valid_prefix(bucket_name, prefix, brain_id):
     if not has_correct_id or is_test:
         return False
 
-    # Check inside prefix
+    # Check inside prefix - old convention
     if util.exists_in_prefix(bucket_name, prefix, "fused.zarr"):
         img_prefix = os.path.join(prefix, "fused.zarr")
-        subprefixes = util.list_s3_prefixes(bucket_name, img_prefix)
-        subprefixes = [p.split("/")[-2] for p in subprefixes]
-        for i in range(0, 7):
-            if str(i) not in subprefixes:
+        multiscales = util.list_s3_prefixes(bucket_name, img_prefix)
+        multiscales = [s.split("/")[-2] for s in multiscales]
+        for s in map(str, range(0, 8)):
+            if s not in multiscales:
                 return False
     return True
 
