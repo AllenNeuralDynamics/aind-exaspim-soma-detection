@@ -12,11 +12,8 @@ from scipy.optimize import curve_fit
 
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import s3fs
 import zarr
-
-from aind_exaspim_soma_detection.utils import util
 
 ANISOTROPY = [0.748, 0.748, 1.0]
 
@@ -39,7 +36,7 @@ def open_img(path):
     return zarr.open(store, mode="r")
 
 
-def get_patch(img, voxel, shape, from_center=True):
+def get_patch(img, voxel, shape, is_center=True):
     """
     Extracts a patch from an image based on the given voxel coordinate and
     patch shape.
@@ -52,8 +49,8 @@ def get_patch(img, voxel, shape, from_center=True):
         Center of patch to be extracted
     shape : Tuple[int]
         Shape of patch to be extracted.
-    from_center : bool, optional
-        Indicates whether the given voxel is the center or top, left, front
+    is_center : bool, optional
+        Indicates whether the given voxel is the center or top-left-front
         corner of the patch to be extracted. Default is True.
 
     Returns
@@ -62,7 +59,7 @@ def get_patch(img, voxel, shape, from_center=True):
         Patch extracted from the given image.
     """
     # Get image patch coordiantes
-    start, end = get_start_end(voxel, shape, from_center=from_center)
+    start, end = get_start_end(voxel, shape, is_center=is_center)
     valid_start = any([s >= 0 for s in start])
     valid_end = any([e < img.shape[i + 2] for i, e in enumerate(end)])
 
@@ -75,7 +72,7 @@ def get_patch(img, voxel, shape, from_center=True):
         return np.ones(shape)
 
 
-def calculate_offsets(img, window_shape, overlap):
+def generate_offsets(img, window_shape, overlap):
     """
     Generates a list of 3D coordinates representing the front-top-left corner
     by sliding a window over a 3D image, given a specified window size and
@@ -92,7 +89,7 @@ def calculate_offsets(img, window_shape, overlap):
 
     Returns
     -------
-    List[Tuple[int]]
+    Iterator[Tuple[int]]
         Voxel coordinates representing the front-top-left corner.
     """
     # Calculate stride based on the overlap and window size
@@ -104,15 +101,13 @@ def calculate_offsets(img, window_shape, overlap):
     i_win, j_win, k_win = window_shape
 
     # Loop over the  with the sliding window
-    voxels = []
     for i in range(0, i_dim - i_win + 1, i_stride):
         for j in range(0, j_dim - j_win + 1, j_stride):
             for k in range(0, k_dim - k_win + 1, k_stride):
-                voxels.append((i, j, k))
-    return voxels
+                yield (i, j, k)
 
 
-def get_start_end(voxel, shape, from_center=True):
+def get_start_end(voxel, shape, is_center=True):
     """
     Gets the start and end indices of the image patch to be read.
 
@@ -123,7 +118,7 @@ def get_start_end(voxel, shape, from_center=True):
         corner of the patch to be read.
     shape : Tuple[int]
         Shape of the image patch to be read.
-    from_center : bool, optional
+    is_center : bool, optional
         Indication of whether the provided coordinates represent the center of
         the patch or the front-top-left corner. The default is True.
 
@@ -131,9 +126,8 @@ def get_start_end(voxel, shape, from_center=True):
     ------
     Tuple[List[int]]
         Start and end indices of the image patch to be read.
-
     """
-    if from_center:
+    if is_center:
         start = [voxel[i] - shape[i] // 2 for i in range(3)]
         end = [voxel[i] + shape[i] // 2 for i in range(3)]
     else:
@@ -206,94 +200,6 @@ def local_to_physical(local_voxel, offset, multiscale):
     """
     global_voxel = np.array([v + o for v, o in zip(local_voxel, offset)])
     return to_physical(global_voxel, multiscale)
-
-
-# --- Image Prefix Search ---
-def get_img_prefix(brain_id, img_prefix_path=None):
-    # Check prefix path
-    if img_prefix_path:
-        prefix_lookup = util.read_json(img_prefix_path)
-        if brain_id in prefix_lookup:
-            return prefix_lookup[brain_id]
-
-    # Search for prefix path
-    result = find_img_prefix(brain_id)
-    if len(result) == 1:
-        prefix = result[0] + "/"
-        if img_prefix_path:
-            prefix_lookup[brain_id] = prefix
-            util.write_json(img_prefix_path, prefix_lookup)
-        return prefix
-
-    raise Exception(f"Image Prefixes Found - {result}")
-
-
-def find_img_prefix(brain_id):
-    """
-    Finds the image prefix corresponding to the given brain ID.
-
-    Parameters
-    ----------
-    brain_id : str
-        Brain ID used to find image prefix.
-
-    Returns
-    -------
-    str
-        Image prefix corresponding to the given brain ID.
-    """
-    # Initializations
-    bucket_name = "aind-open-data"
-    prefixes = util.list_s3_bucket_prefixes(
-        "aind-open-data", keyword="exaspim"
-    )
-
-    # Get possible prefixes
-    valid_prefixes = list()
-    for prefix in prefixes:
-        # Check for new naming convention
-        if util.exists_in_prefix(bucket_name, prefix, "fusion"):
-            prefix = os.path.join(prefix, "fusion")
-        
-        # Check if prefix is valid
-        if is_valid_prefix(bucket_name, prefix, brain_id):
-            valid_prefixes.append(
-                os.path.join("s3://aind-open-data", prefix, "fused.zarr")
-            )
-    return find_functional_img_prefix(valid_prefixes)
-
-
-def is_valid_prefix(bucket_name, prefix, brain_id):
-    # Quick checks
-    is_test = "test" in prefix.lower()
-    has_correct_id = str(brain_id) in prefix
-    if not has_correct_id or is_test:
-        return False
-
-    # Check inside prefix - old convention
-    if util.exists_in_prefix(bucket_name, prefix, "fused.zarr"):
-        img_prefix = os.path.join(prefix, "fused.zarr")
-        multiscales = util.list_s3_prefixes(bucket_name, img_prefix)
-        multiscales = [s.split("/")[-2] for s in multiscales]
-        for s in map(str, range(0, 8)):
-            if s not in multiscales:
-                return False
-    return True
-
-
-def find_functional_img_prefix(prefixes):
-    # Filter img prefixes that fail to open
-    functional_prefixes = list()
-    for prefix in prefixes:
-        try:
-            root = os.path.join(prefix, str(0))
-            store = s3fs.S3Map(root=root, s3=s3fs.S3FileSystem(anon=True))
-            img = zarr.open(store, mode="r")
-            if np.max(img.shape) > 25000:
-                functional_prefixes.append(prefix)
-        except:
-            pass
-    return functional_prefixes
 
 
 # --- Visualizations ---
@@ -518,7 +424,6 @@ def rotated_gaussian_3d_mask(
     mask : ndarray of shape (N,)
         Boolean array where True indicates the voxel is within the threshold.
     """
-
     x, y, z = voxels[:, 0], voxels[:, 1], voxels[:, 2]
     dx = x - x0
     dy = y - y0

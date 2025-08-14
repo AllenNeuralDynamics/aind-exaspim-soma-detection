@@ -39,7 +39,6 @@ def mkdir(path, delete=False):
     Returns
     -------
     None
-
     """
     if delete:
         rmdir(path)
@@ -59,7 +58,6 @@ def rmdir(path):
     Returns
     -------
     None
-
     """
     if os.path.exists(path):
         shutil.rmtree(path)
@@ -77,8 +75,7 @@ def list_subdirectory_names(directory_path):
     Returns
     -------
     List[str]
-        List of the names of subdirectories.
-
+        Names of subdirectories.
     """
     subdir_names = list()
     for d in os.listdir(directory_path):
@@ -102,9 +99,8 @@ def list_paths(directory, extension=""):
 
     Returns
     -------
-    list[str]
-        List of all paths within "directory".
-
+    List[str]
+        Paths within "directory".
     """
     paths = list()
     for f in os.listdir(directory):
@@ -126,8 +122,7 @@ def read_txt(path):
     Returns
     -------
     str
-        Contents of txt file.
-
+        Contents of a txt file.
     """
     with open(path, "r") as f:
         return f.read().splitlines()
@@ -146,7 +141,6 @@ def read_json(path):
     -------
     str
         Contents of json file.
-
     """
     with open(path, "r") as file:
         return json.load(file)
@@ -166,7 +160,6 @@ def write_json(path, my_dict):
     Returns
     -------
     None
-
     """
     with open(path, 'w') as file:
         json.dump(my_dict, file, indent=4)
@@ -181,12 +174,11 @@ def write_list(path, my_list):
     path : str
         Path where text file is to be written.
     my_list
-        The list of items to write to the file.
+        Items to write to a text file.
 
     Returns
     -------
     None
-
     """
     with open(path, "w") as file:
         for item in my_list:
@@ -209,7 +201,6 @@ def read_swc_dir(swc_dir):
     Tuple[list]
         Paths to SWC files and xyz coordinates read from corresponding SWC
         files.
-
     """
     with ThreadPoolExecutor() as executor:
         # Assign threads
@@ -242,7 +233,6 @@ def read_swc(path):
     -------
     List[float]
         xyz coordinate stored in SWC file.
-
     """
     # Parse commented section
     offset = [0.0, 0.0, 0.0]
@@ -275,12 +265,11 @@ def write_points(zip_path, points, color=None, prefix="", radius=20):
         String that is prefixed to the filenames of the SWC files. Default is
         an empty string.
     radius : float, optional
-        Radius to be used in swc file.
+        Radius to be used in SWC file.
 
     Returns
     --------
     None
-
     """
     zip_writer = ZipFile(zip_path, "w")
     for i, xyz in enumerate(points):
@@ -309,7 +298,6 @@ def to_zipped_point(zip_writer, filename, xyz, color=None, radius=5):
     Returns
     -------
     None
-
     """
     with StringIO() as text_buffer:
         # Preamble
@@ -326,55 +314,6 @@ def to_zipped_point(zip_writer, filename, xyz, color=None, radius=5):
 
 
 # --- S3 utils ---
-def exists_in_prefix(bucket_name, prefix, name):
-    """
-    Checks if a given filename is in a prefix.
-
-    Parameters
-    ----------
-    bucket_name : str
-        Name of the S3 bucket to search.
-    prefix : str
-        S3 prefix to search within.
-    name : str
-        Filename to search for.
-
-    Returns
-    -------
-    bool
-        Indiciation of whether a given file is in a prefix.
-
-    """
-    prefixes = list_s3_prefixes(bucket_name, prefix)
-    return sum([1 for prefix in prefixes if name in prefix]) > 0
-
-
-def is_file_in_prefix(bucket_name, prefix, filename):
-    """
-    Checks if a specific file exists within a given S3 prefix.
-
-    Parameters
-    -----------
-    bucket_name : str
-        Name of the S3 bucket to searched.
-    prefix : str
-        S3 prefix (path) under which to look for the file.
-    filename : str
-        Name of the file to search for within the specified prefix.
-
-    Returns:
-    --------
-    bool
-        Returns "True" if the file exists within the given prefix,
-        otherwise "False".
-
-    """
-    for sub_prefix in list_s3_prefixes(bucket_name, prefix):
-        if filename in sub_prefix:
-            return True
-    return False
-
-
 def list_s3_prefixes(bucket_name, prefix):
     """
     Lists all immediate subdirectories of a given S3 path (prefix).
@@ -389,8 +328,7 @@ def list_s3_prefixes(bucket_name, prefix):
     Returns:
     --------
     List[str]
-        List of immediate subdirectories under the specified prefix.
-
+        Immediate subdirectories under the specified prefix.
     """
     # Check prefix is valid
     if not prefix.endswith("/"):
@@ -405,54 +343,6 @@ def list_s3_prefixes(bucket_name, prefix):
         return [cp["Prefix"] for cp in response["CommonPrefixes"]]
     else:
         return list()
-
-
-def list_s3_bucket_prefixes(bucket_name, keyword=None):
-    """
-    Lists all top-level prefixes (directories) in an S3 bucket, optionally
-    filtering by a keyword.
-
-    Parameters
-    -----------
-    bucket_name : str
-        Name of the S3 bucket to search.
-    keyword : str, optional
-        Keyword used to filter the prefixes.
-
-    Returns
-    --------
-    List[str]
-        A list of top-level prefixes (directories) in the S3 bucket. If a
-        keyword is provided, only the matching prefixes are returned.
-
-    """
-    # Initializations
-    prefixes = list()
-    continuation_token = None
-    s3 = boto3.client("s3")
-
-    # Main
-    while True:
-        # Call the list_objects_v2 API
-        list_kwargs = {"Bucket": bucket_name, "Delimiter": "/"}
-        if continuation_token:
-            list_kwargs["ContinuationToken"] = continuation_token
-        response = s3.list_objects_v2(**list_kwargs)
-
-        # Collect the top-level prefixes
-        if "CommonPrefixes" in response:
-            for prefix in response["CommonPrefixes"]:
-                if keyword and keyword in prefix["Prefix"].lower():
-                    prefixes.append(prefix["Prefix"])
-                elif keyword is None:
-                    prefixes.append(prefix["Prefix"])
-
-        # Check if there are more pages to fetch
-        if response.get("IsTruncated"):
-            continuation_token = response.get("NextContinuationToken")
-        else:
-            break
-    return prefixes
 
 
 def upload_dir_to_s3(bucket_name, prefix, source_dir):
@@ -471,7 +361,6 @@ def upload_dir_to_s3(bucket_name, prefix, source_dir):
     Returns
     -------
     None
-
     """
     for name in os.listdir(source_dir):
         source_path = os.path.join(source_dir, name)
@@ -500,7 +389,6 @@ def upload_file_to_s3(bucket_name, source_path, destination_path):
     Returns
     -------
     None
-
     """
     s3 = boto3.client("s3")
     s3.upload_file(source_path, bucket_name, destination_path)
@@ -588,8 +476,7 @@ def sample_once(my_container):
 
     Returns
     -------
-    sample
-
+    any
     """
     return sample(my_container, 1)[0]
 
@@ -611,7 +498,6 @@ def time_writer(t, unit="seconds"):
         Runtime
     str
         Unit of time.
-
     """
     assert unit in ["seconds", "minutes", "hours"]
     upd_unit = {"seconds": "minutes", "minutes": "hours"}

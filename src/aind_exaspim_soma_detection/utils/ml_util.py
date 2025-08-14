@@ -145,7 +145,6 @@ def report_metrics(y, hat_y, threshold):
     Returns
     -------
     None
-
     """
     hat_y = (hat_y > threshold).astype(int)
     accuracy = accuracy_score(y, hat_y)
