@@ -36,7 +36,6 @@ from tqdm import tqdm
 import numpy as np
 
 from aind_exaspim_soma_detection.utils import img_util
-from aind_exaspim_soma_detection.utils.img_util import get_patch
 
 
 # --- Wrappers ---
@@ -74,13 +73,15 @@ def generate_proposals(
     # Initializations
     img = img_util.open_img(img_prefix)
     margin = np.min(patch_overlap) // 4
-    offsets = img_util.calculate_offsets(img, patch_shape, patch_overlap)
+    offsets_generator = img_util.generate_offsets(
+        img, patch_shape, patch_overlap
+    )
 
     # Generate proposals
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = list()
-        for offset in offsets:
+        for offset in offsets_generator:
             threads.append(
                 executor.submit(
                     generate_proposals_patch,
@@ -138,7 +139,7 @@ def generate_proposals_patch(
         Physical coordinates of proposals.
     """
     # Get image patch
-    img_patch = get_patch(img, offset, patch_shape, from_center=False)
+    img_patch = img_util.get_patch(img, offset, patch_shape, is_center=False)
     if np.max(img_patch) < bright_threshold:
         return list()
 

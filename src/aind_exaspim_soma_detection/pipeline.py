@@ -53,12 +53,11 @@ def run_pipeline(
         routine "classify_proposals".
     filter_params : dict, optional
         Dictionary containing values for optional parameters used by the
-        routine "quantify_accepts". The default is None.
+        routine "quantify_accepts". Default is None.
 
     Returns
     -------
     None
-
     """
     # Initializations
     t0 = time()
@@ -102,27 +101,26 @@ def generate_proposals(
     img_path : str
         Path to whole brain image stored in a S3 bucket.
     multiscale : int, optional
-        Level in the image pyramid that image patches are read from. The
-        default is 4.
+        Level in the image pyramid that image patches are read from.
+        Default is 4.
     patch_shape : Tuple[int], optional
         Shape of each image patch. The default is (64, 64, 64).
     patch_overlap : int, optional
-        Overlap between adjacent image patches in each dimension. The default
-        is (32, 32, 32).
+        Overlap between adjacent image patches in each dimension. Default is
+        (32, 32, 32).
     bright_threshold : int, optional
-        Brightness threshold used to filter proposals and image patches. The
-        default is 0.
+        Brightness threshold used to filter proposals and image patches.
+        Default is 0.
     output_dir : str, optional
-        Path to directory that results are written to. The default is None.
+        Path to directory that results are written to. Default is None.
     save_swcs : bool, optional
         Indication of whether to save each proposal coordinate as an SWC file.
-        The default is False.
+        Default is False.
 
     Returns
     -------
     List[Tuple[float]]
         Physical coordinates of proposals.
-
     """
     # Main
     t0 = time()
@@ -172,27 +170,26 @@ def classify_proposals(
         List of proposals, where each is represented by an xyz coordinate.
     accept_threshold : float, optional
         Threshold applied to model predictions, above which a proposal is
-        classified as a soma. The default is 0.4.
+        classified as a soma. Default is 0.4.
     model_path : str, optional
         Path to the pre-trained model that is used to classify the proposals.
-        The default is None.
+        Default is None.
     multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
-        The default is 1.
+        Default is 1.
     patch_shape : Tuple[int], optional
-        Shape of image patches to be used for inference. The default is
+        Shape of image patches to be used for inference. Default is
         (102, 102, 102).
     output_dir : str, optional
-        Path to directory that results are written to. The default is None.
+        Path to directory that results are written to. Default is None.
     save_swcs : bool, optional
         Indication of whether to save each proposal coordinate as an SWC file.
-        The default is False.
+        Default is False.
 
     Returns
     -------
     List[Tuple[float]]
         Physical coordinates of accepted proposals.
-
     """
     # Main
     t0 = time()
@@ -258,7 +255,6 @@ def quantify_accepts(
     -------
     List[Tuple[float]]
         Physical coordinates of accepted proposals that passed filtering step.
-
     """
     # Main
     t0 = time()
@@ -296,7 +292,6 @@ def update_log(output_dir, log_info):
     Returns
     -------
     None
-
     """
     print(log_info)
     if output_dir is not None:
