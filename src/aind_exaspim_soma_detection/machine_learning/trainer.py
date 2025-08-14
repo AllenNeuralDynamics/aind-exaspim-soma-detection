@@ -28,7 +28,6 @@ from aind_exaspim_soma_detection import soma_proposal_classification as spc
 class FocalLoss(nn.Module):
     """
     Focal Loss for addressing class imbalance in binary classification tasks.
-
     """
 
     def __init__(self, alpha=0.5, gamma=2.0):
@@ -43,7 +42,6 @@ class FocalLoss(nn.Module):
         gamma : float, optional
             Focusing parameter that controls the rate at which easy examples
             are down-weighted. The default is 2.0.
-
         """
         super(FocalLoss, self).__init__()
         self.alpha = alpha
@@ -65,7 +63,6 @@ class FocalLoss(nn.Module):
         -------
         torch.Tensor
             Focal loss value.
-
         """
         BCE_loss = F.binary_cross_entropy(hat_y, y, reduction="none")
         pt = torch.exp(-BCE_loss)
@@ -111,7 +108,6 @@ def evaluation_metrics(writer, hat_y, y, cnt, prefix="", threshold=0):
     -------
     float
         F1 score for the given epoch.
-
     """
     # Compute metrics
     hat_y = (hat_y > threshold).astype(int)

@@ -28,11 +28,6 @@ class FastConvNet3d(nn.Module):
         ----------
         patch_shape : Tuple[int]
             Shape of image patches to be run through network.
-
-        Returns
-        -------
-        None
-
         """
         super(FastConvNet3d, self).__init__()
         self.patch_shape = patch_shape
@@ -93,11 +88,6 @@ class FastConvNet3d(nn.Module):
         ----------
         m : nn.Module
             PyTorch layer or module.
-
-        Returns
-        -------
-        None
-
         """
         if isinstance(m, nn.Conv3d):
             init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
@@ -124,7 +114,6 @@ class FastConvNet3d(nn.Module):
         -------
         torch.Tensor
             Output with shape (batch_size, 1).
-
         """
         # Convolutional Layers
         x = self.layer1(x)
@@ -141,7 +130,6 @@ class FastConvNet3d(nn.Module):
 class FastConvLayer(nn.Module):
     """
     Class that performs a single layer of 2.5 convolution.
-
     """
 
     def __init__(self, in_channels, out_channels):
@@ -154,11 +142,6 @@ class FastConvLayer(nn.Module):
             Number of input channels.
         int_channels : int
             Number of intermediate channels for the 2D convolutions.
-
-        Returns
-        -------
-        None
-
         """
         super(FastConvLayer, self).__init__()
         self.conv_2d = nn.Conv2d(in_channels, in_channels, 3, padding=1)
@@ -177,7 +160,6 @@ class FastConvLayer(nn.Module):
         -------
         torch.Tensor
             Output of shape (batch_size, out_channels, height, width, depth).
-
         """
         B, C, D, H, W = x.shape
 
