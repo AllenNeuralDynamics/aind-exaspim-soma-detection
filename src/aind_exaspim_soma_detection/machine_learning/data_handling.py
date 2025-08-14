@@ -45,7 +45,6 @@ class ProposalDataset(Dataset):
         (4) labels: Labels for each proposal (0 or 1), optional.
 
     Note: This dataset supports proposals from multiple whole-brain datasets.
-
     """
 
     def __init__(self, patch_shape, transform=False):
@@ -75,7 +74,6 @@ class ProposalDataset(Dataset):
         transform : callable or None
             Transformation pipeline applied to each image patch if "transform"
             is True. Otherwise, this value is set to None.
-
         """
         # Class attributes
         self.key_to_filename = dict()
@@ -138,7 +136,6 @@ class ProposalDataset(Dataset):
             - "key" (tuple): Input "key" tuple.
             - "img_patch" (numpy.ndarray): 3D image patch centered at "voxel".
             - "label" (int): Label associated with the proposal.
-
         """
         # Get voxel
         brain_id, voxel = key
@@ -168,7 +165,6 @@ class ProposalDataset(Dataset):
         -------
         dict
             Positive proposals in dataset.
-
         """
         return dict({k: v for k, v in self.proposals.items() if v})
 
@@ -176,15 +172,10 @@ class ProposalDataset(Dataset):
         """
         Gets all negative proposals in the dataset.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         dict
             Negative proposals in dataset.
-
         """
         return dict({k: v for k, v in self.proposals.items() if not v})
 
@@ -192,15 +183,10 @@ class ProposalDataset(Dataset):
         """
         Counts the number of positive proposals in the dataset.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         int
             Number of positive proposals in the dataset.
-
         """
         return len(self.get_positives())
 
@@ -208,15 +194,10 @@ class ProposalDataset(Dataset):
         """
         Counts the number of negative proposals in the dataset.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         int
             Number of negative proposals in the dataset.
-
         """
         return len(self.get_negatives())
 
@@ -234,18 +215,11 @@ class ProposalDataset(Dataset):
         img_prefix : str
             Prefix (or path) of a whole-brain image stored in a S3 bucket.
         voxels : List[Tuple[int]]
-            List of voxel coordinates representing the proposals.
+            Voxel coordinates representing the proposals.
         labels : List[int], optional
-            List of ground truth labels corresponding to the proposals. The
-            default is None.
+            Ground truth labels of the proposals. Default is None.
         paths : List[str], optional
-            List of file paths corresponding to the proposal. The default is
-            None.
-
-        Returns
-        -------
-        None
-
+            File paths corresponding to the proposal. Default is None.
         """
         # Sanity checks
         if labels is not None:
@@ -277,12 +251,8 @@ class ProposalDataset(Dataset):
             - "brain_id" (str): Unique identifier of the brain dataset.
             - "voxel" (Tuple[int]): Voxel coordinate of proposal.
         epsilon : float, optional
-            Distance threshold used to search for nearby proposals.
-
-        Returns
-        -------
-        None
-
+            Distance threshold used to search for nearby proposals. Default
+            is 0.
         """
         # Remove if proposal exists
         if query_key in self.proposals:
@@ -308,11 +278,6 @@ class ProposalDataset(Dataset):
             Unique indentifier of a proposal which is a tuple containing:
             - "brain_id" (str): Unique identifier of the brain dataset.
             - "voxel" (Tuple[int]): Voxel coordinate of proposal.
-
-        Returns
-        -------
-        None
-
         """
         _, img_patch, _ = self[key]
         img_util.plot_mips(img_patch)
@@ -328,11 +293,6 @@ class ProposalDataset(Dataset):
             Unique indentifier of a proposal which is a tuple containing:
             - "brain_id" (str): Unique identifier of the brain dataset.
             - "voxel" (Tuple[int]): Voxel coordinate of proposal.
-
-        Returns
-        -------
-        None
-
         """
         # Get image patch
         _, img_patch, _ = self[key]
@@ -348,7 +308,6 @@ class MultiThreadedDataLoader:
     """
     DataLoader that uses multithreading to fetch image patches from the cloud
     to form batches.
-
     """
 
     def __init__(self, dataset, batch_size=64, shuffle=True):
@@ -360,12 +319,10 @@ class MultiThreadedDataLoader:
         dataset : Dataset.ProposalDataset
             Instance of custom dataset.
         batch_size : int, optional
-            Number of samples per batch. The default is 64.
-
-        Returns
-        -------
-        None
-
+            Number of samples per batch. Default is 64.
+        shuffle : bool, optional
+            Indication of whether to shuffle the examples during training.
+            Default is True.
         """
         self.dataset = dataset
         self.batch_size = batch_size
@@ -373,14 +330,13 @@ class MultiThreadedDataLoader:
 
     def __iter__(self):
         """
-        Returns an iterator for the data loader, providing the functionality
+        Returns an iterator for the data oader, providing the functionality
         to iterate over the whole dataset.
 
         Returns
         -------
         iterator
-            Iterator for the data loader.
-
+            Iterator for the dataloader.
         """
         return self.DataLoaderIterator(self)
 
@@ -388,7 +344,6 @@ class MultiThreadedDataLoader:
         """
         Custom iterator class for iterating over the dataset in the data
         loader.
-
         """
 
         def __init__(self, dataloader):
@@ -399,8 +354,7 @@ class MultiThreadedDataLoader:
             Parameters
             ----------
             MultiThreadedDataLoader
-                Data loader instance that this iterator is associated with.
-
+                Dataloader instance that this iterator is associated with.
             """
             self.current_index = 0
             self.batch_size = dataloader.batch_size
@@ -417,7 +371,6 @@ class MultiThreadedDataLoader:
             -------
             DataLoaderIterator
                 Iterator object itself.
-
             """
             return self
 
@@ -425,10 +378,6 @@ class MultiThreadedDataLoader:
             """
             Retrieves the next batch of image patches and their corresponding
             labels from the dataset.
-
-            Parameters
-            ----------
-            None
 
             Returns
             -------
@@ -440,7 +389,6 @@ class MultiThreadedDataLoader:
                   with the shape (self.batch_size, 1, H, W, D).
                 - "labels" (torch.Tensor): Labels corresponding to the image
                    patches with the shape (self.batch_size, 1).
-
             """
             # Check whether to stop
             if self.current_index >= len(self.keys):
