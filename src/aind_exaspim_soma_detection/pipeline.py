@@ -54,10 +54,6 @@ def run_pipeline(
     filter_params : dict, optional
         Dictionary containing values for optional parameters used by the
         routine "quantify_accepts". Default is None.
-
-    Returns
-    -------
-    None
     """
     # Initializations
     t0 = time()
@@ -288,10 +284,6 @@ def update_log(output_dir, log_info):
         Path to directory that results will be written to.
     log_info : str
         Information to be written to the file.
-
-    Returns
-    -------
-    None
     """
     print(log_info)
     if output_dir is not None:

@@ -346,18 +346,18 @@ def shift_somas(
     img_prefix : str
         Prefix (or path) of a whole-brain image stored in a S3 bucket.
     xyz_list : List[Tuples[float]
-        List of soma coordinates to process.
+        Soma coordinates to process.
     multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
-        The default is 3.
+        Default is 3.
     patch_shape : Tuple[int], optional
-        Shape of the image patch to be extracted around each soma. The default
-        is (40, 40, 40).
+        Shape of the image patch to be extracted around each soma. Default is
+        (40, 40, 40).
 
     Returns:
     --------
     str, List[Tuple[float]]
-        Brain id and shifted soma xyz coordinates.
+        Brain ID and shifted soma xyz coordinates.
     """
     img = img_util.open_img(img_prefix + str(multiscale))
     with ThreadPoolExecutor() as executor:
@@ -391,6 +391,7 @@ def shift_soma(img, xyz, patch_shape, multiscale=3):
         Shape of the image patch to be extracted from "img".
     multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
+        Default is 3.
 
     Returns
     -------

@@ -212,10 +212,6 @@ def plot_mips(img, vmax=None):
     ----------
     img : numpy.ndarray
         Input 3D image to generate MIPs from.
-
-    Returns
-    -------
-    None
     """
     vmax = vmax or np.percentile(img, 99.9)
     fig, axs = plt.subplots(1, 3, figsize=(10, 4))
