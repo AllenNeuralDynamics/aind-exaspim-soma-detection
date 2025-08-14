@@ -29,7 +29,7 @@ dependencies = [
     'tqdm',
     'urllib3==1.26.15',
     'zarr',
-    'aind-exaspim-image-utils @ git+https://github.com/AllenNeuralDynamics/aind-exaspim-dataset-utils.git@main'
+    'aind-exaspim-dataset-utils @ git+https://github.com/AllenNeuralDynamics/aind-exaspim-dataset-utils.git@main'
 ]
 
 [project.optional-dependencies]

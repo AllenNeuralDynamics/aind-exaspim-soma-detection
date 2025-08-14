@@ -14,19 +14,17 @@ from io import StringIO
 from random import sample
 from zipfile import ZipFile
 
-import ast
 import boto3
 import json
 import numpy as np
 import os
-import pandas as pd
 import shutil
 
 
 # --- OS utils ---
 def mkdir(path, delete=False):
     """
-    Creates a directory at "path".
+    Creates a directory located at the given path.
 
     Parameters
     ----------
@@ -34,11 +32,7 @@ def mkdir(path, delete=False):
         Path of directory to be created.
     delete : bool, optional
         Indication of whether to delete directory at path if it already
-        exists. The default is False.
-
-    Returns
-    -------
-    None
+        exists. Default is False.
     """
     if delete:
         rmdir(path)
@@ -54,10 +48,6 @@ def rmdir(path):
     ----------
     path : str
         Path to directory and subdirectories to be deleted if they exist.
-
-    Returns
-    -------
-    None
     """
     if os.path.exists(path):
         shutil.rmtree(path)
@@ -87,15 +77,15 @@ def list_subdirectory_names(directory_path):
 
 def list_paths(directory, extension=""):
     """
-    Lists all paths within "directory" that end with "extension" if provided.
+    Lists all paths within "directory" ending with "extension" if provided.
 
     Parameters
     ----------
     directory : str
         Directory to be searched.
     extension : str, optional
-        If provided, only paths of files with the extension are returned. The
-        default is an empty string.
+        If provided, only paths of files with the extension are returned.
+        Default is an empty string.
 
     Returns
     -------
@@ -130,17 +120,17 @@ def read_txt(path):
 
 def read_json(path):
     """
-    Reads json file stored at "path".
+    Reads JSON file stored at "path".
 
     Parameters
     ----------
     path : str
-        Path where json file is stored.
+        Path where JSON file is stored.
 
     Returns
     -------
     str
-        Contents of json file.
+        Contents of JSON file.
     """
     with open(path, "r") as file:
         return json.load(file)
@@ -148,7 +138,7 @@ def read_json(path):
 
 def write_json(path, my_dict):
     """
-    Writes the contents in the given dictionary to a json file at "path".
+    Writes the contents in the given dictionary to a JSON file at "path".
 
     Parameters
     ----------
@@ -156,10 +146,6 @@ def write_json(path, my_dict):
         Path where JSON file is stored.
     my_dict : dict
         Dictionary to be written to a JSON.
-
-    Returns
-    -------
-    None
     """
     with open(path, 'w') as file:
         json.dump(my_dict, file, indent=4)
@@ -175,10 +161,6 @@ def write_list(path, my_list):
         Path where text file is to be written.
     my_list
         Items to write to a text file.
-
-    Returns
-    -------
-    None
     """
     with open(path, "w") as file:
         for item in my_list:
@@ -259,17 +241,13 @@ def write_points(zip_path, points, color=None, prefix="", radius=20):
     points : list
         A list of 3D points to be saved.
     color : str, optional
-        The color to associate with the points in the SWC files. The default
-        is None.
+        The color to associate with the points in the SWC files. Default is
+        None.
     prefix : str, optional
         String that is prefixed to the filenames of the SWC files. Default is
-        an empty string.
+        an empty string. Default is an empty string.
     radius : float, optional
-        Radius to be used in SWC file.
-
-    Returns
-    --------
-    None
+        Radius to be used in SWC file. Default is 20.
     """
     zip_writer = ZipFile(zip_path, "w")
     for i, xyz in enumerate(points):
@@ -291,13 +269,9 @@ def to_zipped_point(zip_writer, filename, xyz, color=None, radius=5):
     xyz : ArrayLike
         Point to be written to SWC file.
     color : str, optional
-        Color of nodes. The default is None.
+        Color of nodes. Default is None.
     radius : float, optional
-        Radius of point. The default is 5um.
-
-    Returns
-    -------
-    None
+        Radius of point. Default is 5um.
     """
     with StringIO() as text_buffer:
         # Preamble
@@ -314,37 +288,6 @@ def to_zipped_point(zip_writer, filename, xyz, color=None, radius=5):
 
 
 # --- S3 utils ---
-def list_s3_prefixes(bucket_name, prefix):
-    """
-    Lists all immediate subdirectories of a given S3 path (prefix).
-
-    Parameters
-    -----------
-    bucket_name : str
-        Name of the S3 bucket to search.
-    prefix : str
-        S3 prefix (path) to search within.
-
-    Returns:
-    --------
-    List[str]
-        Immediate subdirectories under the specified prefix.
-    """
-    # Check prefix is valid
-    if not prefix.endswith("/"):
-        prefix += "/"
-
-    # Call the list_objects_v2 API
-    s3 = boto3.client("s3")
-    response = s3.list_objects_v2(
-        Bucket=bucket_name, Prefix=prefix, Delimiter="/"
-    )
-    if "CommonPrefixes" in response:
-        return [cp["Prefix"] for cp in response["CommonPrefixes"]]
-    else:
-        return list()
-
-
 def upload_dir_to_s3(bucket_name, prefix, source_dir):
     """
     Uploads the contents of a directory to S3.
@@ -357,10 +300,6 @@ def upload_dir_to_s3(bucket_name, prefix, source_dir):
         Name of S3 prefix to be written to.
     source_dir : str
         Path to local directory to be written to S3.
-
-    Returns
-    -------
-    None
     """
     for name in os.listdir(source_dir):
         source_path = os.path.join(source_dir, name)
@@ -385,37 +324,9 @@ def upload_file_to_s3(bucket_name, source_path, destination_path):
         Path to local file to be written to S3.
     destination_path : str
         Path within S3 bucket that file is to be written to.
-
-    Returns
-    -------
-    None
     """
     s3 = boto3.client("s3")
     s3.upload_file(source_path, bucket_name, destination_path)
-
-
-# --- S3 Soma utils ---
-def load_somas_from_s3(brain_id):
-    # Find soma results for brain_id
-    bucket_name = 'aind-msma-morphology-data'
-    prefix = f"exaspim_soma_detection/{brain_id}"
-    prefix_list = list_s3_prefixes(bucket_name, prefix)
-
-    # Find most recent result
-    if prefix_list:
-        dirname = find_most_recent_dirname(prefix_list)
-        path = f"s3://{bucket_name}/{prefix}/{dirname}/somas-{brain_id}.csv"
-        return list(pd.read_csv(path)["xyz"].apply(ast.literal_eval))
-    else:
-        return None
-
-
-def find_most_recent_dirname(results_prefix_list):
-    dates = list()
-    for prefix in results_prefix_list:
-        dirname = prefix.split("/")[-2]
-        dates.append(dirname.replace("results_", ""))
-    return "results_" + sorted(dates)[-1]
 
 
 # --- Miscellaneous ---
@@ -427,8 +338,8 @@ def compute_std(values, weights=None):
     ----------
     values : array-like
         Data points.
-    weights : array-like
-        Weights corresponding to each data point.
+    weights : array-like, optional
+        Weights corresponding to each data point. Default is None.
 
     Returns
     -------
@@ -490,7 +401,7 @@ def time_writer(t, unit="seconds"):
     t : float
         Runtime.
     unit : str, optional
-        Unit of time that "t" is expressed in.
+        Unit of time that "t" is expressed in. Default is "seconds".
 
     Returns
     -------

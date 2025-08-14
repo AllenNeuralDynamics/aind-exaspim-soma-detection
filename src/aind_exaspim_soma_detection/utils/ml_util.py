@@ -105,7 +105,7 @@ def get_incorrect(keys, y, hat_y, threshold, verbose=True):
         Threshold value for classifying the predicted likelihoods.
     verbose : bool, optional
         Indication of whether to print our the number of false positives and
-        false negatives. The default is True.
+        false negatives. Default is True.
 
     Returns
     -------
@@ -141,10 +141,6 @@ def report_metrics(y, hat_y, threshold):
         True labels.
     hat_y : numpy.ndarray
         Predicted labels from a machine learning model.
-
-    Returns
-    -------
-    None
     """
     hat_y = (hat_y > threshold).astype(int)
     accuracy = accuracy_score(y, hat_y)
@@ -168,7 +164,7 @@ def split_train_validation(examples, train_ratio=0.85):
         represent the example data.
     train_ratio : float, optional
         Number between 0 and 1 representing the proportion of the dataset to be
-        used for training. The default is 0.85.
+        used for training. Default is 0.85.
 
     Returns
     -------
@@ -198,8 +194,8 @@ def toCPU(tensor, return_numpy=True):
     tensor : torch.Tensor
         Input tensor that is on a GPU.
     return_numpy : bool, optional
-        Indication of whether to return the tensor as a NumPy array. The
-        default is True.
+        Indication of whether to convert tensor to a NumPy array. Default is
+        True.
 
     Returns
     -------
