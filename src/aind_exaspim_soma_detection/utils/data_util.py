@@ -49,7 +49,6 @@ def fetch_smartsheet_somas(dataset_path, img_prefixes_path, multiscale):
             - "img_path" (str): Path to image stored in S3 bucket.
             - "voxels" (list): Voxel coordinates of proposed somas.
             - "labels" (list): Labels corresponding to voxels.
-
     """
     data = list()
     img_prefixes = util.read_json(img_prefixes_path)
@@ -82,7 +81,6 @@ def fetch_exaspim_somas_2024(dataset_path, img_prefixes_path, multiscale):
             - "img_path" (str): Path to image stored in S3 bucket.
             - "voxels" (list): Voxel coordinates of proposed somas.
             - "labels" (list): Labels corresponding to voxels.
-
     """
     data = list()
     img_prefixes = util.read_json(img_prefixes_path)
@@ -133,7 +131,6 @@ def load_swc_examples(
             - "img_path" (str): Path to image stored in S3 bucket.
             - "voxels" (list): Voxel coordinates of proposed somas.
             - "labels" (list): Labels corresponding to voxels.
-
     """
     paths, xyz_list = util.read_swc_dir(swc_dir)
     voxels = [img_util.to_voxels(xyz, multiscale) for xyz in xyz_list]
@@ -175,7 +172,6 @@ def reformat_data(
             - "img_path" (str): Path to image stored in S3 bucket.
             - "voxels" (list): Voxel coordinates of proposed somas.
             - "labels" (list): Labels corresponding to voxels.
-
     """
     img_path = img_prefixes[brain_id] + str(multiscale)
     labels = len(voxels) * [label] if label else None
@@ -200,7 +196,6 @@ def load_examples(path):
     List[Tuple[str, ArrayLike]]
         List of tuples such that each contains a "brain_id" and "voxel"
         coordinate.
-
     """
     examples = list()
     for line in util.read_txt(path):
@@ -230,7 +225,6 @@ def scrape_smartsheet(smartsheet_path, img_prefixes_path, multiscale):
     -------
     List[tuple]
         List of tuples containing processed soma data for each brain.
-
     """
     # Read data
     img_prefixes = util.read_json(img_prefixes_path)
@@ -278,7 +272,6 @@ def extract_smartsheet_somas(path, soma_status=None):
     dict
         Dictionary where the keys are brain IDs and values are lists of soma
         coordinates extracted from the sheet.
-
     """
     # Initializations
     df = pd.read_excel(path, sheet_name="Neuron Reconstructions")
@@ -318,7 +311,6 @@ def get_soma_coords(df, idx, soma_status):
     --------
     numpy.ndarray
         Array of 3D coordinates.
-
     """
     xyz_list = list()
     while type(df["Horta Coordinates"][idx]) is str:
@@ -366,7 +358,6 @@ def shift_somas(
     --------
     str, List[Tuple[float]]
         Brain id and shifted soma xyz coordinates.
-
     """
     img = img_util.open_img(img_prefix + str(multiscale))
     with ThreadPoolExecutor() as executor:
@@ -406,7 +397,6 @@ def shift_soma(img, xyz, patch_shape, multiscale=3):
     numpy.ndarray or None
         If a soma is detected, returns the adjusted soma xyz coordinates. If
         no soma is detected, it returns None.
-
     """
     voxel = img_util.to_voxels(xyz, multiscale=multiscale)
     img_patch = img_util.get_patch(img, voxel, patch_shape)
@@ -433,7 +423,6 @@ def get_soma_shift(img_patch):
     List[int] or None
         Shift vector to adjust soma coordinaute if a soma is detected. If no
         somas are detected, then returns None.
-
     """
     # Step 1: Generate Initial Proposals
     img_patch = gaussian_filter(img_patch, sigma=0.5)
