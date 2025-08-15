@@ -39,11 +39,11 @@ def fetch_smartsheet_somas(dataset_path, img_prefixes_path, multiscale):
     img_prefixes_path : str
         Path to a JSON file containing image prefixes for each brain ID.
     multiscale : int
-        Level in the image pyramid that the voxel coordinates must index into.
+        Level in the image pyramid that voxel coordinates must index into.
 
     Returns
     -------
-    List[tuple]
+    data : List[tuple]
         List of tuples where each tuple contains the following:
             - "brain_id" (str): Unique identifier for the brain.
             - "img_path" (str): Path to image stored in S3 bucket.
@@ -71,11 +71,11 @@ def fetch_exaspim_somas_2024(dataset_path, img_prefixes_path, multiscale):
     img_prefixes_path : str
         Path to a JSON file containing image prefixes for each brain ID.
     multiscale : int
-        Level in the image pyramid that the voxel coordinates must index into.
+        Level in the image pyramid that voxel coordinates must index into.
 
     Returns
     -------
-    List[tuple]
+    data : List[tuple]
         List of tuples where each tuple contains the following:
             - "brain_id" (str): Unique identifier for the brain.
             - "img_path" (str): Path to image stored in S3 bucket.
@@ -119,14 +119,14 @@ def load_swc_examples(
     img_prefixes : dict
         Dictionary that maps brain IDs to image S3 prefixes.
     multiscale : int
-        Level in the image pyramid that the voxel coordinates must index into.
+        Level in the image pyramid that voxel coordinates must index into.
     label : int, optional
         Label with each SWC file. The default is None.
 
     Returns
     -------
-    List[tuple]
-        List of tuples where each tuple contains the following:
+    data : List[tuple]
+        Tuples that consist of the following values:
             - "brain_id" (str): Unique identifier for the brain.
             - "img_path" (str): Path to image stored in S3 bucket.
             - "voxels" (list): Voxel coordinates of proposed somas.
@@ -154,7 +154,7 @@ def reformat_data(
     img_prefixes : dict
         Dictionary that maps brain IDs to image S3 prefixes.
     multiscale : int
-        Level in the image pyramid that the voxel coordinates must index into.
+        Level in the image pyramid that voxel coordinates must index into.
     voxels : List[ArrayLike]
         List of voxel coordinates.
     label : int
@@ -167,7 +167,7 @@ def reformat_data(
     Returns
     -------
     tuple
-        Tuple that contains the following:
+        Tuples that consist of the following values:
             - "brain_id" (str): Unique identifier for the brain.
             - "img_path" (str): Path to image stored in S3 bucket.
             - "voxels" (list): Voxel coordinates of proposed somas.
@@ -183,19 +183,18 @@ def reformat_data(
 
 def load_examples(path):
     """
-    Loads examples stored in a text file where each line is formatted as
+    Loads examples stored in a txt file where each line is formatted as
     "(brain_id, voxel)".
 
     Parameters
     ----------
     path : str
-        Path to text file to be parsed.
+        Path to txt file to be parsed.
 
     Returns
     -------
-    List[Tuple[str, ArrayLike]]
-        List of tuples such that each contains a "brain_id" and "voxel"
-        coordinate.
+    examples : List[Tuple[str, ArrayLike]]
+        Tuples containing a "brain_id" and "voxel" coordinate.
     """
     examples = list()
     for line in util.read_txt(path):
@@ -223,8 +222,8 @@ def scrape_smartsheet(smartsheet_path, img_prefixes_path, multiscale):
 
     Returns
     -------
-    List[tuple]
-        List of tuples containing processed soma data for each brain.
+    data : List[tuple]
+        Tuples containing processed soma data for each brain.
     """
     # Read data
     img_prefixes = util.read_json(img_prefixes_path)
