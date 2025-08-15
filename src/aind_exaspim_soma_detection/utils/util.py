@@ -214,7 +214,7 @@ def read_swc(path):
     Returns
     -------
     List[float]
-        xyz coordinate stored in SWC file.
+        3D coordinate stored in the SWC file.
     """
     # Parse commented section
     offset = [0.0, 0.0, 0.0]
