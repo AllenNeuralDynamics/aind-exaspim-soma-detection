@@ -103,14 +103,10 @@ class ProposalDataset(Dataset):
         """
         Counts the number of proposals in self.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
-        Number of proposals in self.
-
+        int
+            Number of proposals in self.
         """
         return len(self.proposals)
 
@@ -129,13 +125,14 @@ class ProposalDataset(Dataset):
             Indication of whether to normalize the img_patch corresponding to
             the given key.
 
-        Returns:
-        --------
-        Tuple
-            A tuple containing:
-            - "key" (tuple): Input "key" tuple.
-            - "img_patch" (numpy.ndarray): 3D image patch centered at "voxel".
-            - "label" (int): Label associated with the proposal.
+        Returns
+        -------
+        key : tuple
+            Input "key" tuple.
+        img_patch : numpy.ndarray
+            3D image patch centered at "voxel".
+        label : int
+            Label associated with the proposal.
         """
         # Get voxel
         brain_id, voxel = key
@@ -156,10 +153,6 @@ class ProposalDataset(Dataset):
     def get_positives(self):
         """
         Gets all positive proposals in the dataset.
-
-        Parameters
-        ----------
-        None
 
         Returns
         -------
@@ -381,14 +374,12 @@ class MultiThreadedDataLoader:
 
             Returns
             -------
-            tuple
-                A tuple containing the following:
-                - "keys" (list): List of keys corresponding to the current
-                  batch of proposals.
-                - "patches" (torch.Tensor): Image patches from the dataset
-                  with the shape (self.batch_size, 1, H, W, D).
-                - "labels" (torch.Tensor): Labels corresponding to the image
-                   patches with the shape (self.batch_size, 1).
+            keys : List[tuple]
+                List of keys corresponding to the current batch of proposals.
+            patches : torch.Tensor
+                Image patches from the dataset with shape (B, 1, H, W, D).
+            labels : torch.Tensor
+                Labels corresponding to the image patches with shape (B, 1).
             """
             # Check whether to stop
             if self.current_index >= len(self.keys):

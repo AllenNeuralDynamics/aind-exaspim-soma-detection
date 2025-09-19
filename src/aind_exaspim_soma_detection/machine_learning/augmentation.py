@@ -28,10 +28,6 @@ class RandomContrast3D:
         factor_range : Tuple[float], optional
             Tuple of integers representing the range of contrast factors.
             Default is (0.8, 1.1).
-
-        Returns
-        -------
-        None
         """
         self.factor_range = factor_range
 
@@ -41,12 +37,12 @@ class RandomContrast3D:
 
         Parameters
         ----------
-        img : np.ndarray
+        img : numpy.ndarray
             Image to which contrast will be added.
 
         Returns
         -------
-        np.ndarray
+        numpy.ndarray
             Contrasted 3D image.
         """
         factor = random.uniform(*self.factor_range)
@@ -67,10 +63,6 @@ class RandomFlip3D:
         axes : Tuple[float], optional
             Tuple of integers representing the axes along which to flip the
             image. Default is (0, 1, 2).
-
-        Returns
-        -------
-        None
         """
         self.axes = axes
 
@@ -80,12 +72,12 @@ class RandomFlip3D:
 
         Parameters
         ----------
-        img : np.ndarray
+        img : numpy.ndarray
             Image to be flipped.
 
         Returns
         -------
-        np.ndarray
+        numpy.ndarray
             Flipped 3D image.
         """
         for axis in self.axes:
@@ -110,10 +102,6 @@ class RandomNoise3D:
         std : float, optional
             Standard deviation of the Gaussian noise distribution. Default is
             0.025.
-
-        Returns
-        -------
-        None
         """
         self.mean = mean
         self.std = std
@@ -129,7 +117,7 @@ class RandomNoise3D:
 
         Returns
         -------
-        np.ndarray
+        numpy.ndarray
             Noisy 3D image.
         """
         noise = np.random.normal(self.mean, self.std, img.shape)
@@ -151,10 +139,6 @@ class RandomRotation3D:
             Maximum angle of rotation. Default is (-45, 45).
         axis : Tuple[Tuple[int]], optional
             Axes to apply rotation.
-
-        Returns
-        -------
-        None
         """
         self.angles = angles
         self.axes = axes
@@ -173,7 +157,7 @@ class RandomRotation3D:
 
         Returns
         -------
-        np.ndarray
+        numpy.ndarray
             Rotated 3D image.
         """
         for axis in self.axes:
@@ -197,10 +181,6 @@ class RandomScale3D:
         ----------
         scale_range : Tuple[float], optional
             Range of scaling factors. Default is (0.9, 1.1).
-
-        Returns
-        -------
-        None
         """
         self.scale_range = scale_range
 
@@ -215,7 +195,7 @@ class RandomScale3D:
 
         Returns
         -------
-        np.ndarray
+        numpy.ndarray
             Scaled 3D image.
         """
         # Sample new image shape
