@@ -8,6 +8,7 @@ Routines for loading soma proposal data for testing and training.
 
 """
 
+from aind_exaspim_dataset_utils.smartsheet_util import extract_somas
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
@@ -17,8 +18,6 @@ from scipy.ndimage import gaussian_filter
 from tqdm import tqdm
 
 import ast
-import numpy as np
-import pandas as pd
 import os
 
 from aind_exaspim_soma_detection import soma_proposal_generation as spg
@@ -166,12 +165,14 @@ def reformat_data(
 
     Returns
     -------
-    tuple
-        Tuples that consist of the following values:
-            - "brain_id" (str): Unique identifier for the brain.
-            - "img_path" (str): Path to image stored in S3 bucket.
-            - "voxels" (list): Voxel coordinates of proposed somas.
-            - "labels" (list): Labels corresponding to voxels.
+    brain_id : str
+        Unique identifier for the brain.
+    img_path : str
+        Path to image stored in an S3 bucket.
+    voxels : List[Tuple[int]]]
+        Voxel coordinates of proposed somas.
+    labels : List[int]
+        Labels corresponding to voxels.
     """
     img_path = img_prefixes[brain_id] + str(multiscale)
     labels = len(voxels) * [label] if label else None
@@ -206,15 +207,15 @@ def load_examples(path):
 
 
 # --- Read SmartSheet ---
-def scrape_smartsheet(smartsheet_path, img_prefixes_path, multiscale):
+def scrape_smartsheet(access_token, img_prefixes_path, multiscale):
     """
     Scrapes data from a Smartsheet containing soma xyz coordinates, shifts the
     coordinate to the center of the soma, and reformats the data.
 
     Parameters
     ----------
-    smartsheet_path : str
-        Path to the Smartsheet file containing soma coordinates.
+    access_token : str
+        Access token for authenticating with the Smartsheet API.
     img_prefixes_path : str
         Path to a JSON file containing image prefixes for each brain ID.
     multiscale : int
@@ -225,9 +226,9 @@ def scrape_smartsheet(smartsheet_path, img_prefixes_path, multiscale):
     data : List[tuple]
         Tuples containing processed soma data for each brain.
     """
-    # Read data
+    # Load data
     img_prefixes = util.read_json(img_prefixes_path)
-    soma_coords = extract_smartsheet_somas(smartsheet_path)
+    soma_coords = extract_somas(access_token)
 
     # Center somas and reformat data
     data = list()
@@ -249,86 +250,6 @@ def scrape_smartsheet(smartsheet_path, img_prefixes_path, multiscale):
                 reformat_data(brain_id, img_prefixes, multiscale, xyz_list, 1)
             )
     return data
-
-
-def extract_smartsheet_somas(path, soma_status=None):
-    """
-    Extracts soma coordinates from the AIND neuron reconstructions Smartsheet
-    which is assumed to be stored locally as an Excel file.
-
-    Parameters
-    ----------
-    path : str
-        Path to the Smartsheet Excel file. Note that this file must contain a
-        sheet named "Neuron Reconstructions".
-    soma_status : str, optional
-        Specifies the filter condition for somas based on their status. If
-        provided, filters soma coordinates that match the specified status
-        (case-insensitive). The default is None, which includes all soma
-
-    Returns
-    -------
-    dict
-        Dictionary where the keys are brain IDs and values are lists of soma
-        coordinates extracted from the sheet.
-    """
-    # Initializations
-    df = pd.read_excel(path, sheet_name="Neuron Reconstructions")
-    n_somas = 0
-    somas = dict()
-    if type(soma_status) is str:
-        soma_status = soma_status.lower()
-
-    # Parse dataframe
-    idx = 0
-    while idx < len(df["Collection"]):
-        microscope = df["Collection"][idx]
-        if type(microscope) is str:
-            brain_id = str(df["ID"][idx])
-            if "spim" in microscope.lower() and brain_id != "609281":
-                somas[brain_id] = get_soma_coords(df, idx + 1, soma_status)
-                n_somas += len(somas[brain_id])
-        idx += 1
-    return somas
-
-
-def get_soma_coords(df, idx, soma_status):
-    """
-    Extracts a list of 3D coordinates of soma from a DataFrame starting at a
-    specified index.
-
-    Parameters
-    -----------
-    df : pandas.DataFrame
-        DataFrame containing a column of soma coordinates.
-    idx : int
-        Index in the DataFrame where the soma coordinates start.
-    soma_status : str or None
-        ...
-
-    Returns
-    --------
-    numpy.ndarray
-        Array of 3D coordinates.
-    """
-    xyz_list = list()
-    while type(df["Horta Coordinates"][idx]) is str:
-        item = df["Horta Coordinates"][idx]
-        if "[" in item and "]" in item:
-            # Check status
-            is_status_str = type(df["Status 1"][idx]) is str
-            if soma_status is not None and is_status_str:
-                if df["Status 1"][idx].lower() not in soma_status:
-                    idx += 1
-                    continue
-
-            # Add coordinate
-            xyz_list.append(tuple(ast.literal_eval(item)))
-            assert len(xyz_list[-1]) == 3, "Coordinate is not 3D!"
-        idx += 1
-        if idx >= len(df["Horta Coordinates"]):
-            break
-    return np.array(xyz_list)
 
 
 # --- Adjust Smartsheet Coordinates ---

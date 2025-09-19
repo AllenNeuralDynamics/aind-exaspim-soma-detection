@@ -64,7 +64,7 @@ def list_subdirectory_names(directory_path):
 
     Returns
     -------
-    List[str]
+    subdir_names : List[str]
         Names of subdirectories.
     """
     subdir_names = list()
@@ -89,7 +89,7 @@ def list_paths(directory, extension=""):
 
     Returns
     -------
-    List[str]
+    paths : List[str]
         Paths within "directory".
     """
     paths = list()
@@ -356,12 +356,44 @@ def compute_std(values, weights=None):
 
 
 def find_key_intersection(dict_1, dict_2):
+    """
+    Find the set of keys that exist in both dictionaries.
+
+    Parameters
+    ----------
+    dict_1 : dict
+        First dictionary to compare.
+    dict_2 : dict
+        Second dictionary to compare.
+
+    Returns
+    -------
+    set
+        A set containing the keys that are present in both dictionaries.
+    """
     keys_1 = find_key_subset(dict_1, dict_2)
     keys_2 = find_key_subset(dict_2, dict_1)
     return keys_1.intersection(keys_2)
 
 
 def find_key_subset(dict_1, dict_2):
+    """
+    Find the subset of keys from the first dictionary that also exist in the
+    second.
+
+    Parameters
+    ----------
+    dict_1 : dict
+        Dictionary whose keys will be checked.
+    dict_2 : dict
+        Dictionary against which membership of keys is tested.
+
+    Returns
+    -------
+    subset : set
+        A set containing the keys from "dict_1" that are also present in
+        "dict_2".
+    """
     subset = set()
     for key in dict_1:
         if key in dict_2:
@@ -370,6 +402,21 @@ def find_key_subset(dict_1, dict_2):
 
 
 def get_subdict(my_dict, keys):
+    """
+    Extract a subdictionary containing only the specified keys.
+
+    Parameters
+    ----------
+    my_dict : dict
+        The source dictionary to extract values from.
+    keys : iterable
+        An iterable of keys to include in the resulting dictionary.
+
+    Returns
+    -------
+    dict
+        A dictionary containing only the specified keys from "my_dict".
+    """
     subdict = dict()
     for key in keys:
         subdict[key] = my_dict[key]
@@ -405,9 +452,9 @@ def time_writer(t, unit="seconds"):
 
     Returns
     -------
-    float
+    t : float
         Runtime
-    str
+    unit : str
         Unit of time.
     """
     assert unit in ["seconds", "minutes", "hours"]

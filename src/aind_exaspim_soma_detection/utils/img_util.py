@@ -15,8 +15,6 @@ import numpy as np
 import s3fs
 import zarr
 
-ANISOTROPY = [0.748, 0.748, 1.0]
-
 
 def open_img(path):
     """
@@ -137,7 +135,7 @@ def get_start_end(voxel, shape, is_center=True):
 
 
 # --- Coordinate Conversions ---
-def to_physical(voxel, multiscale):
+def to_physical(voxel, multiscale, anisotropy=(0.748, 0.748, 1.0)):
     """
     Converts the given coordinate from voxels to physical space.
 
@@ -154,10 +152,10 @@ def to_physical(voxel, multiscale):
         Physical coordinate of the given voxel.
     """
     voxel = voxel[::-1]
-    return tuple([voxel[i] * ANISOTROPY[i] * 2**multiscale for i in range(3)])
+    return tuple([voxel[i] * anisotropy[i] * 2**multiscale for i in range(3)])
 
 
-def to_voxels(xyz, multiscale):
+def to_voxels(xyz, multiscale, anisotropy=(0.748, 0.748, 1.0)):
     """
     Converts the given coordinate from physical to voxel space.
 
@@ -174,7 +172,7 @@ def to_voxels(xyz, multiscale):
         Voxel coordinate of the given physical coordinate.
     """
     scaling_factor = 1.0 / 2**multiscale
-    voxel = scaling_factor * (xyz / np.array(ANISOTROPY))
+    voxel = scaling_factor * (xyz / np.array(anisotropy))
     return np.round(voxel).astype(int)[::-1]
 
 
