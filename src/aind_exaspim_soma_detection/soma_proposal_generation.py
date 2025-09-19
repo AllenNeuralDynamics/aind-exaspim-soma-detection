@@ -27,7 +27,6 @@ Code that generates soma proposals.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from random import sample
 from scipy.ndimage import gaussian_filter, gaussian_laplace, maximum_filter
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
@@ -100,7 +99,6 @@ def generate_proposals(
         for thread in as_completed(threads):
             proposals.extend(thread.result())
             pbar.update(1)
-        pbar.update(1)
     return spatial_filtering(proposals, 60)
 
 
@@ -135,7 +133,7 @@ def generate_proposals_patch(
 
     Returns
     -------
-    List[Tuple[float]]
+    filtered_proposals : List[Tuple[float]]
         Physical coordinates of proposals.
     """
     # Get image patch
@@ -160,7 +158,7 @@ def generate_proposals_patch(
 
 
 # -- Step 1: Generate Initial Proposals ---
-def detect_blobs(img_patch, bright_threshold, LoG_sigma, margin):
+def detect_blobs(img_patch, bright_threshold, sigma_LoG, margin):
     """
     Detects blob-like structures in a given image patch using Laplacian of
     Gaussian (LoG) method and filters them based on brightness and location.
@@ -171,7 +169,7 @@ def detect_blobs(img_patch, bright_threshold, LoG_sigma, margin):
         A 3D image patch that blobs are to be detected in.
     bright_threshold : float
         Minimum brightness required for detected blobs.
-    LoG_sigma : float
+    sigma_LoG : float
         Standard deviation of the Gaussian kernel for the LoG operation.
     margin : int
         Margin distance from the edges of the image used to filter blobs.
@@ -182,7 +180,7 @@ def detect_blobs(img_patch, bright_threshold, LoG_sigma, margin):
         Voxel coordinates of detected blobs.
     """
     blobs = list()
-    LoG = gaussian_laplace(img_patch, LoG_sigma)
+    LoG = gaussian_laplace(img_patch, sigma_LoG)
     for peak in peak_local_max(maximum_filter(LoG, 5), min_distance=5):
         peak = tuple([int(x) for x in peak])
         if LoG[peak] > 0 and is_inbounds(img_patch.shape, peak, margin):
@@ -272,7 +270,7 @@ def filter_proposals(img_patch, proposals, max_proposals=10, radius=5):
 
     Returns
     -------
-    List[Tuple[float]]
+    proposals : List[Tuple[float]]
         Filtered list of proposals.
     """
     # Filter by distance and brightness
@@ -299,7 +297,7 @@ def spatial_filtering(proposals, radius):
 
     Returns
     -------
-    List[Tuple[float]]
+    filtered_proposals : List[Tuple[float]]
         Filtered list of proposals.
     """
     filtered_proposals = list()
@@ -367,7 +365,7 @@ def gaussian_fit_filtering(img_patch, proposals, r=4, min_score=0.7):
 
     Returns
     -------
-    List[Tuple[int]]
+    filtered_proposals : List[Tuple[int]]
         Filtered and adjusted list of proposals.
     """
     filtered_proposals = list()

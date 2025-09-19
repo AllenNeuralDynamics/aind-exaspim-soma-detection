@@ -63,7 +63,7 @@ def classify_proposals(
 
     Returns:
     --------
-    List[Tuple[float]]
+    soma_xyz_list : List[Tuple[float]]
         Physical coordinates of somas detected by the model.
     """
     # Initialize dataset
@@ -74,7 +74,7 @@ def classify_proposals(
     # Generate predictions
     dataloader = MultiThreadedDataLoader(dataset, batch_size)
     model = ml_util.load_model(model_path, patch_shape, device)
-    id_voxel, hat_y, _ = run_inference(dataloader, model, device)
+    id_voxel, hat_y = run_inference(dataloader, model, device)
 
     # Extract predicted somas
     soma_xyz_list = list()
@@ -96,30 +96,29 @@ def run_inference(dataloader, model, device="cuda", verbose=True):
     model : torch.nn.Module
         Neural network model that is used to generate predictions.
     device : str, optional
-        Name of device where model should be loaded and run. The default is
+        Name of device where model should be loaded and run. Default is
         "cuda".
     verbose : bool, optional
-        Indication of whether to display a progress bar during inference. The
-        default is True.
+        Indication of whether to display a progress bar during inference.
+        Default is True.
 
     Returns
     -------
-    Tuple[list]
-        Tuple that contains the following:
-            - "id_voxel" (List[tuple]): Unique identifier for each proposal
-            that consists of the "brain_id" and "voxel" coordinate.
-            - "hat_y" (numpy.ndarray): Prediction for each proposal.
-            - "y" (numpy.ndarray): Ground truth label for each proposal.
+    id_voxel : List[Tuple[str, Tuple[float]]]
+        Unique identifier for each proposal that consists of the "brain_id"
+        and "voxel" coordinate.
+    hat_y : numpy.ndarray
+        Prediction for each proposal.
     """
     # Initializations
     n = dataloader.n_rounds
     iterator = tqdm(dataloader, total=n) if verbose else dataloader
 
     # Main
-    id_voxel, hat_y, y = list(), list(), list()
+    id_voxel, hat_y = list(), list()
     with torch.no_grad():
         model.eval()
-        for id_voxel_i, x_i, y_i in iterator:
+        for id_voxel_i, x_i, _ in iterator:
             # Forward pass
             x_i = x_i.to(device)
             hat_y_i = torch.sigmoid(model(x_i))
@@ -127,8 +126,10 @@ def run_inference(dataloader, model, device="cuda", verbose=True):
             # Store result
             id_voxel.extend(id_voxel_i)
             hat_y.append(ml_util.toCPU(hat_y_i))
-            y.append(np.array(y_i) if y_i[0] is not None else list())
-    return id_voxel, np.vstack(hat_y)[:, 0], np.vstack(y)[:, 0]
+
+    # Reformat predictions
+    hat_y = np.vstack(hat_y)[:, 0]
+    return id_voxel, hat_y
 
 
 # --- Accepted Proposal Filtering ---
@@ -147,7 +148,7 @@ def compute_metrics(
     Parameters
     ----------
     img_path : str
-        Path to whole-brain image stored in a S3 bucket.
+        Path to whole-brain image stored in an S3 bucket.
     accepts : List[Tuple[float]]
         List of accepted proposals, where each is represented by an xyz
         coordinate.
@@ -158,8 +159,8 @@ def compute_metrics(
 
     Returns
     -------
-    pd.DataFrame
-        Data frame containing metrics computed for each detected soma.
+    results : pandas.DataFrame
+        Dataframe containing metrics computed for each detected soma.
     """
     def load_patch(voxel):
         patch = img_util.get_patch(img, voxel, patch_shape)
@@ -189,34 +190,31 @@ def compute_metrics(
 
 
 def process_patch(voxel_patch, multiscale=2):
-    try:
-        # Fit gaussian
-        voxel, img_patch = voxel_patch
-        params, voxels = img_util.fit_rotated_gaussian_3d(img_patch)
-        mask = img_util.rotated_gaussian_3d_mask(
-            img_patch.shape, voxels, *params[:9]
-        )
+    # Fit gaussian
+    voxel, img_patch = voxel_patch
+    params, voxels = img_util.fit_rotated_gaussian_3d(img_patch)
+    mask = img_util.rotated_gaussian_3d_mask(
+        img_patch.shape, voxels, *params[:9]
+    )
 
-        # Compute metrics
-        brightness = np.percentile(img_patch[mask], 80) if mask.any() else 0
-        radii = compute_radii(params, multiscale)
-        score = img_util.compute_fit_score(img_patch, params, voxels)
+    # Compute metrics
+    brightness = np.percentile(img_patch[mask], 80) if mask.any() else 0
+    radii = compute_radii(params, multiscale)
+    score = img_util.compute_fit_score(img_patch, params, voxels)
 
-        # Compile results
-        feasible_radii = (radii > 6).any() or (radii < 140).any()
-        if feasible_radii and score > 0.7:
-            result = {
-                "xyz": img_util.to_physical(voxel, multiscale=multiscale),
-                "Brightness": int(brightness),
-                "Volume (µm³)": int(np.prod(radii) * (4 / 3) * np.pi),
-                "Radii (μm)": tuple([round(r, 2) for r in radii]),
-            }
-        else:
-            result = None
-        return result
-    except Exception as e:
-        print(f"[ERROR] Voxel {voxel} failed with error: {e}")
-        return None
+    # Compile results
+    feasible_radii = (radii > 6).any() or (radii < 140).any()
+    if feasible_radii and score > 0.7:
+        xyz = img_util.to_physical(voxel, multiscale=multiscale)
+        result = {
+            "xyz": tuple(int(t) for t in xyz),
+            "Brightness": int(brightness),
+            "Volume (µm³)": int(np.prod(radii) * (4 / 3) * np.pi),
+            "Radii (μm)": tuple([round(float(r), 2) for r in radii]),
+        }
+    else:
+        result = None
+    return result
 
 
 def compute_radii(params, multiscale, anisotropy=(0.748, 0.748, 1.0)):

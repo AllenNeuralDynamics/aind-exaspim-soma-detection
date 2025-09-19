@@ -238,14 +238,14 @@ def quantify_accepts(
         Physical coordinates of accepted proposals.
     multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
-        The default is 3.
+        Default is 3.
     patch_shape : Tuple[int]
-        Shape of image patches to be used. The default is (40, 40, 40).
+        Shape of image patches to be used. Default is (40, 40, 40).
     output_dir : str, optional
-        Path to directory that results are written to. The default is None.
+        Path to directory that results are written to. Default is None.
     save_swcs : bool, optional
         Indication of whether to save each proposal coordinate as an SWC file.
-        The default is False.
+        Default is False.
 
     Returns
     -------
