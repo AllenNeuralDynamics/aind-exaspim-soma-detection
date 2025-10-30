@@ -299,7 +299,7 @@ def update_log(output_dir, log_info):
     """
     print(log_info)
     if output_dir is not None:
-        path = os.path.join(output_dir, "log.txt")
+        path = os.path.join(output_dir, "soma_detection_log.txt")
         with open(path, 'a') as file:
             file.write(log_info + "\n")
 
