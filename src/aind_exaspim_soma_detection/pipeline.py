@@ -12,6 +12,7 @@ image dataset.
 from scipy.optimize import OptimizeWarning
 from time import time
 
+import numpy as np
 import os
 import pandas as pd
 import warnings
@@ -260,6 +261,17 @@ def quantify_accepts(
         img_path, accepts, multiscale, patch_shape
     )
     t, unit = util.time_writer(time() - t0)
+
+    # Save metric defaults
+    print(filtered_accepts_df.head())
+    brightness = float(np.percentile(filtered_accepts_df["Brightness"], 80))
+    volume = float(np.percentile(filtered_accepts_df["Volume (µm³)"], 80))
+    soma_metric_defaults = {
+        "Brightness": brightness,
+        "Volume": volume
+    }
+    path = os.path.join(output_dir, f"soma-metric-defaults.csv")
+    util.write_json(path, soma_metric_defaults)
 
     # Report results
     update_log(output_dir, f"# Filtered Accepts: {len(filtered_accepts_df)}")
