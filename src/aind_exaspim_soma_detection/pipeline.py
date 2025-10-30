@@ -270,7 +270,7 @@ def quantify_accepts(
         "Brightness": brightness,
         "Volume": volume
     }
-    path = os.path.join(output_dir, "soma_metric_defaults.csv")
+    path = os.path.join(output_dir, "soma_metric_defaults.json")
     util.write_json(path, soma_metric_defaults)
 
     # Report results
