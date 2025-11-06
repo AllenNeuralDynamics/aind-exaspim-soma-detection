@@ -207,7 +207,8 @@ def process_patch(voxel_patch, multiscale=2):
     if feasible_radii and score > 0.7:
         xyz = img_util.to_physical(voxel, multiscale=multiscale)
         result = {
-            "xyz": tuple(int(t) for t in xyz),
+            "xyz": tuple(round(float(t), 2) for t in xyz),
+            "voxel": tuple(int(t) for t in voxel),
             "Brightness": int(brightness),
             "Volume (µm³)": int(np.prod(radii) * (4 / 3) * np.pi),
             "Radii (μm)": tuple([round(float(r), 2) for r in radii]),
