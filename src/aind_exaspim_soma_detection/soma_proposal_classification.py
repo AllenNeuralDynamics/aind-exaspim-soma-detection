@@ -139,7 +139,7 @@ def compute_metrics(
     multiscale,
     patch_shape,
     batch_size=64,
-    min_brightness=200,
+    min_brightness=160,
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
