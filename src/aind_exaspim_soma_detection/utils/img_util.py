@@ -30,7 +30,7 @@ def open_img(path):
     zarr.core.Array
         Zarr object representing an image.
     """
-    store = s3fs.S3Map(root=path, s3=s3fs.S3FileSystem())
+    store = s3fs.S3Map(root=path, s3=s3fs.S3FileSystem(anon=True))
     return zarr.open(store, mode="r")
 
 
@@ -222,6 +222,47 @@ def plot_mips(img, vmax=None):
         axs[i].set_yticks([])
     plt.tight_layout()
     plt.show()
+
+
+def plot_slices(img, output_path=None, vmax=None):
+    """
+    Plots the middle slice of a 3D image along the XY, XZ, and YZ axes.
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        Image to generate MIPs from.
+    output_path : None or str, optional
+        Path that plot is saved to if provided. Default is None.
+    vmax : None or float, optional
+        Brightness intensity used as upper limit of the colormap. Default is
+        None.
+    """
+    # Get middle slice
+    shape = img.shape[2:] if len(img.shape) == 5 else img.shape
+    zc, yc, xc = (s // 2 for s in shape)
+    slices = [
+        img[zc, :, :],   # XY plane
+        img[:, yc, :],   # XZ plane
+        img[:, :, xc]    # YZ plane
+    ]
+
+    # Plot
+    vmax = vmax or np.percentile(img, 99.9)
+    fig, axs = plt.subplots(1, 3, figsize=(10, 4))
+    axs_names = ["XY", "XZ", "YZ"]
+    for i in range(3):
+        axs[i].imshow(slices[i], vmax=vmax)
+        axs[i].set_title(axs_names[i], fontsize=16)
+        axs[i].set_xticks([])
+        axs[i].set_yticks([])
+
+    plt.tight_layout()
+    if output_path:
+        plt.savefig(output_path, dpi=200)
+
+    plt.show()
+    plt.close(fig)
 
 
 def get_detections_img(shape, voxels):
@@ -512,19 +553,19 @@ def is_inbounds(voxel, shape):
         return False
 
 
-def normalize(img_patch):
+def normalize(img):
     """
     Rescales the input image to a [0, 1] intensity range.
 
     Parameters
     ----------
-    img_patch : numpy.ndarray
-        Image patch to be normalized.
+    img : numpy.ndarray
+        Image to be normalized.
 
     Returns
     -------
     numpy.ndarray
         Normalized image.
     """
-    img_patch -= np.min(img_patch)
-    return img_patch / np.max(img_patch)
+    img -= np.min(img)
+    return img / np.max(img)
