@@ -10,6 +10,7 @@ Code for working with SWC files.
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from google.cloud import storage
+from tqdm import tqdm
 
 import os
 import pandas as pd
@@ -19,8 +20,9 @@ from aind_exaspim_soma_detection.utils import util
 
 def load_dataset_examples(bucket_name, prefix):
     examples = list()
+    brain_ids = util.list_gcs_subdirs(bucket_name, prefix)
     bucket = storage.Client().bucket(bucket_name)
-    for brain_id in util.list_gcs_subdirs(bucket_name, prefix):
+    for brain_id in tqdm(brain_ids, desc="Load Data"):
         examples.extend(load_brain_examples(bucket, prefix, brain_id))
     return pd.DataFrame(examples)
 
@@ -36,8 +38,6 @@ def load_brain_examples(bucket, prefix, brain_id):
                     threads.append(
                         executor.submit(_load_blob, blob, brain_id, label)
                     )
-
-            print(f"  {brain_id}/{label_str}: {len(threads)} file(s)")
 
             # Compile results
             examples = list()
