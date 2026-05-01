@@ -8,8 +8,9 @@ Miscellaneous helper routines.
 
 """
 
-from concurrent.futures import as_completed, ThreadPoolExecutor
-
+from botocore import UNSIGNED
+from botocore.client import Config
+from google.cloud import storage
 from io import StringIO
 from random import sample
 from zipfile import ZipFile
@@ -102,20 +103,25 @@ def list_paths(directory, extension=""):
 # --- IO utils ---
 def read_txt(path):
     """
-    Reads txt file stored at "path".
+    Reads txt file at the given path.
 
     Parameters
     ----------
     path : str
-        Path where txt file is stored.
+        Path to txt file.
 
     Returns
     -------
-    str
-        Contents of a txt file.
+    List[str]
+        Lines from the txt file.
     """
-    with open(path, "r") as f:
-        return f.read().splitlines()
+    if is_s3_path(path):
+        return read_txt_from_s3(path)
+    elif is_gcs_path(path):
+        return read_txt_from_gcs(path)
+    else:
+        with open(path, "r") as f:
+            return f.read()
 
 
 def read_json(path):
@@ -147,7 +153,7 @@ def write_json(path, my_dict):
     my_dict : dict
         Dictionary to be written to a JSON.
     """
-    with open(path, 'w') as file:
+    with open(path, "w") as file:
         json.dump(my_dict, file, indent=4)
 
 
@@ -167,68 +173,7 @@ def write_list(path, my_list):
             file.write(f"{tuple(item)}\n")
 
 
-# --- SWC utils ---
-def read_swc_dir(swc_dir):
-    """
-    Reads all SWC files in a given directory and returns the content. Note
-    that each SWC file is assumed to contain a single point.
-
-    Parameters
-    ----------
-    swc_dir : str
-        Path to the directory containing SWC files.
-
-    Returns
-    -------
-    Tuple[list]
-        Paths to SWC files and xyz coordinates read from corresponding SWC
-        files.
-    """
-    with ThreadPoolExecutor() as executor:
-        # Assign threads
-        threads = list()
-        for path in list_paths(swc_dir, extension=".swc"):
-            threads.append(executor.submit(read_swc, path))
-
-        # Process results
-        path_list = list()
-        xyz_list = list()
-        for thread in as_completed(threads):
-            path, xyz = thread.result()
-            path_list.append(path)
-            xyz_list.append(xyz)
-        return path_list, xyz_list
-
-
-def read_swc(path):
-    """
-    Processes lines of text from a content source, extracts an offset value
-    and returns the remaining content starting from the line immediately after
-    the last commented line.
-
-    Parameters
-    ----------
-    path : str
-        Path to an SWC file.
-
-    Returns
-    -------
-    List[float]
-        3D coordinate stored in the SWC file.
-    """
-    # Parse commented section
-    offset = [0.0, 0.0, 0.0]
-    for i, line in enumerate(read_txt(path)):
-        if line.startswith("# OFFSET"):
-            offset = [float(val) for val in line.split()[2:5]]
-        if not line.startswith("#"):
-            break
-
-    # Extract xyz coordinate
-    xyz_str = line.split()[2:5]
-    return path, [float(xyz_str[i]) + offset[i] for i in range(3)]
-
-
+# --- SWC Utils ---
 def write_points(zip_path, points, color=None, prefix="", radius=20):
     """
     Writes a list of 3D points to individual SWC files in the specified
@@ -239,13 +184,13 @@ def write_points(zip_path, points, color=None, prefix="", radius=20):
     zip_path : str
         Path to ZIP archive where the SWC files will be saved.
     points : list
-        A list of 3D points to be saved.
+        3D points to be saved.
     color : str, optional
         The color to associate with the points in the SWC files. Default is
         None.
     prefix : str, optional
         String that is prefixed to the filenames of the SWC files. Default is
-        an empty string. Default is an empty string.
+        an empty string.
     radius : float, optional
         Radius to be used in SWC file. Default is 20.
     """
@@ -287,7 +232,108 @@ def to_zipped_point(zip_writer, filename, xyz, color=None, radius=5):
         zip_writer.writestr(filename, text_buffer.getvalue())
 
 
+# --- GCS Utils ---
+def is_gcs_path(path):
+    """
+    Checks if the path is a GCS path.
+
+    Parameters
+    ----------
+    path : str
+        Path to be checked.
+
+    Returns
+    -------
+    bool
+        Indication of whether the path is a GCS path.
+    """
+    return path.startswith("gs://")
+
+
+def list_gcs_subdirs(bucket_name, prefix):
+    """
+    Lists all direct subdirectories of a given prefix in a GCS bucket.
+
+    Parameters
+    ----------
+    bucket : str
+        Name of bucket to be read from.
+    prefix : str
+        Path to directory in "bucket".
+
+    Returns
+    -------
+    subdirs: List[str]
+         Direct subdirectories.
+    """
+    prefix = prefix.rstrip("/") + "/"
+    subdirs = set()
+    bucket = storage.Client().bucket(bucket_name)
+    for blob in bucket.list_blobs(prefix=prefix):
+        remainder = blob.name[len(prefix):]
+        subdir = remainder.split("/")[0]
+        if subdir:
+            subdirs.add(subdir)
+    return sorted(subdirs)
+
+
+def read_txt_from_gcs(path):
+    """
+    Reads a txt file stored in a GCS bucket.
+
+    Parameters
+    ----------
+    path : str
+        Path to txt file to be read.
+
+    Returns
+    -------
+    str
+        Contents of txt file.
+    """
+    bucket_name, subpath = parse_cloud_path(path)
+    bucket = storage.Client().bucket(bucket_name)
+    return bucket.blob(subpath).download_as_text()
+
+
 # --- S3 utils ---
+def is_s3_path(path):
+    """
+    Checks if the given path is an S3 path.
+
+    Parameters
+    ----------
+    path : str
+        Path to be checked.
+
+    Returns
+    -------
+    bool
+        Indication of whether the path is an S3 path.
+    """
+    return path.startswith("s3://")
+
+
+def read_txt_from_s3(path):
+    """
+    Reads a txt file stored in an S3 bucket.
+
+    Parameters
+    ----------
+    path : str
+        Path to txt file to be read.
+
+    Returns
+    -------
+    str
+        Contents of txt file.
+    """
+    bucket_name, subpath = parse_cloud_path(path)
+    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+    obj = s3.get_object(Bucket=bucket_name, Key=subpath)
+    return obj["Body"].read().decode("utf-8")
+
+
 def upload_dir_to_s3(bucket_name, prefix, source_dir):
     """
     Uploads the contents of a directory to S3.
@@ -351,7 +397,9 @@ def compute_std(values, weights=None):
     weights = np.array(weights)
 
     weighted_mean = np.sum(weights * values) / np.sum(weights)
-    variance = np.sum(weights * (values - weighted_mean)**2) / np.sum(weights)
+    variance = np.sum(weights * (values - weighted_mean) ** 2) / np.sum(
+        weights
+    )
     return np.sqrt(variance)
 
 
@@ -421,6 +469,33 @@ def get_subdict(my_dict, keys):
     for key in keys:
         subdict[key] = my_dict[key]
     return subdict
+
+
+def parse_cloud_path(path):
+    """
+    Parses a cloud storage path into its bucket name and prefix. Supports
+    paths of the form: "{scheme}://bucket_name/prefix" or without a scheme.
+
+    Parameters
+    ----------
+    path : str
+        Path to be parsed.
+
+    Returns
+    -------
+    bucket_name : str
+        Name of the bucket.
+    prefix : str
+        Cloud prefix.
+    """
+    # Split path
+    path = path[len("s3://"):] if is_s3_path else path[len("gs://"):]
+    parts = path.split("/", 1)
+
+    # Extract bucket and prefix
+    bucket_name = parts[0]
+    prefix = parts[1] if len(parts) > 1 else ""
+    return bucket_name, prefix
 
 
 def sample_once(my_container):

@@ -32,7 +32,7 @@ def run_pipeline(
     output_dir,
     proposal_params,
     classify_params,
-    filter_params=None
+    filter_params=None,
 ):
     """
     Runs the soma proposal generation and classification pipeline for a
@@ -87,7 +87,7 @@ def generate_proposals(
     patch_overlap=(32, 32, 32),
     bright_threshold=0,
     output_dir=None,
-    save_swcs=False
+    save_swcs=False,
 ):
     """
     Generates soma proposals and saves the each proposal coordinate as an SWC
@@ -266,10 +266,7 @@ def quantify_accepts(
     print(filtered_accepts_df.head())
     brightness = float(np.percentile(filtered_accepts_df["Brightness"], 80))
     volume = float(np.percentile(filtered_accepts_df["Volume (µm³)"], 80))
-    soma_metric_defaults = {
-        "Brightness": brightness,
-        "Volume": volume
-    }
+    soma_metric_defaults = {"Brightness": brightness, "Volume": volume}
     path = os.path.join(output_dir, "soma_metric_defaults.json")
     util.write_json(path, soma_metric_defaults)
 
@@ -300,7 +297,7 @@ def update_log(output_dir, log_info):
     print(log_info)
     if output_dir is not None:
         path = os.path.join(output_dir, "soma_detection_log.txt")
-        with open(path, 'a') as file:
+        with open(path, "a") as file:
             file.write(log_info + "\n")
 
 
@@ -318,7 +315,7 @@ if __name__ == "__main__":
     proposal_params = {
         "multiscale": 4,
         "patch_shape": (64, 64, 64),
-        "bright_threshold": 150,
+        "bright_threshold": 30,
         "patch_overlap": (28, 28, 28),
         "output_dir": output_dir,
         "save_swcs": False,
@@ -345,5 +342,5 @@ if __name__ == "__main__":
         output_dir,
         proposal_params,
         classify_params,
-        filter_params
+        filter_params,
     )

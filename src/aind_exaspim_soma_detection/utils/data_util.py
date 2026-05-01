@@ -1,366 +1,141 @@
 """
-Created on Mon Jan 6 14:00:00 2025
+Created on Thu Apr 30 18:00:00 2026
 
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines for loading soma proposal data for testing and training.
+Code for working with SWC files.
 
 """
 
-from aind_exaspim_dataset_utils.smartsheet_util import extract_somas
-from concurrent.futures import (
-    ProcessPoolExecutor,
-    ThreadPoolExecutor,
-    as_completed,
-)
-from scipy.ndimage import gaussian_filter
-from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from google.cloud import storage
 
-import ast
 import os
+import pandas as pd
 
-from aind_exaspim_soma_detection import soma_proposal_generation as spg
-from aind_exaspim_soma_detection.utils import img_util, util
-
-
-# --- Fetch Data ---
-def fetch_smartsheet_somas(dataset_path, img_prefixes_path, multiscale):
-    """
-    Fetches and formats data from a text file generated from the Neuron
-    Reconstruction SmartSheet.
-
-    Parameters
-    ----------
-    dataset_path : str
-        Path to the text file where each line is formatted as "(brain_id,
-        voxel)".
-    img_prefixes_path : str
-        Path to a JSON file containing image prefixes for each brain ID.
-    multiscale : int
-        Level in the image pyramid that voxel coordinates must index into.
-
-    Returns
-    -------
-    data : List[tuple]
-        List of tuples where each tuple contains the following:
-            - "brain_id" (str): Unique identifier for the brain.
-            - "img_path" (str): Path to image stored in S3 bucket.
-            - "voxels" (list): Voxel coordinates of proposed somas.
-            - "labels" (list): Labels corresponding to voxels.
-    """
-    data = list()
-    img_prefixes = util.read_json(img_prefixes_path)
-    for brain_id, voxel in load_examples(dataset_path):
-        data.append(
-            reformat_data(brain_id, img_prefixes, multiscale, [voxel], 1)
-        )
-    return data
+from aind_exaspim_soma_detection.utils import util
 
 
-def fetch_exaspim_somas_2024(dataset_path, img_prefixes_path, multiscale):
-    """
-    Fetches and formats data from exaSPIM datasets.
-
-    Parameters
-    ----------
-    dataset_path : str
-        Path to the dataset directory containing brain-specific subdirectories
-        with "accepts" and "rejects" folders.
-    img_prefixes_path : str
-        Path to a JSON file containing image prefixes for each brain ID.
-    multiscale : int
-        Level in the image pyramid that voxel coordinates must index into.
-
-    Returns
-    -------
-    data : List[tuple]
-        List of tuples where each tuple contains the following:
-            - "brain_id" (str): Unique identifier for the brain.
-            - "img_path" (str): Path to image stored in S3 bucket.
-            - "voxels" (list): Voxel coordinates of proposed somas.
-            - "labels" (list): Labels corresponding to voxels.
-    """
-    data = list()
-    img_prefixes = util.read_json(img_prefixes_path)
-    for brain_id in util.list_subdirectory_names(dataset_path):
-        # Accepts
-        accepts_dir = os.path.join(dataset_path, brain_id, "accepts")
-        data.append(
-            load_swc_examples(
-                accepts_dir, brain_id, img_prefixes, multiscale, 1
-            )
-        )
-
-        # Rejects
-        rejects_dir = os.path.join(dataset_path, brain_id, "rejects")
-        data.append(
-            load_swc_examples(
-                rejects_dir, brain_id, img_prefixes, multiscale, 0
-            )
-        )
-    return data
-
-
-def load_swc_examples(
-    swc_dir, brain_id, img_prefixes, multiscale, label=None
-):
-    """
-    Loads SWC files, converts soma coordinates to voxel format, and reformats
-    the data for training and testing.
-
-    Parameters
-    ----------
-    swc_dir : str
-        Directory containing SWC files to be read.
-    brain_id : str
-        Unique identifier for the whole-brain dataset.
-    img_prefixes : dict
-        Dictionary that maps brain IDs to image S3 prefixes.
-    multiscale : int
-        Level in the image pyramid that voxel coordinates must index into.
-    label : int, optional
-        Label with each SWC file. The default is None.
-
-    Returns
-    -------
-    data : List[tuple]
-        Tuples that consist of the following values:
-            - "brain_id" (str): Unique identifier for the brain.
-            - "img_path" (str): Path to image stored in S3 bucket.
-            - "voxels" (list): Voxel coordinates of proposed somas.
-            - "labels" (list): Labels corresponding to voxels.
-    """
-    paths, xyz_list = util.read_swc_dir(swc_dir)
-    voxels = [img_util.to_voxels(xyz, multiscale) for xyz in xyz_list]
-    data = reformat_data(
-        brain_id, img_prefixes, multiscale, voxels, label, paths
-    )
-    return data
-
-
-def reformat_data(
-    brain_id, img_prefixes, multiscale, voxels, label, paths=None
-):
-    """
-    Reformats data for training or inference by converting xyz to voxel
-    coordinates and associates them with a brain id, image path, and labels.
-
-    Parameters
-    ----------
-    brain_id : str
-        Unique identifier for the whole-brain dataset.
-    img_prefixes : dict
-        Dictionary that maps brain IDs to image S3 prefixes.
-    multiscale : int
-        Level in the image pyramid that voxel coordinates must index into.
-    voxels : List[ArrayLike]
-        List of voxel coordinates.
-    label : int
-        Label associated with the given coordinates (i.e. 1 for "accepts" and
-        0 for "rejects").
-    paths : List[str], optional
-        List of file paths corresponding to the examples in xyz_list. The
-        default is None.
-
-    Returns
-    -------
-    brain_id : str
-        Unique identifier for the brain.
-    img_path : str
-        Path to image stored in an S3 bucket.
-    voxels : List[Tuple[int]]]
-        Voxel coordinates of proposed somas.
-    labels : List[int]
-        Labels corresponding to voxels.
-    """
-    img_path = img_prefixes[brain_id] + str(multiscale)
-    labels = len(voxels) * [label] if label else None
-    if paths is None:
-        return (brain_id, img_path, voxels, labels)
-    else:
-        return (brain_id, img_path, voxels, labels, paths)
-
-
-def load_examples(path):
-    """
-    Loads examples stored in a txt file where each line is formatted as
-    "(brain_id, voxel)".
-
-    Parameters
-    ----------
-    path : str
-        Path to txt file to be parsed.
-
-    Returns
-    -------
-    examples : List[Tuple[str, ArrayLike]]
-        Tuples containing a "brain_id" and "voxel" coordinate.
-    """
+def load_dataset_examples(bucket_name, prefix):
     examples = list()
-    for line in util.read_txt(path):
-        idx = line.find(",")
-        brain_id = ast.literal_eval(line[1:idx])
-        voxel = ast.literal_eval(line[idx + 2: -1])
-        examples.append((brain_id, voxel))
+    bucket = storage.Client().bucket(bucket_name)
+    for brain_id in util.list_gcs_subdirs(bucket_name, prefix):
+        examples.extend(load_brain_examples(bucket, prefix, brain_id))
+    return pd.DataFrame(examples)
+
+
+def load_brain_examples(bucket, prefix, brain_id):
+    for label_str, label in [("accepts", 1), ("rejects", 0)]:
+        subprefix = f"{prefix}/{brain_id}/{label_str}/"
+        with ThreadPoolExecutor(max_workers=64) as executor:
+            # Assign threads
+            threads = list()
+            for blob in bucket.list_blobs(prefix=subprefix):
+                if blob.name.endswith(".swc"):
+                    threads.append(
+                        executor.submit(_load_blob, blob, brain_id, label)
+                    )
+
+            print(f"  {brain_id}/{label_str}: {len(threads)} file(s)")
+
+            # Compile results
+            examples = list()
+            for thread in as_completed(threads):
+                result = thread.result()
+                if result is not None:
+                    examples.append(result)
     return examples
 
 
-# --- Read SmartSheet ---
-def scrape_smartsheet(access_token, img_prefixes_path, multiscale):
+def parse_swc_point(content, source=""):
     """
-    Scrapes data from a Smartsheet containing soma xyz coordinates, shifts the
-    coordinate to the center of the soma, and reformats the data.
-
-    Parameters
-    ----------
-    access_token : str
-        Access token for authenticating with the Smartsheet API.
-    img_prefixes_path : str
-        Path to a JSON file containing image prefixes for each brain ID.
-    multiscale : int
-        Level in the image pyramid that the voxel coordinates must index into.
-
-    Returns
-    -------
-    data : List[tuple]
-        Tuples containing processed soma data for each brain.
+    Parses a single-point SWC file to extract a single coordinate.
     """
-    # Load data
-    img_prefixes = util.read_json(img_prefixes_path)
-    soma_coords = extract_somas(access_token)
+    offset = (0.0, 0.0, 0.0)
+    for line in content.splitlines():
+        # Check if line is empty
+        line = line.strip()
+        if not line:
+            continue
 
-    # Center somas and reformat data
-    data = list()
-    with ProcessPoolExecutor() as executor:
-        # Assign processes
-        processes = list()
-        for brain_id, xyz_list in soma_coords.items():
-            if brain_id not in ["686955", "708373"]:
-                processes.append(
-                    executor.submit(
-                        shift_somas, brain_id, img_prefixes[brain_id], xyz_list
-                    )
-                )
+        # Check for commented lines
+        if line.startswith("#"):
+            tokens = line.lstrip("#").strip().split()
+            if line.startswith("# OFFSET"):
+                offset = (float(tokens[1]), float(tokens[2]), float(tokens[3]))
+            continue
 
-        # Store results
-        for process in tqdm(as_completed(processes), total=len(processes)):
-            brain_id, xyz_list = process.result()
-            data.append(
-                reformat_data(brain_id, img_prefixes, multiscale, xyz_list, 1)
-            )
-    return data
+        # Get coordinate
+        parts = line.split()
+        if len(parts) < 6:
+            raise ValueError(f"Malformed SWC line in {source!r}: {line!r}")
+        _, _, x, y, z, *_ = parts
+        return (
+            float(x) + offset[0],
+            float(y) + offset[1],
+            float(z) + offset[2],
+        )
 
-
-# --- Adjust Smartsheet Coordinates ---
-def shift_somas(
-    brain_id, img_prefix, xyz_list, multiscale=3, patch_shape=(36, 36, 36)
-):
-    """
-    Shifts soma coordinates from dendritic shaft to soma center.
-
-    Parameters
-    ----------
-    brain_id : str
-        Unique identifier for the whole-brain dataset.
-    img_prefix : str
-        Prefix (or path) of a whole-brain image stored in a S3 bucket.
-    xyz_list : List[Tuples[float]
-        Soma coordinates to process.
-    multiscale : int, optional
-        Level in the image pyramid that the voxel coordinate must index into.
-        Default is 3.
-    patch_shape : Tuple[int], optional
-        Shape of the image patch to be extracted around each soma. Default is
-        (40, 40, 40).
-
-    Returns:
-    --------
-    str, List[Tuple[float]]
-        Brain ID and shifted soma xyz coordinates.
-    """
-    img = img_util.open_img(img_prefix + str(multiscale))
-    with ThreadPoolExecutor() as executor:
-        # Assign threads
-        threads = list()
-        for xyz in xyz_list:
-            threads.append(executor.submit(shift_soma, img, xyz, patch_shape))
-
-        # Process results
-        shifted_xyz_list = list()
-        for thread in as_completed(threads):
-            shifted_xyz = thread.result()
-            if shifted_xyz is not None:
-                shifted_xyz_list.append(shifted_xyz)
-
-    return brain_id, shifted_xyz_list
+    raise ValueError(f"No data rows found in SWC file: {source!r}")
 
 
-def shift_soma(img, xyz, patch_shape, multiscale=3):
-    """
-    Shifts soma position from the beginning of the dendritic shaft to the
-    center of the soma in a 3D image.
-
-    Parameters
-    ----------
-    img : zarr.core.Array
-        Array representing a 3D image of a whole-brain.
-    xyz : tuple or list of int
-        xyz coordinate of soma.
-    patch_shape : Tuple[int]
-        Shape of the image patch to be extracted from "img".
-    multiscale : int, optional
-        Level in the image pyramid that the voxel coordinate must index into.
-        Default is 3.
-
-    Returns
-    -------
-    numpy.ndarray or None
-        If a soma is detected, returns the adjusted soma xyz coordinates. If
-        no soma is detected, it returns None.
-    """
-    voxel = img_util.to_voxels(xyz, multiscale=multiscale)
-    img_patch = img_util.get_patch(img, voxel, patch_shape)
-    shift = get_soma_shift(img_patch)
-    if shift is not None:
-        return img_util.local_to_physical(voxel, shift, multiscale)
-    else:
+def _load_blob(blob, brain_id, label):
+    filename = blob.name.split("/")[-1]
+    try:
+        content = blob.download_as_text()
+        x, y, z = parse_swc_point(content, source=blob.name)
+        example = {
+            "brain_id": brain_id,
+            "label": label,
+            "swc_filename": filename,
+            "x": x,
+            "y": y,
+            "z": z,
+        }
+        return example
+    except ValueError as e:
+        print(f"  WARNING: {e} — skipping")
         return None
 
 
-def get_soma_shift(img_patch):
+# --- Miscellaneous ---
+def split_swc_into_points(input_swc_path, output_dir):
     """
-    Detects soma center in a 3D image patch and computes a shift vector to
-    adjust the soma's coordinates from the beginning of the dendritic shaft
-    to the center of the soma.
+    Reads an SWC file and writes each point as its own SWC file.
 
     Parameters
     ----------
-    img_patch : numpy.ndarray
-        A 3D image patch that contains a soma to be detected.
-
-    Returns
-    -------
-    List[int] or None
-        Shift vector to adjust soma coordinaute if a soma is detected. If no
-        somas are detected, then returns None.
+    input_swc_path : str
+        Path to the input SWC file.
+    output_dir : str
+        Directory where individual SWC files will be saved.
     """
-    # Step 1: Generate Initial Proposals
-    img_patch = gaussian_filter(img_patch, sigma=0.5)
-    proposals_1 = spg.detect_blobs(img_patch, 140, 8, 12)
-    proposals_2 = spg.detect_blobs(img_patch, 140, 6, 12)
-    proposals_3 = spg.detect_blobs(img_patch, 140, 4, 12)
-    proposals = proposals_1 + proposals_2 + proposals_3
+    # Read SWC file
+    lines = util.read_txt(input_swc_path)
 
-    # Step 2: Filter Initial Proposals
-    proposals = spg.spatial_filtering(proposals, 6)
-    proposals = spg.brightness_filtering(img_patch, proposals, 5)
-    proposals = spg.gaussian_fitness_filtering(
-        img_patch, proposals, min_score=0.8
-    )
-    proposals = spg.brightness_filtering(img_patch, proposals, 1)
-    if len(proposals) > 0:
-        shape = img_patch.shape
-        return [ps_i - s_i // 2 for s_i, ps_i in zip(shape, proposals[0])]
-    else:
-        return None
+    # Extract offset header if present
+    offset_header = None
+    for line in lines:
+        if line.startswith("# OFFSET"):
+            offset_header = line.strip()
+            break
+
+    # Process SWC file
+    lines = [l for l in lines if not l.strip().startswith("#") and l.strip()]
+    os.makedirs(output_dir, exist_ok=True)
+    for i, line in enumerate(lines):
+        # Extract content
+        parts = line.strip().split()
+        node_id = parts[0]
+        parts[0] = "1"
+        new_line = " ".join(parts) + "\n"
+
+        # Write SWC file
+        output_path = os.path.join(output_dir, f"{node_id}.swc")
+        with open(output_path, "w") as out:
+            if offset_header:
+                out.write(f"# {offset_header}\n")
+            out.write(new_line)
+
+    print(f"Saved {len(lines)} SWC files to {output_dir}")

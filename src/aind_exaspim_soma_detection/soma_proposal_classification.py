@@ -162,6 +162,7 @@ def compute_metrics(
     results : pandas.DataFrame
         Dataframe containing metrics computed for each detected soma.
     """
+
     def load_patch(voxel):
         patch = img_util.get_patch(img, voxel, patch_shape)
         return (voxel, patch)
@@ -222,11 +223,7 @@ def compute_radii(params, multiscale, anisotropy=(0.748, 0.748, 1.0)):
     # Compute precision matrix
     scaled_anisotropy = [a * 2**multiscale for a in anisotropy]
     _, _, _, a11, a12, a13, a22, a23, a33, _, _ = params
-    P_voxel = np.array([
-        [a11, a12, a13],
-        [a12, a22, a23],
-        [a13, a23, a33]
-    ])
+    P_voxel = np.array([[a11, a12, a13], [a12, a22, a23], [a13, a23, a33]])
 
     # Convert precision matrix from voxel to physical space
     S = np.diag(scaled_anisotropy)

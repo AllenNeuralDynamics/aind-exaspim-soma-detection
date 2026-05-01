@@ -27,7 +27,7 @@ Code that generates soma proposals.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from scipy.ndimage import gaussian_filter, gaussian_laplace, maximum_filter
+from scipy.ndimage import gaussian_filter, gaussian_laplace
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
 from tqdm import tqdm
@@ -99,7 +99,7 @@ def generate_proposals(
         for thread in as_completed(threads):
             proposals.extend(thread.result())
             pbar.update(1)
-    return spatial_filtering(proposals, 60)
+    return spatial_filtering(proposals, 50)
 
 
 def generate_proposals_patch(
@@ -108,7 +108,7 @@ def generate_proposals_patch(
     margin,
     patch_shape,
     multiscale,
-    bright_threshold=150,
+    bright_threshold=0,
 ):
     """
     Generates soma proposals by detecting blobs, filtering them, and
@@ -129,7 +129,7 @@ def generate_proposals_patch(
     multiscale : int
         Level in the image pyramid that image patches are read from.
     bright_threshold : int, optional
-        Minimum brightness required for image patch. Default is 150.
+        Minimum brightness required for image patch. Default is 0.
 
     Returns
     -------
@@ -142,10 +142,10 @@ def generate_proposals_patch(
         return list()
 
     # Generate initial proposals
-    img_patch = gaussian_filter(img_patch, sigma=0.5)
+    img_patch = gaussian_filter(img_patch, sigma=1)
     proposals_1 = detect_blobs(img_patch, bright_threshold, 8, margin)
     proposals_2 = detect_blobs(img_patch, bright_threshold, 5, margin)
-    proposals_3 = detect_blobs(img_patch, bright_threshold, 3.25, margin)
+    proposals_3 = detect_blobs(img_patch, bright_threshold, 3, margin)
     proposals = proposals_1 + proposals_2 + proposals_3
 
     # Filter initial proposals + convert coordinates
@@ -181,7 +181,7 @@ def detect_blobs(img_patch, bright_threshold, sigma_LoG, margin):
     """
     blobs = list()
     LoG = gaussian_laplace(img_patch, sigma_LoG)
-    for peak in peak_local_max(maximum_filter(LoG, 5), min_distance=5):
+    for peak in peak_local_max(LoG, min_distance=5):
         peak = tuple([int(x) for x in peak])
         if LoG[peak] > 0 and is_inbounds(img_patch.shape, peak, margin):
             blobs.append(peak)

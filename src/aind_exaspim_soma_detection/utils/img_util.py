@@ -242,9 +242,9 @@ def plot_slices(img, output_path=None, vmax=None):
     shape = img.shape[2:] if len(img.shape) == 5 else img.shape
     zc, yc, xc = (s // 2 for s in shape)
     slices = [
-        img[zc, :, :],   # XY plane
-        img[:, yc, :],   # XZ plane
-        img[:, :, xc]    # YZ plane
+        img[zc, :, :],  # XY plane
+        img[:, yc, :],  # XZ plane
+        img[:, :, xc],  # YZ plane
     ]
 
     # Plot
@@ -307,9 +307,14 @@ def fit_gaussian_3d(img_patch, std=2):
     """
     center = [s // 2 for s in img_patch.shape]
     initial_guess = (
-        center[0], center[1], center[2],
-        std, std, std,
-        np.max(img_patch), np.min(img_patch)
+        center[0],
+        center[1],
+        center[2],
+        std,
+        std,
+        std,
+        np.max(img_patch),
+        np.min(img_patch),
     )
     return fit(img_patch, gaussian_3d, initial_guess)
 
@@ -317,11 +322,17 @@ def fit_gaussian_3d(img_patch, std=2):
 def fit_rotated_gaussian_3d(img_patch):
     center = [s // 2 for s in img_patch.shape]
     initial_guess = (
-        center[0], center[1], center[2],
-        1e-2, 0, 0,
-        1e-2, 0,
+        center[0],
+        center[1],
+        center[2],
         1e-2,
-        np.max(img_patch), np.min(img_patch)
+        0,
+        0,
+        1e-2,
+        0,
+        1e-2,
+        np.max(img_patch),
+        np.min(img_patch),
     )
     return fit(img_patch, rotated_gaussian_3d, initial_guess)
 
@@ -427,8 +438,12 @@ def rotated_gaussian_3d(
 
     # Construct quadratic form
     quad = (
-        a11*dx**2 + 2*a12*dx*dy + 2*a13*dx*dz +
-        a22*dy**2 + 2*a23*dy*dz + a33*dz**2
+        a11 * dx**2
+        + 2 * a12 * dx * dy
+        + 2 * a13 * dx * dz
+        + a22 * dy**2
+        + 2 * a23 * dy * dz
+        + a33 * dz**2
     )
     return A * np.exp(-0.5 * quad) + B
 
@@ -464,8 +479,12 @@ def rotated_gaussian_3d_mask(
     dy = y - y0
     dz = z - z0
     quad = (
-        a11*dx**2 + 2*a12*dx*dy + 2*a13*dx*dz +
-        a22*dy**2 + 2*a23*dy*dz + a33*dz**2
+        a11 * dx**2
+        + 2 * a12 * dx * dy
+        + 2 * a13 * dx * dz
+        + a22 * dy**2
+        + 2 * a23 * dy * dz
+        + a33 * dz**2
     )
     return (quad <= threshold).reshape(shape)
 
@@ -489,7 +508,7 @@ def generate_img_coords(shape):
         np.arange(shape[0]),
         np.arange(shape[1]),
         np.arange(shape[2]),
-        indexing='ij'
+        indexing="ij",
     )
     return np.stack(grid, axis=-1).reshape(-1, 3)
 
