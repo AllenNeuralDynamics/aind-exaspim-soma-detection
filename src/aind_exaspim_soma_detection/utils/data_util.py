@@ -112,7 +112,7 @@ def split_swc_into_points(input_swc_path, output_dir):
         Directory where individual SWC files will be saved.
     """
     # Read SWC file
-    lines = util.read_txt(input_swc_path)
+    lines = util.read_txt(input_swc_path).splitlines()
 
     # Extract offset header if present
     offset_header = None
@@ -135,7 +135,7 @@ def split_swc_into_points(input_swc_path, output_dir):
         output_path = os.path.join(output_dir, f"{node_id}.swc")
         with open(output_path, "w") as out:
             if offset_header:
-                out.write(f"# {offset_header}\n")
+                out.write(f"{offset_header}\n")
             out.write(new_line)
 
     print(f"Saved {len(lines)} SWC files to {output_dir}")
