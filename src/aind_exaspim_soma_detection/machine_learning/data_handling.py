@@ -232,6 +232,31 @@ class ProposalDataset(Dataset):
             if paths is not None:
                 self.key_to_filename[key] = paths[i]
 
+    def ingest_proposals_from_df(self, df, img_prefixes):
+        """
+        Iterates over a soma DataFrame and ingests proposals into a dataset.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            DataFrame with columns: brain_id, label, swc_filename, x, y, z.
+        img_prefixes : Dict[str, str]
+            Dictionary that maps a brain_id and returns the image prefix.
+        """
+        for brain_id, group in df.groupby("brain_id"):
+            img_prefix = img_prefixes[brain_id]
+            voxels = list(zip(group["x"], group["y"], group["z"]))
+            labels = group["label"].tolist()
+            paths = group["swc_filename"].tolist()
+
+            self.ingest_proposals(
+                brain_id=brain_id,
+                img_prefix=img_prefix,
+                voxels=voxels,
+                labels=labels,
+                paths=paths,
+            )
+
     def remove_proposal(self, query_key, epsilon=0):
         """
         Removes the proposal corresponding to the given key. Optionally,
@@ -387,7 +412,7 @@ class MultiThreadedDataLoader:
 
             # Get the next batch of proposals
             batch_keys = self.keys[
-                self.current_index : self.current_index
+                self.current_index: self.current_index
                 + self.dataloader.batch_size
             ]
             self.current_index += self.dataloader.batch_size

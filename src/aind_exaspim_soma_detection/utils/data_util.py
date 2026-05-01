@@ -4,12 +4,11 @@ Created on Thu Apr 30 18:00:00 2026
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Code for working with SWC files.
+Code for loading positive and negative soma examples.
 
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from google.cloud import storage
 from tqdm import tqdm
 
 import os
@@ -21,26 +20,26 @@ from aind_exaspim_soma_detection.utils import util
 def load_dataset_examples(bucket_name, prefix):
     examples = list()
     brain_ids = util.list_gcs_subdirs(bucket_name, prefix)
-    bucket = storage.Client().bucket(bucket_name)
     for brain_id in tqdm(brain_ids, desc="Load Data"):
-        examples.extend(load_brain_examples(bucket, prefix, brain_id))
+        examples.extend(load_brain_examples(bucket_name, prefix, brain_id))
     return pd.DataFrame(examples)
 
 
-def load_brain_examples(bucket, prefix, brain_id):
+def load_brain_examples(bucket_name, prefix, brain_id):
+    examples = list()
     for label_str, label in [("accepts", 1), ("rejects", 0)]:
-        subprefix = f"{prefix}/{brain_id}/{label_str}/"
-        with ThreadPoolExecutor(max_workers=64) as executor:
+        subprefix = f"{prefix}/{brain_id}/{label_str}"
+        with ThreadPoolExecutor(max_workers=128) as executor:
             # Assign threads
             threads = list()
-            for blob in bucket.list_blobs(prefix=subprefix):
-                if blob.name.endswith(".swc"):
+            for filename in util.list_gcs_subdirs(bucket_name, subprefix):
+                if filename.endswith(".swc"):
+                    gcs_path = f"gs://{bucket_name}/{subprefix}/{filename}"
                     threads.append(
-                        executor.submit(_load_blob, blob, brain_id, label)
+                        executor.submit(_load_example, gcs_path, brain_id, label)
                     )
 
             # Compile results
-            examples = list()
             for thread in as_completed(threads):
                 result = thread.result()
                 if result is not None:
@@ -80,11 +79,11 @@ def parse_swc_point(content, source=""):
     raise ValueError(f"No data rows found in SWC file: {source!r}")
 
 
-def _load_blob(blob, brain_id, label):
-    filename = blob.name.split("/")[-1]
+def _load_example(gcs_path, brain_id, label):
     try:
-        content = blob.download_as_text()
-        x, y, z = parse_swc_point(content, source=blob.name)
+        content = util.read_txt(gcs_path)
+        filename = gcs_path.split("/")[-1]
+        x, y, z = parse_swc_point(content, source=gcs_path)
         example = {
             "brain_id": brain_id,
             "label": label,
@@ -102,7 +101,8 @@ def _load_blob(blob, brain_id, label):
 # --- Miscellaneous ---
 def split_swc_into_points(input_swc_path, output_dir):
     """
-    Reads an SWC file and writes each point as its own SWC file.
+    Reads an SWC file containing single points and writes each point as its
+    own SWC file.
 
     Parameters
     ----------
