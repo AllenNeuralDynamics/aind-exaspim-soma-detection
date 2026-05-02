@@ -14,16 +14,12 @@ from scipy.spatial import distance
 from torch.utils.data import Dataset
 
 import numpy as np
+import os
 import random
 import torch
-import torchvision.transforms as transforms
 
 from aind_exaspim_soma_detection.machine_learning.augmentation import (
-    RandomContrast3D,
-    RandomFlip3D,
-    RandomNoise3D,
-    RandomRotation3D,
-    RandomScale3D,
+    ImageTransforms,
 )
 from aind_exaspim_soma_detection.utils import img_util
 
@@ -47,7 +43,14 @@ class ProposalDataset(Dataset):
     Note: This dataset supports proposals from multiple whole-brain datasets.
     """
 
-    def __init__(self, patch_shape, transform=False):
+    def __init__(
+        self,
+        patch_shape,
+        brightness_clip=300,
+        multiscale=0,
+        normalization_percentiles=(1, 99.5),
+        transform=False,
+    ):
         """
         Initializes a custom dataset for processing soma proposals.
 
@@ -76,28 +79,15 @@ class ProposalDataset(Dataset):
             is True. Otherwise, this value is set to None.
         """
         # Class attributes
-        self.key_to_filename = dict()
-        self.proposals = dict()
+        self.brightness_clip = brightness_clip
         self.imgs = dict()
         self.img_paths = dict()
+        self.key_to_filename = dict()
+        self.multiscale = multiscale
         self.patch_shape = patch_shape
-
-        # Data augmentation (if applicable)
-        if transform:
-            self.transform = transforms.Compose(
-                [
-                    RandomFlip3D(),
-                    RandomRotation3D(),
-                    RandomScale3D(),
-                    RandomContrast3D(),
-                    RandomNoise3D(),
-                    lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(
-                        0
-                    ),
-                ]
-            )
-        else:
-            self.transform = transform
+        self.percentiles = normalization_percentiles
+        self.proposals = dict()
+        self.transform = ImageTransforms() if transform else False
 
     def __len__(self):
         """
@@ -110,7 +100,7 @@ class ProposalDataset(Dataset):
         """
         return len(self.proposals)
 
-    def __getitem__(self, key, normalize=True):
+    def __getitem__(self, key):
         """
         Gets the image patch centered at the voxel corresponding to the given
         key.
@@ -121,9 +111,6 @@ class ProposalDataset(Dataset):
             Unique indentifier of a proposal which is a tuple containing:
             - "brain_id" (str): Unique identifier of the brain dataset.
             - "voxel" (Tuple[int]): Voxel coordinate of proposal.
-        normalize : bool
-            Indication of whether to normalize the img_patch corresponding to
-            the given key.
 
         Returns
         -------
@@ -140,15 +127,16 @@ class ProposalDataset(Dataset):
             voxel = [voxel_i + random.randint(-5, 5) for voxel_i in voxel]
 
         # Get image patch
-        try:
-            img_patch = img_util.get_patch(
-                self.imgs[brain_id], voxel, self.patch_shape
-            )
-            if normalize:
-                img_patch = img_util.normalize(img_patch)
-        except:
-            img_patch = np.ones(self.patch_shape)
-        return key, img_patch, self.proposals[key]
+        img = self.get_patch(brain_id, voxel)
+        if self.transform:
+            img = self.transform(img)
+        return key, img, self.proposals[key]
+
+    def get_patch(self, brain_id, voxel):
+        img = img_util.get_patch(self.imgs[brain_id], voxel, self.patch_shape)
+        img = np.minimum(img, self.brightness_clip)
+        img = img_util.normalize(img, percentiles=self.percentiles)
+        return img
 
     def get_positives(self):
         """
@@ -244,8 +232,8 @@ class ProposalDataset(Dataset):
             Dictionary that maps a brain_id and returns the image prefix.
         """
         for brain_id, group in df.groupby("brain_id"):
-            img_prefix = img_prefixes[brain_id]
-            voxels = list(zip(group["x"], group["y"], group["z"]))
+            img_prefix = os.path.join(img_prefixes[brain_id], str(self.multiscale))
+            voxels = [img_util.to_voxels(xyz, self.multiscale) for xyz in group["xyz"]]
             labels = group["label"].tolist()
             paths = group["swc_filename"].tolist()
 
@@ -299,26 +287,6 @@ class ProposalDataset(Dataset):
         """
         _, img_patch, _ = self[key]
         img_util.plot_mips(img_patch)
-
-    def visualize_augmented_proposal(self, key):
-        """
-        Plots maximum intensity projections (MIPs) of the image patch centered
-        at the given proposal key, before and after image augmentation.
-
-        Parameters
-        ----------
-        key : tuple
-            Unique indentifier of a proposal which is a tuple containing:
-            - "brain_id" (str): Unique identifier of the brain dataset.
-            - "voxel" (Tuple[int]): Voxel coordinate of proposal.
-        """
-        # Get image patch
-        _, img_patch, _ = self[key]
-        img_util.plot_mips(img_patch, clip_bool=True)
-
-        # Apply transforms
-        img_patch = np.array(self.transform(img_patch))
-        img_util.plot_mips(img_patch[0, ...], clip_bool=True)
 
 
 # --- Custom Dataloader ---

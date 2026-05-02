@@ -22,6 +22,7 @@ def load_dataset_examples(bucket_name, prefix):
     brain_ids = util.list_gcs_subdirs(bucket_name, prefix)
     for brain_id in tqdm(brain_ids, desc="Load Data"):
         examples.extend(load_brain_examples(bucket_name, prefix, brain_id))
+        break
     return pd.DataFrame(examples)
 
 
@@ -83,14 +84,12 @@ def _load_example(gcs_path, brain_id, label):
     try:
         content = util.read_txt(gcs_path)
         filename = gcs_path.split("/")[-1]
-        x, y, z = parse_swc_point(content, source=gcs_path)
+        xyz = parse_swc_point(content, source=gcs_path)
         example = {
             "brain_id": brain_id,
             "label": label,
             "swc_filename": filename,
-            "x": x,
-            "y": y,
-            "z": z,
+            "xyz": xyz,
         }
         return example
     except ValueError as e:

@@ -58,16 +58,13 @@ def get_patch(img, voxel, shape, is_center=True):
     """
     # Get image patch coordiantes
     start, end = get_start_end(voxel, shape, is_center=is_center)
-    valid_start = any([s >= 0 for s in start])
-    valid_end = any([e < img.shape[i + 2] for i, e in enumerate(end)])
-
-    # Get image patch
-    if valid_start and valid_end:
+    try:
         return img[
             0, 0, start[0]: end[0], start[1]: end[1], start[2]: end[2]
         ]
-    else:
-        return np.ones(shape)
+    except Exception:
+        print(f"Unable to read image patch at {voxel} w/ shape {shape}!")
+        return np.zeros(shape)
 
 
 def generate_offsets(img, window_shape, overlap):
@@ -572,19 +569,23 @@ def is_inbounds(voxel, shape):
         return False
 
 
-def normalize(img):
+def normalize(img, percentiles=(1, 99.5)):
     """
-    Rescales the input image to a [0, 1] intensity range.
+    Normalizes an image using a percentile-based scheme and clips values to
+    [0, 1].
 
     Parameters
     ----------
     img : numpy.ndarray
         Image to be normalized.
+    percentiles : Tuple[float], optional
+        Upper and lower percentiles used to normalize the given image. Default
+        is (1, 99.5).
 
     Returns
     -------
-    numpy.ndarray
+    img : numpy.ndarray
         Normalized image.
     """
-    img -= np.min(img)
-    return img / np.max(img)
+    mn, mx = np.percentile(img, percentiles)
+    return np.clip((img - mn) / (mx - mn + 1e-5), 0, 1)
