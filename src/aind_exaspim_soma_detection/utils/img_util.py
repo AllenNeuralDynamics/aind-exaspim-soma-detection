@@ -74,14 +74,14 @@ class TensorStoreImage:
         Generates a list of 3D coordinates representing the front-top-left corner
         by sliding a window over a 3D image, given a specified window size and
         overlap between adjacent windows.
-    
+
         Parameters
         ----------
         window_shape : Tuple[int]
             Shape of the sliding window.
         overlap : Tuple[int]
             Overlap between adjacent windows.
-    
+
         Returns
         -------
         Iterator[Tuple[int]]
@@ -90,11 +90,11 @@ class TensorStoreImage:
         # Calculate stride based on the overlap and window size
         stride = tuple(w - o for w, o in zip(window_shape, overlap))
         i_stride, j_stride, k_stride = stride
-    
+
         # Get dimensions of the window
         _, _, i_dim, j_dim, k_dim = self.shape()
         i_win, j_win, k_win = window_shape
-    
+
         # Loop over img with the sliding window
         for i in range(0, i_dim - i_win + 1, i_stride):
             for j in range(0, j_dim - j_win + 1, j_stride):

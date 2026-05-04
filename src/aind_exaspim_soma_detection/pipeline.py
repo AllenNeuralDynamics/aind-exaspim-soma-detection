@@ -200,6 +200,7 @@ def classify_proposals(
         multiscale,
         patch_shape,
         accept_threshold,
+        output_dir=output_dir,
     )
     t, unit = util.time_writer(time() - t0)
 
@@ -322,8 +323,8 @@ if __name__ == "__main__":
     }
     classify_params = {
         "multiscale": 1,
-        "patch_shape": (102, 102, 102),
-        "accept_threshold": 0.4,
+        "patch_shape": (84, 84, 84),
+        "accept_threshold": 0.5,
         "model_path": model_path,
         "output_dir": output_dir,
         "save_swcs": False,

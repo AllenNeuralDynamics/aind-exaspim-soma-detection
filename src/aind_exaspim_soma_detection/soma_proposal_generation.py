@@ -72,11 +72,10 @@ def generate_proposals(
     """
     img = img_util.TensorStoreImage(img_path)
     margin = np.min(patch_overlap) // 4
-    offsets_generator = img.generate_offsets(patch_shape, patch_overlap)
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = list()
-        for offset in sample(list(offsets_generator), 10**4):
+        for offset in img.generate_offsets(patch_shape, patch_overlap):
             threads.append(
                 executor.submit(
                     generate_proposals_patch,

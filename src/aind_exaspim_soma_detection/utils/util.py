@@ -104,7 +104,7 @@ def read_txt(path):
 
 def read_json(path):
     """
-    Reads JSON file stored at "path".
+    Reads JSON stored at "path".
 
     Parameters
     ----------
@@ -122,12 +122,12 @@ def read_json(path):
 
 def write_json(path, my_dict):
     """
-    Writes the contents in the given dictionary to a JSON file at "path".
+    Writes the given dictionary to a JSON at the given path.
 
     Parameters
     ----------
     path : str
-        Path where JSON file is stored.
+        Path where JSON is to be written.
     my_dict : dict
         Dictionary to be written to a JSON.
     """
@@ -137,14 +137,14 @@ def write_json(path, my_dict):
 
 def write_list(path, my_list):
     """
-    Writes each item in a list to a text file, with each item on a new line.
+    Writes each item in a list to a txt file, with each item on a new line.
 
     Parameters
     ----------
     path : str
         Path where text file is to be written.
     my_list
-        Items to write to a text file.
+        Items to write to a txt file.
     """
     with open(path, "w") as file:
         for item in my_list:
@@ -164,13 +164,13 @@ def write_points(zip_path, points, color=None, prefix="", radius=20):
     points : list
         3D points to be saved.
     color : str, optional
-        The color to associate with the points in the SWC files. Default is
+        Color to associate with the points in the SWC files. Default is
         None.
     prefix : str, optional
         String that is prefixed to the filenames of the SWC files. Default is
         an empty string.
     radius : float, optional
-        Radius to be used in SWC file. Default is 20.
+        Radius used in SWC file. Default is 20.
     """
     zip_writer = ZipFile(zip_path, "w")
     for i, xyz in enumerate(points):
