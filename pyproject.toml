@@ -25,6 +25,7 @@ dependencies = [
     'scikit-learn',
     'scipy',
     'smartsheet-python-sdk',
+    'tensorstore',
     'torch',
     'torchvision',
     'tqdm',
