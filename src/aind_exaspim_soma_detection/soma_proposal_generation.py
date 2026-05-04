@@ -27,6 +27,7 @@ Code that generates soma proposals.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from random import sample
 from scipy.ndimage import gaussian_filter, gaussian_laplace
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
@@ -39,7 +40,7 @@ from aind_exaspim_soma_detection.utils import img_util
 
 # --- Wrappers ---
 def generate_proposals(
-    img_prefix,
+    img_path,
     multiscale,
     patch_shape,
     patch_overlap,
@@ -52,8 +53,8 @@ def generate_proposals(
 
     Parameters
     ----------
-    img_prefix : str
-        Prefix (or path) of a whole brain image stored in a S3 bucket.
+    img_path : str
+        Path to image.
     multiscale : int
         Level in the image pyramid that image patches are read from.
     patch_shape : Tuple[int]
@@ -69,18 +70,13 @@ def generate_proposals(
     List[Tuple[float]]
         Physical coordinates of proposals.
     """
-    # Initializations
-    img = img_util.open_img(img_prefix)
+    img = img_util.TensorStoreImage(img_path)
     margin = np.min(patch_overlap) // 4
-    offsets_generator = img_util.generate_offsets(
-        img, patch_shape, patch_overlap
-    )
-
-    # Generate proposals
+    offsets_generator = img.generate_offsets(patch_shape, patch_overlap)
     with ThreadPoolExecutor() as executor:
         # Assign threads
         threads = list()
-        for offset in offsets_generator:
+        for offset in sample(list(offsets_generator), 10**4):
             threads.append(
                 executor.submit(
                     generate_proposals_patch,
@@ -137,7 +133,7 @@ def generate_proposals_patch(
         Physical coordinates of proposals.
     """
     # Get image patch
-    img_patch = img_util.get_patch(img, offset, patch_shape, is_center=False)
+    img_patch = img.read(offset, patch_shape, is_center=False)
     if np.max(img_patch) < bright_threshold:
         return list()
 

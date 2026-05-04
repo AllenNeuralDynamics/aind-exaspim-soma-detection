@@ -8,7 +8,6 @@ Helper routines for training and inference.
 
 """
 
-from random import sample
 from sklearn.metrics import (
     accuracy_score,
     f1_score,

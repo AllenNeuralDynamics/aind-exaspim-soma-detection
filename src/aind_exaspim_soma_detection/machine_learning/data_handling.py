@@ -34,7 +34,7 @@ class ProposalDataset(Dataset):
     This dataset is populated using the "self.ingest_proposals" method, which
     requires the following inputs:
         (1) brain_id: Unique identifier of brain containing proposals.
-        (2) img_prefix: Path to whole-brain image stored in an S3 bucket.
+        (2) img_path: Path to whole-brain image stored in an S3 bucket.
         (3) voxels: List of voxel coordinates of proposals.
         (4) labels: Labels for each proposal (0 or 1), optional.
 
@@ -89,7 +89,7 @@ class ProposalDataset(Dataset):
 
     # --- Load Data ---
     def ingest_proposals(
-        self, brain_id, img_prefix, voxels, labels=None, paths=None
+        self, brain_id, img_path, voxels, labels=None, paths=None
     ):
         """
         Ingests proposals represented by voxel coordinates along with optional
@@ -99,7 +99,7 @@ class ProposalDataset(Dataset):
         ----------
         brain_id : str
             Unique identifier for the whole-brain dataset.
-        img_prefix : str
+        img_path : str
             Prefix (or path) of a whole-brain image stored in a S3 bucket.
         voxels : List[Tuple[int]]
             Voxel coordinates representing the proposals.
@@ -116,8 +116,8 @@ class ProposalDataset(Dataset):
 
         # Load image (if applicable)
         if brain_id not in self.imgs:
-            self.imgs[brain_id] = img_util.open_img(img_prefix)
-            self.img_paths[brain_id] = img_prefix
+            self.imgs[brain_id] = img_util.TensorStoreImage(img_path)
+            self.img_paths[brain_id] = img_path
 
         # Load proposal voxel coordinates
         for i, voxel in enumerate(voxels):
@@ -126,7 +126,7 @@ class ProposalDataset(Dataset):
             if paths is not None:
                 self.key_to_filename[key] = paths[i]
 
-    def ingest_proposals_from_df(self, df, img_prefixes):
+    def ingest_proposals_from_df(self, df, img_pathes):
         """
         Iterates over a soma DataFrame and ingests proposals into a dataset.
 
@@ -134,18 +134,18 @@ class ProposalDataset(Dataset):
         ----------
         df : pd.DataFrame
             DataFrame with columns: brain_id, label, swc_filename, x, y, z.
-        img_prefixes : Dict[str, str]
+        img_pathes : Dict[str, str]
             Dictionary that maps a brain_id and returns the image prefix.
         """
         for brain_id, group in df.groupby("brain_id"):
-            img_prefix = os.path.join(img_prefixes[brain_id], str(self.multiscale))
+            img_path = os.path.join(img_pathes[brain_id], str(self.multiscale))
             voxels = [img_util.to_voxels(xyz, self.multiscale) for xyz in group["xyz"]]
             labels = group["label"].tolist()
             paths = group["swc_filename"].tolist()
 
             self.ingest_proposals(
                 brain_id=brain_id,
-                img_prefix=img_prefix,
+                img_path=img_path,
                 voxels=voxels,
                 labels=labels,
                 paths=paths,
@@ -200,7 +200,7 @@ class ProposalDataset(Dataset):
         return key, img, self.proposals[key]
 
     def get_patch(self, brain_id, voxel):
-        img = img_util.get_patch(self.imgs[brain_id], voxel, self.patch_shape)
+        img = self.imgs[brain_id].read(voxel, self.patch_shape)
         img = np.minimum(img, self.brightness_clip)
         img = img_util.normalize(img, percentiles=self.percentiles)
         return img
@@ -264,6 +264,14 @@ class DataLoader:
 
     # --- Helpers ---
     def __len__(self):
+        """
+        Counts number of examples in the dataset.
+
+        Returns
+        -------
+        int
+            Number of examples in the dataset.
+        """
         return len(self.dataset)
 
     def get_batch(self, keys):

@@ -151,8 +151,8 @@ def classify_proposals(
     proposals,
     accept_threshold=0.4,
     model_path=None,
-    multiscale=1,
-    patch_shape=(102, 102, 102),
+    multiscale=2,
+    patch_shape=(84, 84, 84),
     output_dir=None,
     save_swcs=False,
 ):
@@ -173,10 +173,10 @@ def classify_proposals(
         Default is None.
     multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
-        Default is 1.
+        Default is 2.
     patch_shape : Tuple[int], optional
         Shape of image patches to be used for inference. Default is
-        (102, 102, 102).
+        (84, 84, 84).
     output_dir : str, optional
         Path to directory that results are written to. Default is None.
     save_swcs : bool, optional

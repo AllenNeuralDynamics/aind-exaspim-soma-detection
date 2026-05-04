@@ -110,15 +110,10 @@ def run_inference(dataloader, model, device="cuda", verbose=True):
     hat_y : numpy.ndarray
         Prediction for each proposal.
     """
-    # Initializations
-    n = dataloader.n_rounds
-    iterator = tqdm(dataloader, total=n) if verbose else dataloader
-
-    # Main
     id_voxel, hat_y = list(), list()
     with torch.no_grad():
         model.eval()
-        for id_voxel_i, x_i, _ in iterator:
+        for id_voxel_i, x_i, _ in tqdm(dataloader):
             # Forward pass
             x_i = x_i.to(device)
             hat_y_i = torch.sigmoid(model(x_i))
@@ -139,7 +134,7 @@ def compute_metrics(
     multiscale,
     patch_shape,
     batch_size=64,
-    min_brightness=160,
+    min_brightness=0,
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
@@ -164,12 +159,12 @@ def compute_metrics(
     """
 
     def load_patch(voxel):
-        patch = img_util.get_patch(img, voxel, patch_shape)
+        patch = img.read(voxel, patch_shape)
         return (voxel, patch)
 
     # Initializations
     pbar = tqdm(total=len(accepts))
-    img = img_util.open_img(img_path)
+    img = img_util.TensorStoreImage(img_path)
     voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
 
     # Main

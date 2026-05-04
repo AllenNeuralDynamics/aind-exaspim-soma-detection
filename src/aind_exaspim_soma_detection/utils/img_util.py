@@ -9,126 +9,139 @@ Helper routines for working with images.
 """
 
 from scipy.optimize import curve_fit
+import tensorstore as ts
 
 import matplotlib.pyplot as plt
 import numpy as np
-import s3fs
-import zarr
+
+from aind_exaspim_soma_detection.utils import util
 
 
-def open_img(path):
+class TensorStoreImage:
     """
-    Opens an image stored in an S3 bucket as a Zarr array.
-
-    Parameters
-    ----------
-    path : str
-        Path to image stored in an S3 bucket.
-
-    Returns
-    -------
-    zarr.core.Array
-        Zarr object representing an image.
+    Class that uses the TensorStore library for image IO operations.
     """
-    store = s3fs.S3Map(root=path, s3=s3fs.S3FileSystem(anon=True))
-    return zarr.open(store, mode="r")
 
+    def __init__(self, img_path):
+        """
+        Instantiates a TensorStoreImage object.
 
-def get_patch(img, voxel, shape, is_center=True):
-    """
-    Extracts a patch from an image based on the given voxel coordinate and
-    patch shape.
+        Parameters
+        ----------
+        img_path : str
+            Path to image.
+        """
+        # Open image
+        self.img = ts.open(self.get_spec(img_path)).result()
+        self.img_path = img_path
 
-    Parameters
-    ----------
-    img : zarr.core.Array
-         Zarr object representing an image.
-    voxel : Tuple[int]
-        Center of patch to be extracted
-    shape : Tuple[int]
-        Shape of patch to be extracted.
-    is_center : bool, optional
-        Indicates whether the given voxel is the center or top-left-front
-        corner of the patch to be extracted. Default is True.
+        # Check dimensions
+        while self.img.ndim < 5:
+            self.img = self.img[ts.newaxis, ...]
 
-    Returns
-    -------
-    numpy.ndarray
-        Patch extracted from the given image.
-    """
-    # Get image patch coordiantes
-    start, end = get_start_end(voxel, shape, is_center=is_center)
-    try:
-        return img[
-            0, 0, start[0]: end[0], start[1]: end[1], start[2]: end[2]
-        ]
-    except Exception:
-        print(f"Unable to read image patch at {voxel} w/ shape {shape}!")
-        return np.zeros(shape)
+    # --- Core Routines ---
+    def read(self, voxel, shape, is_center=True):
+        """
+        Reads the image patch specified by the given slices.
 
+        Parameters
+        ----------
+        voxel : Tuple[int]
+            Voxel coordinate used as reference to extract patch.
+        shape : Tuple[int]
+            Shape of patch to be extracted.
+        is_center : bool, optional
+            Indicates whether the given voxel is the center or top-left-front
+            corner of the patch to be extracted. Default is True.
 
-def generate_offsets(img, window_shape, overlap):
-    """
-    Generates a list of 3D coordinates representing the front-top-left corner
-    by sliding a window over a 3D image, given a specified window size and
-    overlap between adjacent windows.
+        Returns
+        -------
+        numpy.ndarray
+            Image patch.
+        """
+        try:
+            _get_slices = get_center_slices if is_center else get_slices
+            slices = _get_slices(voxel, shape)
+            patch = self.img[slices].read().result()
+        except ValueError:
+            print(f"Error reading {slices} from img w/ shape {self.shape()}")
+            patch = np.zeros(tuple(s.stop - s.start for s in slices))
+        return patch
 
-    Parameters
-    ----------
-    img : zarr.core.Array
-        Input 3D image.
-    window_shape : Tuple[int]
-        Shape of the sliding window.
-    overlap : Tuple[int]
-        Overlap between adjacent windows.
+    # --- Helpers ---
+    def generate_offsets(self, window_shape, overlap):
+        """
+        Generates a list of 3D coordinates representing the front-top-left corner
+        by sliding a window over a 3D image, given a specified window size and
+        overlap between adjacent windows.
+    
+        Parameters
+        ----------
+        window_shape : Tuple[int]
+            Shape of the sliding window.
+        overlap : Tuple[int]
+            Overlap between adjacent windows.
+    
+        Returns
+        -------
+        Iterator[Tuple[int]]
+            Voxel coordinates representing the front-top-left corner.
+        """
+        # Calculate stride based on the overlap and window size
+        stride = tuple(w - o for w, o in zip(window_shape, overlap))
+        i_stride, j_stride, k_stride = stride
+    
+        # Get dimensions of the window
+        _, _, i_dim, j_dim, k_dim = self.shape()
+        i_win, j_win, k_win = window_shape
+    
+        # Loop over img with the sliding window
+        for i in range(0, i_dim - i_win + 1, i_stride):
+            for j in range(0, j_dim - j_win + 1, j_stride):
+                for k in range(0, k_dim - k_win + 1, k_stride):
+                    yield (i, j, k)
 
-    Returns
-    -------
-    Iterator[Tuple[int]]
-        Voxel coordinates representing the front-top-left corner.
-    """
-    # Calculate stride based on the overlap and window size
-    stride = tuple(w - o for w, o in zip(window_shape, overlap))
-    i_stride, j_stride, k_stride = stride
+    def get_spec(self, img_path):
+        """
+        Creates a TensorStore specification for opening the image at the
+        given path.
 
-    # Get dimensions of the window
-    _, _, i_dim, j_dim, k_dim = img.shape
-    i_win, j_win, k_win = window_shape
+        Parameters
+        ----------
+        img_path : str
+            Path to image to be opened.
 
-    # Loop over the  with the sliding window
-    for i in range(0, i_dim - i_win + 1, i_stride):
-        for j in range(0, j_dim - j_win + 1, j_stride):
-            for k in range(0, k_dim - k_win + 1, k_stride):
-                yield (i, j, k)
+        Returns
+        -------
+        spec : dict
+            TensorStore specification for opening the image at the given path.
+        """
+        bucket_name, relative_path = util.parse_cloud_path(img_path)
+        spec = {
+            "driver": get_driver(img_path),
+            "kvstore": {
+                "driver": get_storage_driver(img_path),
+                "bucket": bucket_name,
+                "path": relative_path,
+            },
+            "context": {
+                "cache_pool": {"total_bytes_limit": 1000000000},
+                "cache_pool#remote": {"total_bytes_limit": 1000000000},
+                "data_copy_concurrency": {"limit": 8},
+            },
+        }
+        return spec
 
+    def shape(self):
+        """
+        Gets the shape of the image.
 
-def get_start_end(voxel, shape, is_center=True):
-    """
-    Gets the start and end indices of the image patch to be read.
-
-    Parameters
-    ----------
-    voxel : Tuple[int]
-        Voxel coordinate that specifies either the center or front-top-left
-        corner of the patch to be read.
-    shape : Tuple[int]
-        Shape of the image patch to be read.
-    is_center : bool, optional
-        Indication of whether the provided coordinates represent the center of
-        the patch or the front-top-left corner. The default is True.
-
-    Return
-    ------
-    Tuple[List[int]]
-        Start and end indices of the image patch to be read.
-    """
-    if is_center:
-        start = [voxel[i] - shape[i] // 2 for i in range(3)]
-        end = [voxel[i] + shape[i] // 2 for i in range(3)]
-    else:
-        start = voxel
-        end = [voxel[i] + shape[i] for i in range(3)]
-    return start, end
+        Returns
+        -------
+        Tuple[int]
+            Shape of image.
+        """
+        return self.img.shape
 
 
 # --- Coordinate Conversions ---
@@ -492,7 +505,7 @@ def rotated_gaussian_3d_mask(
     return (quad <= threshold).reshape(shape)
 
 
-# --- Utils ---
+# --- Helpers ---
 def generate_img_coords(shape):
     """
     Generates all voxel coordinates of an image patch given its shape.
@@ -514,6 +527,90 @@ def generate_img_coords(shape):
         indexing="ij",
     )
     return np.stack(grid, axis=-1).reshape(-1, 3)
+
+
+def get_center_slices(center, shape):
+    """
+    Gets the start and end indices of image patch to be read.
+
+    Parameters
+    ----------
+    center : Tuple[int]
+        Center of image patch to be read.
+    shape : Tuple[int]
+        Shape of image patch to be read.
+
+    Return
+    ------
+    Tuple[slice]
+        Slice objects used to index into the image.
+    """
+    start = [int(c - d // 2) for c, d in zip(center, shape)]
+    slices = tuple(slice(s, s + d) for s, d in zip(start, shape))
+    return (0, 0, *slices)
+
+
+def get_driver(img_path):
+    """
+    Gets the storage driver needed to read the image.
+
+    Parameters
+    ----------
+    img_path : str
+        Path to image
+
+    Returns
+    -------
+    str
+        Storage driver needed to read the image.
+    """
+    if ".zarr" in img_path:
+        return "zarr"
+    elif ".n5" in img_path:
+        return "n5"
+    raise ValueError(f"Unsupported image format: {img_path}")
+
+
+def get_slices(voxel, shape):
+    """
+    Gets the start and end indices of the chunk to be read.
+
+    Parameters
+    ----------
+    voxel : Tuple[int]
+        Start voxel of the slices.
+    shape : Tuple[int]
+        Shape of image patch to be read.
+
+    Return
+    ------
+    Tuple[slice]
+        Slice objects used to index into the image.
+    """
+    slices = tuple(slice(v, v + d) for v, d in zip(voxel, shape))
+    return (0, 0, *slices)
+
+
+def get_storage_driver(img_path):
+    """
+    Gets the storage driver needed to read the image.
+
+    Parameters
+    ----------
+    img_path : str
+        Image path to be checked.
+
+    Returns
+    -------
+    str
+        Storage driver needed to read the image.
+    """
+    if util.is_s3_path(img_path):
+        return "s3"
+    elif util.is_gcs_path(img_path):
+        return "gcs"
+    else:
+        raise ValueError(f"Unsupported path type: {img_path}")
 
 
 def is_inbounds(voxel, shape):
