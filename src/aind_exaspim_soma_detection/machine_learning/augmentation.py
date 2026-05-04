@@ -4,7 +4,7 @@ Created on Tue Jan 21 14:00:00 2025
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Routines for applying image augmentation during training.
+Code for applying image augmentation during training.
 
 """
 
@@ -16,14 +16,13 @@ import random
 
 class ImageTransforms:
     """
-    Class that applies a sequence of transforms to a 3D image and segmentation
-    patch.
+    Class that applies a sequence of transforms to a 3D image.
     """
 
     def __init__(self):
         """
-        Initializes an ImageTransforms instance that applies augmentation to
-        an image and segmentation patch.
+        Instantiates an ImageTransforms object that applies augmentation to
+        an image.
         """
         # Instance attributes
         self.transforms = [
@@ -55,7 +54,7 @@ class RandomFlip3D:
 
     def __init__(self, axes=(0, 1, 2)):
         """
-        Initializes a RandomFlip3D transformer.
+        Instantiates a RandomFlip3D object.
 
         Parameters
         ----------
@@ -66,7 +65,7 @@ class RandomFlip3D:
 
     def __call__(self, img):
         """
-        Applies random flipping to the input image and segmentation patch.
+        Applies random flipping to an image.
 
         Parameters
         ----------
@@ -86,12 +85,12 @@ class RandomRotation3D:
 
     def __init__(self, angles=(-90, 90), axes=((0, 1), (0, 2), (1, 2))):
         """
-        Initializes a RandomRotation3D transformer.
+        Instantiates a RandomRotation3D object.
 
         Parameters
         ----------
         angles : Tuple[int], optional
-            Maximum angle of rotation. Default is (-45, 45).
+            Maximum angle of rotation. Default is (-90, 90).
         axis : Tuple[Tuple[int]], optional
             Axes to apply rotation. Default is ((0, 1), (0, 2), (1, 2))
         """
@@ -100,7 +99,7 @@ class RandomRotation3D:
 
     def __call__(self, img):
         """
-        Rotates the input image and segmentation patch.
+        Rotates an image.
 
         Parameters
         ----------
@@ -139,7 +138,7 @@ class RandomContrast3D:
 
     def __call__(self, img):
         """
-        Applies contrast to the input 3D image.
+        Applies contrast to an image.
 
         Parameters
         ----------
@@ -149,7 +148,6 @@ class RandomContrast3D:
         lo = np.percentile(img, np.random.uniform(*self.p_low))
         hi = np.percentile(img, np.random.uniform(*self.p_high))
         img = (img - lo) / (hi - lo + 1e-5)
-        img = np.clip(img, 0, 1)
         return img
 
 
@@ -160,13 +158,13 @@ class RandomNoise3D:
 
     def __init__(self, max_std=0.2):
         """
-        Initializes a RandomNoise3D transformer.
+        Instantiates a RandomNoise3D object.
 
         Parameters
         ----------
         max_std : float, optional
             Maximum standard deviation of the Gaussian noise distribution.
-            Default is 0.3.
+            Default is 0.2.
         """
         self.max_std = max_std
 
@@ -176,7 +174,7 @@ class RandomNoise3D:
 
         Parameters
         ----------
-        patches : numpy.ndarray
+        img : numpy.ndarray
             Image to add noise to.
         """
         std = self.max_std * random.random()

@@ -9,10 +9,12 @@ Code for loading positive and negative soma examples.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 import os
 import pandas as pd
+import random
 
 from aind_exaspim_soma_detection.utils import util
 
@@ -21,8 +23,10 @@ def load_dataset_examples(bucket_name, prefix):
     examples = list()
     brain_ids = util.list_gcs_subdirs(bucket_name, prefix)
     for brain_id in tqdm(brain_ids, desc="Load Data"):
-        examples.extend(load_brain_examples(bucket_name, prefix, brain_id))
-        break
+        if brain_id not in ["719654", "789202", "802450"]:
+            examples.extend(
+                load_brain_examples(bucket_name, prefix, brain_id)
+            )
     return pd.DataFrame(examples)
 
 
@@ -31,9 +35,15 @@ def load_brain_examples(bucket_name, prefix, brain_id):
     for label_str, label in [("accepts", 1), ("rejects", 0)]:
         subprefix = f"{prefix}/{brain_id}/{label_str}"
         with ThreadPoolExecutor(max_workers=128) as executor:
+            # Extract filenames to load
+            filenames = util.list_gcs_subdirs(bucket_name, subprefix)
+            if brain_id == "802449":
+                n = len(filenames) // 2
+                filenames = random.sample(filenames, n)
+
             # Assign threads
             threads = list()
-            for filename in util.list_gcs_subdirs(bucket_name, subprefix):
+            for filename in filenames:
                 if filename.endswith(".swc"):
                     gcs_path = f"gs://{bucket_name}/{subprefix}/{filename}"
                     threads.append(
@@ -97,7 +107,26 @@ def _load_example(gcs_path, brain_id, label):
         return None
 
 
-# --- Miscellaneous ---
+# --- Helpers ---
+def partition_dataset(df, train_frac=0.6):
+    """
+    Partitions DataFrame indices into train, val, and test splits.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+    train_frac : float
+
+    Returns
+    -------
+    dict with keys "train", "val", "test" mapping to lists of df indices.
+    """
+    assert train_frac > 0 and train_frac < 1
+    idx = df.index.tolist()
+    train_idx, val_idx = train_test_split(idx, train_size=train_frac)
+    return {"train": train_idx, "val": val_idx}
+
+
 def split_swc_into_points(input_swc_path, output_dir):
     """
     Reads an SWC file containing single points and writes each point as its
@@ -138,3 +167,17 @@ def split_swc_into_points(input_swc_path, output_dir):
             out.write(new_line)
 
     print(f"Saved {len(lines)} SWC files to {output_dir}")
+
+
+def summarize_dataset(df):
+    summary = (
+        df.groupby(["brain_id", "label"])
+        .size()
+        .unstack(fill_value=0)
+    )
+    summary.columns = [("accepts" if c else "rejects") for c in summary.columns]
+    for col in ["accepts", "rejects"]:
+        if col not in summary.columns:
+            summary[col] = 0
+    summary["total"] = summary["accepts"] + summary["rejects"]
+    return summary

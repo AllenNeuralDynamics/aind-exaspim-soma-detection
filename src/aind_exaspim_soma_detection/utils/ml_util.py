@@ -19,7 +19,7 @@ from sklearn.metrics import (
 import numpy as np
 import torch
 
-from aind_exaspim_soma_detection.machine_learning.models import FastConvNet3d
+from aind_exaspim_soma_detection.machine_learning.models import CNN3D
 
 
 def load_model(path, patch_shape, device="cuda"):
@@ -42,7 +42,7 @@ def load_model(path, patch_shape, device="cuda"):
     FastConvNet3d
         Model instance with the loaded weights.
     """
-    model = FastConvNet3d(patch_shape)
+    model = CNN3D(patch_shape)
     model.load_state_dict(torch.load(path, map_location=device))
     model = model.to(device)
     return model
@@ -150,38 +150,6 @@ def report_metrics(y, hat_y, threshold):
     print("Recall:", round(recall_score(y, hat_y), 4))
     print("F1:", round(f1_score(y, hat_y), 4))
     print("")
-
-
-def split_train_validation(examples, train_ratio=0.85):
-    """
-    Splits a dictionary of examples into training and validation sets based on
-    a given ratio.
-
-    Parameters
-    ----------
-    examples : dict
-        A dictionary where keys represent example identifiers, and values
-        represent the example data.
-    train_ratio : float, optional
-        Number between 0 and 1 representing the proportion of the dataset to be
-        used for training. Default is 0.85.
-
-    Returns
-    -------
-    Tuple[dict]
-        A tuple containing two dictionaries:
-            - Dictionary containing the training examples.
-            - Dictionary containing the validation examples.
-    """
-    # Sample keys
-    n_train_examples = int(train_ratio * len(examples))
-    train_keys = sample(examples.keys(), n_train_examples)
-    valid_keys = examples.keys() - train_keys
-
-    # Get examples
-    train_examples = dict({k: examples[k] for k in train_keys})
-    valid_examples = dict({k: examples[k] for k in valid_keys})
-    return train_examples, valid_examples
 
 
 def toCPU(tensor, return_numpy=True):

@@ -19,7 +19,7 @@ import torch
 
 from aind_exaspim_soma_detection.utils import img_util, ml_util
 from aind_exaspim_soma_detection.machine_learning.data_handling import (
-    MultiThreadedDataLoader,
+    DataLoader,
     ProposalDataset,
 )
 
@@ -72,7 +72,7 @@ def classify_proposals(
     dataset.ingest_proposals(brain_id, img_path, proposals)
 
     # Generate predictions
-    dataloader = MultiThreadedDataLoader(dataset, batch_size)
+    dataloader = DataLoader(dataset, batch_size)
     model = ml_util.load_model(model_path, patch_shape, device)
     id_voxel, hat_y = run_inference(dataloader, model, device)
 

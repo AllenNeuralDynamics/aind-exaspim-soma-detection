@@ -54,28 +54,6 @@ def rmdir(path):
         shutil.rmtree(path)
 
 
-def list_subdirectory_names(directory_path):
-    """
-    Lists the names of all subdirectories in the given directory.
-
-    Parameters
-    ----------
-    directory_path : str
-        Path to the directory to search.
-
-    Returns
-    -------
-    subdir_names : List[str]
-        Names of subdirectories.
-    """
-    subdir_names = list()
-    for d in os.listdir(directory_path):
-        path = os.path.join(directory_path, d)
-        if os.path.isdir(path) and not d.startswith("."):
-            subdir_names.append(d)
-    return subdir_names
-
-
 def list_paths(directory, extension=""):
     """
     Lists all paths within "directory" ending with "extension" if provided.
@@ -222,13 +200,11 @@ def to_zipped_point(zip_writer, filename, xyz, color=None, radius=5):
         # Preamble
         if color:
             text_buffer.write("# COLOR " + color)
-        text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
+        text_buffer.write("\n# id, type, z, y, x, r, pid")
 
         # Write entry
         x, y, z = tuple(xyz)
-        text_buffer.write("\n" + f"1 5 {x} {y} {z} {radius} -1")
-
-        # Finish
+        text_buffer.write(f"\n1 5 {x} {y} {z} {radius} -1")
         zip_writer.writestr(filename, text_buffer.getvalue())
 
 

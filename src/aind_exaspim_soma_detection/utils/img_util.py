@@ -193,12 +193,12 @@ def local_to_physical(local_voxel, offset, multiscale):
     numpy.ndarray
         Physical coordinate.
     """
-    global_voxel = np.array([v + o for v, o in zip(local_voxel, offset)])
-    return to_physical(global_voxel, multiscale)
+    voxel = np.array([v + o for v, o in zip(local_voxel, offset)])
+    return to_physical(voxel, multiscale)
 
 
 # --- Visualizations ---
-def plot_mips(img, vmax=None):
+def plot_mips(img, output_path=None):
     """
     Plots the Maximum Intensity Projections (MIPs) of a 3D image along the XY,
     XZ, and YZ axes.
@@ -207,18 +207,24 @@ def plot_mips(img, vmax=None):
     ----------
     img : numpy.ndarray
         Input 3D image to generate MIPs from.
+    output_path : None or str, optional
+        Path to save MIPs as a PNG if provided. Default is None.
     """
-    vmax = vmax or np.percentile(img, 99.9)
     fig, axs = plt.subplots(1, 3, figsize=(10, 4))
     axs_names = ["XY", "XZ", "YZ"]
     for i in range(3):
         mip = np.max(img, axis=i)
-        axs[i].imshow(mip, vmax=vmax)
+        axs[i].imshow(mip)
         axs[i].set_title(axs_names[i], fontsize=16)
         axs[i].set_xticks([])
         axs[i].set_yticks([])
     plt.tight_layout()
-    plt.show()
+
+    if output_path:
+        plt.savefig(output_path, dpi=200)
+    else:
+        plt.show()
+    plt.close(fig)
 
 
 def plot_slices(img, output_path=None, vmax=None):
@@ -508,40 +514,6 @@ def generate_img_coords(shape):
         indexing="ij",
     )
     return np.stack(grid, axis=-1).reshape(-1, 3)
-
-
-def get_nbs(voxel, shape):
-    """
-    Gets the neighbors of a given voxel in a 3D grid with respect to
-    26-connectivity.
-
-    Parameters
-    ----------
-    voxel : Tuple[int]
-        Voxel coordinate for which neighbors are to be found.
-    shape : Tuple[int]
-        Shape of the 3D grid. This is used to ensure that neighbors are
-        within the grid boundaries.
-
-    Returns
-    -------
-    List[Tuple[int]]
-        Voxel coordinates of the neighboring voxels.
-    """
-    x, y, z = voxel
-    nbs = []
-    for dx in [-1, 0, 1]:
-        for dy in [-1, 0, 1]:
-            for dz in [-1, 0, 1]:
-                # Skip the given voxel
-                if dx == 0 and dy == 0 and dz == 0:
-                    continue
-
-                # Add neighbor
-                nb = (x + dx, y + dy, z + dz)
-                if is_inbounds(nb, shape):
-                    nbs.append(nb)
-    return nbs
 
 
 def is_inbounds(voxel, shape):
