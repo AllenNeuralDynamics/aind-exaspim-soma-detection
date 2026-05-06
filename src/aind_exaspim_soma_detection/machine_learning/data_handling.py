@@ -9,21 +9,15 @@ Routines for loading data during training and inference.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-from scipy.spatial import distance
 from torch.utils.data import Dataset
 
 import numpy as np
+import os
 import random
 import torch
-import torchvision.transforms as transforms
 
 from aind_exaspim_soma_detection.machine_learning.augmentation import (
-    RandomContrast3D,
-    RandomFlip3D,
-    RandomNoise3D,
-    RandomRotation3D,
-    RandomScale3D,
+    ImageTransforms,
 )
 from aind_exaspim_soma_detection.utils import img_util
 
@@ -40,14 +34,21 @@ class ProposalDataset(Dataset):
     This dataset is populated using the "self.ingest_proposals" method, which
     requires the following inputs:
         (1) brain_id: Unique identifier of brain containing proposals.
-        (2) img_prefix: Path to whole-brain image stored in an S3 bucket.
+        (2) img_path: Path to whole-brain image stored in an S3 bucket.
         (3) voxels: List of voxel coordinates of proposals.
         (4) labels: Labels for each proposal (0 or 1), optional.
 
     Note: This dataset supports proposals from multiple whole-brain datasets.
     """
 
-    def __init__(self, patch_shape, transform=False):
+    def __init__(
+        self,
+        patch_shape,
+        brightness_clip=300,
+        multiscale=0,
+        normalization_percentiles=(1, 99.5),
+        transform=False,
+    ):
         """
         Initializes a custom dataset for processing soma proposals.
 
@@ -76,126 +77,19 @@ class ProposalDataset(Dataset):
             is True. Otherwise, this value is set to None.
         """
         # Class attributes
-        self.key_to_filename = dict()
-        self.proposals = dict()
+        self.brightness_clip = brightness_clip
         self.imgs = dict()
         self.img_paths = dict()
+        self.key_to_filename = dict()
+        self.multiscale = multiscale
         self.patch_shape = patch_shape
+        self.percentiles = normalization_percentiles
+        self.proposals = dict()
+        self.transform = ImageTransforms() if transform else False
 
-        # Data augmentation (if applicable)
-        if transform:
-            self.transform = transforms.Compose(
-                [
-                    RandomFlip3D(),
-                    RandomRotation3D(),
-                    RandomScale3D(),
-                    RandomContrast3D(),
-                    RandomNoise3D(),
-                    lambda x: torch.tensor(x, dtype=torch.float32).unsqueeze(
-                        0
-                    ),
-                ]
-            )
-        else:
-            self.transform = transform
-
-    def __len__(self):
-        """
-        Counts the number of proposals in self.
-
-        Returns
-        -------
-        int
-            Number of proposals in self.
-        """
-        return len(self.proposals)
-
-    def __getitem__(self, key, normalize=True):
-        """
-        Gets the image patch centered at the voxel corresponding to the given
-        key.
-
-        Parameters
-        ----------
-        key : tuple
-            Unique indentifier of a proposal which is a tuple containing:
-            - "brain_id" (str): Unique identifier of the brain dataset.
-            - "voxel" (Tuple[int]): Voxel coordinate of proposal.
-        normalize : bool
-            Indication of whether to normalize the img_patch corresponding to
-            the given key.
-
-        Returns
-        -------
-        key : tuple
-            Input "key" tuple.
-        img_patch : numpy.ndarray
-            3D image patch centered at "voxel".
-        label : int
-            Label associated with the proposal.
-        """
-        # Get voxel
-        brain_id, voxel = key
-        if self.transform:
-            voxel = [voxel_i + random.randint(-5, 5) for voxel_i in voxel]
-
-        # Get image patch
-        try:
-            img_patch = img_util.get_patch(
-                self.imgs[brain_id], voxel, self.patch_shape
-            )
-            if normalize:
-                img_patch = img_util.normalize(img_patch)
-        except:
-            img_patch = np.ones(self.patch_shape)
-        return key, img_patch, self.proposals[key]
-
-    def get_positives(self):
-        """
-        Gets all positive proposals in the dataset.
-
-        Returns
-        -------
-        dict
-            Positive proposals in dataset.
-        """
-        return dict({k: v for k, v in self.proposals.items() if v})
-
-    def get_negatives(self):
-        """
-        Gets all negative proposals in the dataset.
-
-        Returns
-        -------
-        dict
-            Negative proposals in dataset.
-        """
-        return dict({k: v for k, v in self.proposals.items() if not v})
-
-    def n_positives(self):
-        """
-        Counts the number of positive proposals in the dataset.
-
-        Returns
-        -------
-        int
-            Number of positive proposals in the dataset.
-        """
-        return len(self.get_positives())
-
-    def n_negatives(self):
-        """
-        Counts the number of negative proposals in the dataset.
-
-        Returns
-        -------
-        int
-            Number of negative proposals in the dataset.
-        """
-        return len(self.get_negatives())
-
+    # --- Load Data ---
     def ingest_proposals(
-        self, brain_id, img_prefix, voxels, labels=None, paths=None
+        self, brain_id, img_path, voxels, labels=None, paths=None
     ):
         """
         Ingests proposals represented by voxel coordinates along with optional
@@ -205,7 +99,7 @@ class ProposalDataset(Dataset):
         ----------
         brain_id : str
             Unique identifier for the whole-brain dataset.
-        img_prefix : str
+        img_path : str
             Prefix (or path) of a whole-brain image stored in a S3 bucket.
         voxels : List[Tuple[int]]
             Voxel coordinates representing the proposals.
@@ -222,8 +116,8 @@ class ProposalDataset(Dataset):
 
         # Load image (if applicable)
         if brain_id not in self.imgs:
-            self.imgs[brain_id] = img_util.open_img(img_prefix)
-            self.img_paths[brain_id] = img_prefix
+            self.imgs[brain_id] = img_util.TensorStoreImage(img_path)
+            self.img_paths[brain_id] = img_path
 
         # Load proposal voxel coordinates
         for i, voxel in enumerate(voxels):
@@ -232,33 +126,33 @@ class ProposalDataset(Dataset):
             if paths is not None:
                 self.key_to_filename[key] = paths[i]
 
-    def remove_proposal(self, query_key, epsilon=0):
+    def ingest_proposals_from_df(self, df, img_pathes):
         """
-        Removes the proposal corresponding to the given key. Optionally,
-        removes nearby proposals within a specified distance "epsilon".
+        Iterates over a soma DataFrame and ingests proposals into a dataset.
 
         Parameters
         ----------
-        query_key : tuple
-            Unique indentifier of a proposal which is a tuple containing:
-            - "brain_id" (str): Unique identifier of the brain dataset.
-            - "voxel" (Tuple[int]): Voxel coordinate of proposal.
-        epsilon : float, optional
-            Distance threshold used to search for nearby proposals. Default
-            is 0.
+        df : pd.DataFrame
+            DataFrame with columns: brain_id, label, swc_filename, x, y, z.
+        img_pathes : Dict[str, str]
+            Dictionary that maps a brain_id and returns the image prefix.
         """
-        # Remove if proposal exists
-        if query_key in self.proposals:
-            del self.proposals[query_key]
+        for brain_id, group in df.groupby("brain_id"):
+            img_path = os.path.join(img_pathes[brain_id], str(self.multiscale))
+            voxels = [
+                img_util.to_voxels(xyz, self.multiscale)
+                for xyz in group["xyz"]
+            ]
+            labels = group["label"].tolist()
+            paths = group["swc_filename"].tolist()
 
-        # Search for nearby proposal
-        if epsilon > 0:
-            query_brain_id, query_voxel = query_key
-            for brain_id, voxel in self.proposals:
-                d = distance.euclidean(query_voxel, voxel)
-                if brain_id == query_brain_id and d < epsilon:
-                    del self.proposals[(brain_id, voxel)]
-                    break
+            self.ingest_proposals(
+                brain_id=brain_id,
+                img_path=img_path,
+                voxels=voxels,
+                labels=labels,
+                paths=paths,
+            )
 
     def visualize_proposal(self, key):
         """
@@ -275,10 +169,11 @@ class ProposalDataset(Dataset):
         _, img_patch, _ = self[key]
         img_util.plot_mips(img_patch)
 
-    def visualize_augmented_proposal(self, key):
+    # --- Get Example ---
+    def __getitem__(self, key):
         """
-        Plots maximum intensity projections (MIPs) of the image patch centered
-        at the given proposal key, before and after image augmentation.
+        Gets the image patch centered at the voxel corresponding to the given
+        key.
 
         Parameters
         ----------
@@ -286,150 +181,114 @@ class ProposalDataset(Dataset):
             Unique indentifier of a proposal which is a tuple containing:
             - "brain_id" (str): Unique identifier of the brain dataset.
             - "voxel" (Tuple[int]): Voxel coordinate of proposal.
-        """
-        # Get image patch
-        _, img_patch, _ = self[key]
-        img_util.plot_mips(img_patch, clip_bool=True)
-
-        # Apply transforms
-        img_patch = np.array(self.transform(img_patch))
-        img_util.plot_mips(img_patch[0, ...], clip_bool=True)
-
-
-# --- Custom Dataloader ---
-class MultiThreadedDataLoader:
-    """
-    DataLoader that uses multithreading to fetch image patches from the cloud
-    to form batches.
-    """
-
-    def __init__(self, dataset, batch_size=64, shuffle=True):
-        """
-        Constructs a multithreaded data loader.
-
-        Parameters
-        ----------
-        dataset : Dataset.ProposalDataset
-            Instance of custom dataset.
-        batch_size : int, optional
-            Number of samples per batch. Default is 64.
-        shuffle : bool, optional
-            Indication of whether to shuffle the examples during training.
-            Default is True.
-        """
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.n_rounds = len(dataset) // batch_size
-
-    def __iter__(self):
-        """
-        Returns an iterator for the data oader, providing the functionality
-        to iterate over the whole dataset.
 
         Returns
         -------
-        iterator
-            Iterator for the dataloader.
+        key : tuple
+            Input "key" tuple.
+        img_patch : numpy.ndarray
+            3D image patch centered at "voxel".
+        label : int
+            Label associated with the proposal.
         """
-        return self.DataLoaderIterator(self)
-
-    class DataLoaderIterator:
-        """
-        Custom iterator class for iterating over the dataset in the data
-        loader.
-        """
-
-        def __init__(self, dataloader):
-            """
-            Initializes the "DataLoaderIterator" object for custom iteration
-            over the dataset.
-
-            Parameters
-            ----------
-            MultiThreadedDataLoader
-                Dataloader instance that this iterator is associated with.
-            """
-            self.current_index = 0
-            self.batch_size = dataloader.batch_size
-            self.dataloader = dataloader
-            self.dataset = dataloader.dataset
-            self.keys = list(self.dataset.proposals.keys())
-            np.random.shuffle(self.keys)
-
-        def __iter__(self):
-            """
-            Returns the iterator object for custom iteration over the dataset.
-
-            Returns
-            -------
-            DataLoaderIterator
-                Iterator object itself.
-            """
-            return self
-
-        def __next__(self):
-            """
-            Retrieves the next batch of image patches and their corresponding
-            labels from the dataset.
-
-            Returns
-            -------
-            keys : List[tuple]
-                List of keys corresponding to the current batch of proposals.
-            patches : torch.Tensor
-                Image patches from the dataset with shape (B, 1, H, W, D).
-            labels : torch.Tensor
-                Labels corresponding to the image patches with shape (B, 1).
-            """
-            # Check whether to stop
-            if self.current_index >= len(self.keys):
-                raise StopIteration
-
-            # Get the next batch of proposals
-            batch_keys = self.keys[
-                self.current_index: self.current_index
-                + self.dataloader.batch_size
-            ]
-            self.current_index += self.dataloader.batch_size
-
-            # Load image patches
-            with ThreadPoolExecutor() as executor:
-                # Assign threads
-                threads = {
-                    executor.submit(self.dataset.__getitem__, idx): idx
-                    for idx in batch_keys
-                }
-
-                # Process results
-                keys = list()
-                patches = list()
-                labels = list()
-                for thread in as_completed(threads):
-                    key, patch, label = thread.result()
-                    keys.append(key)
-                    patches.append(torch.tensor(patch, dtype=torch.float))
-                    labels.append(torch.tensor(label, dtype=torch.float))
-
-            # Reformat inputs
-            patches = torch.unsqueeze(torch.stack(patches), dim=1)
-            labels = torch.unsqueeze(torch.stack(labels), dim=1)
-            return keys, patches, labels
-
-
-# --- utils ---
-def init_subdataset(dataset, positives, negatives, patch_shape, transform):
-    subdataset = ProposalDataset(patch_shape, transform=transform)
-    for proposal_tuple in merge_proposals(dataset, positives, negatives):
-        subdataset.ingest_proposals(*proposal_tuple)
-    return subdataset
-
-
-def merge_proposals(soma_dataset, positives, negatives):
-    proposals = list()
-    combined_dict = positives.copy()
-    combined_dict.update(negatives)
-    for key, value in combined_dict.items():
+        # Get voxel
         brain_id, voxel = key
-        img_path = soma_dataset.img_paths[brain_id]
-        proposals.append((brain_id, img_path, [voxel], [value]))
-    return proposals
+        if self.transform:
+            voxel = [u + random.randint(-5, 5) for u in voxel]
+
+        # Get image patch
+        img = self.get_patch(brain_id, voxel)
+        if self.transform:
+            img = self.transform(img)
+        return key, img, self.proposals[key]
+
+    def get_patch(self, brain_id, voxel):
+        img = self.imgs[brain_id].read(voxel, self.patch_shape)
+        img = np.minimum(img, self.brightness_clip)
+        img = img_util.normalize(img, percentiles=self.percentiles)
+        return img
+
+    # --- Helpers ---
+    def __len__(self):
+        """
+        Counts the number of proposals in self.
+
+        Returns
+        -------
+        int
+            Number of proposals in self.
+        """
+        return len(self.proposals)
+
+    def n_positives(self):
+        """
+        Counts the number of positive proposals in the dataset.
+
+        Returns
+        -------
+        int
+            Number of positive proposals in the dataset.
+        """
+        return np.sum([1 for v in self.proposals.values() if v])
+
+    def n_negatives(self):
+        """
+        Counts the number of negative proposals in the dataset.
+
+        Returns
+        -------
+        int
+            Number of negative proposals in the dataset.
+        """
+        return np.sum([1 for v in self.proposals.values() if not v])
+
+
+# --- Custom Dataloader ---
+class DataLoader:
+
+    def __init__(self, dataset, batch_size=64, shuffle=True):
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+
+    def __iter__(self):
+        # Shuffle indices
+        keys = list(self.dataset.proposals.keys())
+        if self.shuffle:
+            np.random.shuffle(keys)
+
+        # Yield batches
+        for i in range(0, len(keys), self.batch_size):
+            batch_keys = keys[i: i + self.batch_size]
+            keys_out, patches, labels = zip(*self.get_batch(batch_keys))
+            patches = self.to_tensor(patches)
+            labels = self.to_tensor(labels)
+            yield list(keys_out), patches, labels
+
+    # --- Helpers ---
+    def __len__(self):
+        """
+        Counts the number of examples in the dataset.
+
+        Returns
+        -------
+        int
+            Number of examples in the dataset.
+        """
+        return len(self.dataset)
+
+    def get_batch(self, keys):
+        with ThreadPoolExecutor() as ex:
+            futures = {ex.submit(self.dataset.__getitem__, k): k for k in keys}
+            results = []
+            for f in as_completed(futures):
+                try:
+                    results.append(f.result())
+                except Exception as e:
+                    print(f"WARNING: {e} — skipping")
+            return results
+
+    @staticmethod
+    def to_tensor(data):
+        data = [torch.tensor(d, dtype=torch.float) for d in data]
+        return torch.stack(data).unsqueeze(1)

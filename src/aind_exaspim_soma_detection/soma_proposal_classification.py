@@ -14,14 +14,16 @@ from functools import partial
 from tqdm import tqdm
 
 import numpy as np
+import os
 import pandas as pd
 import torch
 
-from aind_exaspim_soma_detection.utils import img_util, ml_util
+from aind_exaspim_soma_detection.utils import img_util
 from aind_exaspim_soma_detection.machine_learning.data_handling import (
-    MultiThreadedDataLoader,
+    DataLoader,
     ProposalDataset,
 )
+from aind_exaspim_soma_detection.machine_learning.models import load_model
 
 
 def classify_proposals(
@@ -34,6 +36,7 @@ def classify_proposals(
     threshold,
     batch_size=64,
     device="cuda",
+    output_dir=None,
 ):
     """
     Classifies soma proposals using a pre-trained model and returns the
@@ -63,7 +66,7 @@ def classify_proposals(
 
     Returns:
     --------
-    soma_xyz_list : List[Tuple[float]]
+    accepts : List[Tuple[float]]
         Physical coordinates of somas detected by the model.
     """
     # Initialize dataset
@@ -72,16 +75,24 @@ def classify_proposals(
     dataset.ingest_proposals(brain_id, img_path, proposals)
 
     # Generate predictions
-    dataloader = MultiThreadedDataLoader(dataset, batch_size)
-    model = ml_util.load_model(model_path, patch_shape, device)
+    dataloader = DataLoader(dataset, batch_size)
+    model = load_model(model_path, patch_shape, device)
     id_voxel, hat_y = run_inference(dataloader, model, device)
 
     # Extract predicted somas
-    soma_xyz_list = list()
-    for (_, voxel), hat_y_i in zip(id_voxel, hat_y):
+    accepts = list()
+    df = pd.DataFrame(columns=["xyz", "prediction"])
+    for i, ((_, voxel_i), hat_y_i) in enumerate(zip(id_voxel, hat_y)):
+        xyz_i = img_util.to_physical(voxel_i, multiscale)
+        df.loc[i, "prediction"] = hat_y_i
+        df.loc[i, "xyz"] = xyz_i
         if hat_y_i > threshold:
-            soma_xyz_list.append(img_util.to_physical(voxel, multiscale))
-    return soma_xyz_list
+            accepts.append(xyz_i)
+
+    # Save model predictions
+    if output_dir:
+        df.to_csv(os.path.join(output_dir, "model_predictions.csv"))
+    return accepts
 
 
 def run_inference(dataloader, model, device="cuda", verbose=True):
@@ -110,22 +121,19 @@ def run_inference(dataloader, model, device="cuda", verbose=True):
     hat_y : numpy.ndarray
         Prediction for each proposal.
     """
-    # Initializations
-    n = dataloader.n_rounds
-    iterator = tqdm(dataloader, total=n) if verbose else dataloader
-
-    # Main
+    pbar = tqdm(total=len(dataloader))
     id_voxel, hat_y = list(), list()
     with torch.no_grad():
         model.eval()
-        for id_voxel_i, x_i, _ in iterator:
+        for id_voxel_i, x_i, _ in dataloader:
             # Forward pass
             x_i = x_i.to(device)
             hat_y_i = torch.sigmoid(model(x_i))
 
             # Store result
             id_voxel.extend(id_voxel_i)
-            hat_y.append(ml_util.toCPU(hat_y_i))
+            hat_y.append(np.array(hat_y_i.detach().cpu()))
+            pbar.update(len(id_voxel_i))
 
     # Reformat predictions
     hat_y = np.vstack(hat_y)[:, 0]
@@ -139,7 +147,7 @@ def compute_metrics(
     multiscale,
     patch_shape,
     batch_size=64,
-    min_brightness=160,
+    min_brightness=0,
 ):
     """
     Filters a list of accepted proposals by checking whether there exists a
@@ -162,13 +170,14 @@ def compute_metrics(
     results : pandas.DataFrame
         Dataframe containing metrics computed for each detected soma.
     """
+
     def load_patch(voxel):
-        patch = img_util.get_patch(img, voxel, patch_shape)
+        patch = img.read(voxel, patch_shape)
         return (voxel, patch)
 
     # Initializations
     pbar = tqdm(total=len(accepts))
-    img = img_util.open_img(img_path)
+    img = img_util.TensorStoreImage(img_path)
     voxels = [img_util.to_voxels(p, multiscale) for p in accepts]
 
     # Main
@@ -204,7 +213,7 @@ def process_patch(voxel_patch, multiscale=2):
 
     # Compile results
     feasible_radii = (radii > 6).any() or (radii < 140).any()
-    if feasible_radii and score > 0.7:
+    if feasible_radii and score > 0.6:
         xyz = img_util.to_physical(voxel, multiscale=multiscale)
         result = {
             "xyz": tuple(round(float(t), 2) for t in xyz),
@@ -222,11 +231,7 @@ def compute_radii(params, multiscale, anisotropy=(0.748, 0.748, 1.0)):
     # Compute precision matrix
     scaled_anisotropy = [a * 2**multiscale for a in anisotropy]
     _, _, _, a11, a12, a13, a22, a23, a33, _, _ = params
-    P_voxel = np.array([
-        [a11, a12, a13],
-        [a12, a22, a23],
-        [a13, a23, a33]
-    ])
+    P_voxel = np.array([[a11, a12, a13], [a12, a22, a23], [a13, a23, a33]])
 
     # Convert precision matrix from voxel to physical space
     S = np.diag(scaled_anisotropy)

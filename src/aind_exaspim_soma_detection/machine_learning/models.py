@@ -11,73 +11,75 @@ soma proposal as accept or reject.
 
 import torch
 import torch.nn as nn
-import torch.nn.init as init
 
 
-class FastConvNet3d(nn.Module):
+# --- Model Architectures ---
+class CNN3D(nn.Module):
     """
-    Fast 3d convolutional neural network that utilizes 2.5d convolutional
-    layers to improve the computational complexity.
+    Class that implements a convolutional neural network for 3D images.
     """
 
-    def __init__(self, patch_shape):
+    def __init__(
+        self,
+        patch_shape,
+        output_dim=1,
+        dropout=0.1,
+        n_conv_layers=5,
+        n_feat_channels=16,
+        use_double_conv=True,
+    ):
         """
-        Constructs the neural network architecture.
+        Instantiates a CNN3D object.
 
         Parameters
         ----------
         patch_shape : Tuple[int]
-            Shape of image patches to be run through network.
+            Shape of input image patch.
+        output_dim : int, optional
+            Dimension of output. Default is 1.
+        dropout : float, optional
+            Fraction of values to randomly drop during training. Default is
+            0.1.
+        n_conv_layers : int, optional
+            Number of convolutional layers. Default is 5.
+        use_double_conv : bool, optional
+            Indication of whether to use double convolution. Default is True.
         """
-        super(FastConvNet3d, self).__init__()
+        # Call parent class
+        nn.Module.__init__(self)
+
+        # Class attributes
+        self.dropout = dropout
         self.patch_shape = patch_shape
 
-        # Convolutional layer 1
-        self.layer1 = nn.Sequential(
-            FastConvLayer(1, 16),
-            nn.BatchNorm3d(16),
-            nn.ReLU(),
-            nn.Dropout3d(0.2),
-            nn.MaxPool3d(kernel_size=2, stride=2),
+        # Convolutional layers
+        self.conv_layers = init_cnn3d(
+            1, n_feat_channels, n_conv_layers, use_double_conv=use_double_conv
         )
 
-        # Convolutional layer 2
-        self.layer2 = nn.Sequential(
-            FastConvLayer(16, 32),
-            nn.BatchNorm3d(32),
-            nn.ReLU(),
-            nn.Dropout3d(0.2),
-            nn.MaxPool3d(kernel_size=2, stride=2),
-        )
-
-        # Convolutional layer 3
-        self.layer3 = nn.Sequential(
-            FastConvLayer(32, 64),
-            nn.BatchNorm3d(64),
-            nn.ReLU(),
-            nn.Dropout3d(0.2),
-            nn.MaxPool3d(kernel_size=2, stride=2),
-        )
-
-        # Convolutional layer 4
-        self.layer4 = nn.Sequential(
-            FastConvLayer(64, 128),
-            nn.BatchNorm3d(128),
-            nn.ReLU(),
-            nn.Dropout3d(0.2),
-            nn.MaxPool3d(kernel_size=2, stride=2),
-        )
-
-        # Final fully connected layers
-        self.output = nn.Sequential(
-            nn.Linear((128 * (self.patch_shape[0] // 16) ** 3), 256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, 1),
-        )
+        # Output layer
+        flat_size = self._get_flattened_size()
+        self.output = FeedForwardNet(flat_size, output_dim, 3)
 
         # Initialize weights
         self.apply(self.init_weights)
+
+    def _get_flattened_size(self):
+        """
+        Compute the flattened feature vector size after applying a sequence
+        of convolutional and pooling layers on an input tensor with the given
+        shape.
+
+        Returns
+        -------
+        int
+            Length of the flattened feature vector after the convolutions and
+            pooling.
+        """
+        with torch.no_grad():
+            x = torch.zeros(1, 1, *self.patch_shape)
+            x = self.conv_layers(x)
+            return x.view(1, -1).size(1)
 
     @staticmethod
     def init_weights(m):
@@ -90,95 +92,247 @@ class FastConvNet3d(nn.Module):
             PyTorch layer or module.
         """
         if isinstance(m, nn.Conv3d):
-            init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+            nn.init.kaiming_normal_(
+                m.weight, mode="fan_in", nonlinearity="leaky_relu"
+            )
             if m.bias is not None:
-                init.constant_(m.bias, 0)
+                nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.Linear):
-            init.xavier_normal_(m.weight)
+            nn.init.xavier_normal_(m.weight)
             if m.bias is not None:
-                init.constant_(m.bias, 0)
+                nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.BatchNorm3d):
-            init.constant_(m.weight, 1)
-            init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1)
+            nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         """
-        Forward pass of the 2.5D convolutional neural network.
+        Passes the given input through this neural network.
 
         Parameters
         ----------
         x : torch.Tensor
-            Input of shape (batch_size, in_channels, height, width, depth).
+            Input vector of features.
 
         Returns
         -------
-        torch.Tensor
-            Output with shape (batch_size, 1).
+        x : torch.Tensor
+            Output of the neural network.
         """
-        # Convolutional Layers
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-
-        # Output layer
-        x = torch.flatten(x, start_dim=1)
+        x = self.conv_layers(x)
+        x = x.view(x.size(0), -1)
         x = self.output(x)
         return x
 
 
-class FastConvLayer(nn.Module):
+class FeedForwardNet(nn.Module):
     """
-    Class that performs a single layer of 2.5 convolution.
+    A class that implements a feed forward neural network.
     """
 
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, input_dim, output_dim, n_layers):
         """
-        Constructs a 2.5D convolutional layer.
+        Instantiates a FeedFowardNet object.
 
         Parameters
         ----------
-        in_channels : int
-            Number of input channels.
-        int_channels : int
-            Number of intermediate channels for the 2D convolutions.
+        input_dim : int
+            Dimension of the input.
+        output_dim : int
+            Dimension of the output of the network.
+        n_layers : int
+            Number of layers in the network.
         """
-        super(FastConvLayer, self).__init__()
-        self.conv_2d = nn.Conv2d(in_channels, in_channels, 3, padding=1)
-        self.conv_3d = nn.Conv3d(3 * in_channels, out_channels, 3, padding=1)
+        # Call parent class
+        super().__init__()
+
+        # Instance attributes
+        assert n_layers > 1
+        self.net = self.build_network(input_dim, output_dim, n_layers)
+
+    def build_network(self, input_dim, output_dim, n_layers):
+        # Set input/output dimensions
+        input_dim_i = input_dim
+        output_dim_i = max(input_dim // 2, 4)
+
+        # Build architecture
+        layers = []
+        for i in range(n_layers):
+            mlp = init_mlp(input_dim_i, input_dim_i * 2, output_dim_i)
+            layers.append(mlp)
+
+            input_dim_i = output_dim_i
+            output_dim_i = (
+                max(output_dim_i // 2, 4) if i < n_layers - 2 else output_dim
+            )
+
+        # Initialize weights
+        net = nn.Sequential(*layers)
+        net.apply(self._init_weights)
+        return net
+
+    @staticmethod
+    def _init_weights(m):
+        """
+        Initializes weights for linear layers using Kaiming initialization.
+
+        Parameters
+        ----------
+        m : torch.nn.Module
+            Module to initialize.
+        """
+        if isinstance(m, nn.Linear):
+            nn.init.kaiming_normal_(m.weight, nonlinearity="leaky_relu")
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
 
     def forward(self, x):
         """
-        Forward pass of a single 2.5D convolution block.
+        Passes the given input through this neural network.
 
         Parameters
         ----------
         x : torch.Tensor
-            Input of shape (batch_size, in_channels, height, width, depth).
+            Input vector of features.
 
         Returns
         -------
-        torch.Tensor
-            Output of shape (batch_size, out_channels, height, width, depth).
+        x : torch.Tensor
+            Output of the neural network.
         """
-        B, C, D, H, W = x.shape
+        return self.net(x)
 
-        # Process XY slices
-        xy_slices = x.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
-        xy_features = self.conv_2d(xy_slices).reshape(B, D, -1, H, W)
-        xy_features = xy_features.permute(0, 2, 1, 3, 4)
 
-        # Process XZ slices
-        xz_slices = x.permute(0, 3, 1, 2, 4).reshape(B * H, C, D, W)
-        xz_features = self.conv_2d(xz_slices).reshape(B, H, -1, D, W)
-        xz_features = xz_features.permute(0, 2, 3, 1, 4)
+# --- Helpers ---
+def init_cnn3d(in_channels, n_feat_channels, n_layers, use_double_conv=True):
+    """
+    Initializes a convolutional neural network.
 
-        # Process YZ slices
-        yz_slices = x.permute(0, 4, 1, 2, 3).reshape(B * W, C, D, H)
-        yz_features = self.conv_2d(yz_slices).reshape(B, W, -1, D, H)
-        yz_features = yz_features.permute(0, 2, 3, 4, 1)
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels that are input to this convolutional layer.
+    out_channels : int
+        Number of channels that are output from this convolutional layer.
+    n_layers : int
+        Number of layers in the network.
+    use_double_conv : bool, optional
+        Indication of whether to use double convolution. Default is True.
 
-        # Fuse features using 3D convolution
-        combined = torch.cat([xy_features, xz_features, yz_features], dim=1)
-        output = self.conv_3d(combined)
-        return output
+    Returns
+    -------
+    layers : torch.nn.Sequential
+        Sequence of operations that define the network.
+    """
+    layers = list()
+    in_channels = in_channels
+    out_channels = n_feat_channels
+    for i in range(n_layers):
+        # Build layer
+        layers.append(
+            init_conv_layer(in_channels, out_channels, 3, use_double_conv)
+        )
+
+        # Update channel sizes
+        in_channels = out_channels
+        out_channels *= 2
+    return nn.Sequential(*layers)
+
+
+def init_conv_layer(in_channels, out_channels, kernel_size, use_double_conv):
+    """
+    Initializes a convolutional layer.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels that are input to this convolutional layer.
+    out_channels : int
+        Number of channels that are output from this convolutional layer.
+    kernel_size : int
+        Size of kernel used on convolutional layers.
+    use_double_conv : bool
+        Indication of whether to use double convolution.
+
+    Returns
+    -------
+    layers : torch.nn.Sequential
+        Sequence of operations that define this convolutional layer.
+    """
+    # Convolution
+    layers = [
+        nn.Conv3d(
+            in_channels, out_channels, kernel_size, padding=kernel_size // 2
+        ),
+        nn.BatchNorm3d(out_channels),
+        nn.GELU(),
+    ]
+    if use_double_conv:
+        layers += [
+            nn.Conv3d(
+                out_channels,
+                out_channels,
+                kernel_size,
+                padding=kernel_size // 2,
+            ),
+            nn.BatchNorm3d(out_channels),
+            nn.GELU(),
+        ]
+    # Pooling
+    layers.append(nn.MaxPool3d(kernel_size=2))
+    return nn.Sequential(*layers)
+
+
+def init_mlp(input_dim, hidden_dim, output_dim, dropout=0.1):
+    """
+    Initializes a multi-layer perceptron (MLP).
+
+    Parameters
+    ----------
+    input_dim : int
+        Dimension of input.
+    hidden_dim : int
+        Dimension of the hidden layer.
+    output_dim : int
+        Dimension of output.
+    dropout : float, optional
+        Fraction of values to randomly drop during training. Default is 0.1.
+
+    Returns
+    -------
+    mlp : nn.Sequential
+        Multi-layer perception network.
+    """
+    mlp = nn.Sequential(
+        nn.Linear(input_dim, hidden_dim),
+        nn.LeakyReLU(),
+        nn.Dropout(p=dropout),
+        nn.Linear(hidden_dim, output_dim),
+    )
+    return mlp
+
+
+def load_model(path, patch_shape, device="cuda"):
+    """
+    Loads a pre-trained model from the given, then transfers the model to the
+    specified device (i.e. CPU or GPU).
+
+    Parameters
+    ----------
+    path : str
+        Path to the saved model weights.
+    patch_shape : Tuple[int]
+        Shape of the input patches expected by the model expects.
+    device : str, optional
+        Name of device where model should be loaded and run. The default is
+        "cuda".
+
+    Returns
+    -------
+    FastConvNet3d
+        Model instance with the loaded weights.
+    """
+    model = CNN3D(patch_shape)
+    model.load_state_dict(torch.load(path, map_location=device))
+    model = model.to(device)
+    return model

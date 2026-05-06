@@ -9,129 +9,138 @@ Helper routines for working with images.
 """
 
 from scipy.optimize import curve_fit
+import tensorstore as ts
 
 import matplotlib.pyplot as plt
 import numpy as np
-import s3fs
-import zarr
+
+from aind_exaspim_soma_detection.utils import util
 
 
-def open_img(path):
+class TensorStoreImage:
     """
-    Opens an image stored in an S3 bucket as a Zarr array.
-
-    Parameters
-    ----------
-    path : str
-        Path to image stored in an S3 bucket.
-
-    Returns
-    -------
-    zarr.core.Array
-        Zarr object representing an image.
+    Class that uses the TensorStore library for image IO operations.
     """
-    store = s3fs.S3Map(root=path, s3=s3fs.S3FileSystem(anon=True))
-    return zarr.open(store, mode="r")
 
+    def __init__(self, img_path):
+        """
+        Instantiates a TensorStoreImage object.
 
-def get_patch(img, voxel, shape, is_center=True):
-    """
-    Extracts a patch from an image based on the given voxel coordinate and
-    patch shape.
+        Parameters
+        ----------
+        img_path : str
+            Path to image.
+        """
+        # Open image
+        self.img = ts.open(self.get_spec(img_path)).result()
+        self.img_path = img_path
 
-    Parameters
-    ----------
-    img : zarr.core.Array
-         Zarr object representing an image.
-    voxel : Tuple[int]
-        Center of patch to be extracted
-    shape : Tuple[int]
-        Shape of patch to be extracted.
-    is_center : bool, optional
-        Indicates whether the given voxel is the center or top-left-front
-        corner of the patch to be extracted. Default is True.
+        # Check dimensions
+        while self.img.ndim < 5:
+            self.img = self.img[ts.newaxis, ...]
 
-    Returns
-    -------
-    numpy.ndarray
-        Patch extracted from the given image.
-    """
-    # Get image patch coordiantes
-    start, end = get_start_end(voxel, shape, is_center=is_center)
-    valid_start = any([s >= 0 for s in start])
-    valid_end = any([e < img.shape[i + 2] for i, e in enumerate(end)])
+    # --- Core Routines ---
+    def read(self, voxel, shape, is_center=True):
+        """
+        Reads the image patch specified by the given slices.
 
-    # Get image patch
-    if valid_start and valid_end:
-        return img[
-            0, 0, start[0]: end[0], start[1]: end[1], start[2]: end[2]
-        ]
-    else:
-        return np.ones(shape)
+        Parameters
+        ----------
+        voxel : Tuple[int]
+            Voxel coordinate used as reference to extract patch.
+        shape : Tuple[int]
+            Shape of patch to be extracted.
+        is_center : bool, optional
+            Indicates whether the given voxel is the center or top-left-front
+            corner of the patch to be extracted. Default is True.
 
+        Returns
+        -------
+        numpy.ndarray
+            Image patch.
+        """
+        try:
+            _get_slices = get_center_slices if is_center else get_slices
+            slices = _get_slices(voxel, shape)
+            patch = self.img[slices].read().result()
+        except ValueError:
+            print(f"Error reading {slices} from img w/ shape {self.shape()}")
+            patch = np.zeros(tuple(s.stop - s.start for s in slices))
+        return patch
 
-def generate_offsets(img, window_shape, overlap):
-    """
-    Generates a list of 3D coordinates representing the front-top-left corner
-    by sliding a window over a 3D image, given a specified window size and
-    overlap between adjacent windows.
+    # --- Helpers ---
+    def generate_offsets(self, patch_shape, overlap):
+        """
+        Slides a window over the image and yields the top-left-front corner
+        offset of each patch.
 
-    Parameters
-    ----------
-    img : zarr.core.Array
-        Input 3D image.
-    window_shape : Tuple[int]
-        Shape of the sliding window.
-    overlap : Tuple[int]
-        Overlap between adjacent windows.
+        Parameters
+        ----------
+        patch_shape : Tuple[int]
+            Shape of the sliding window.
+        overlap : Tuple[int]
+            Overlap shape between adjacent patches.
 
-    Returns
-    -------
-    Iterator[Tuple[int]]
-        Voxel coordinates representing the front-top-left corner.
-    """
-    # Calculate stride based on the overlap and window size
-    stride = tuple(w - o for w, o in zip(window_shape, overlap))
-    i_stride, j_stride, k_stride = stride
+        Returns
+        -------
+        Iterator[Tuple[int]]
+            Voxel coordinates representing the front-top-left corner.
+        """
+        # Calculate stride based on the overlap and window size
+        stride = tuple(w - o for w, o in zip(patch_shape, overlap))
+        i_stride, j_stride, k_stride = stride
 
-    # Get dimensions of the window
-    _, _, i_dim, j_dim, k_dim = img.shape
-    i_win, j_win, k_win = window_shape
+        # Get dimensions of the window
+        _, _, i_dim, j_dim, k_dim = self.shape()
+        i_win, j_win, k_win = patch_shape
 
-    # Loop over the  with the sliding window
-    for i in range(0, i_dim - i_win + 1, i_stride):
-        for j in range(0, j_dim - j_win + 1, j_stride):
-            for k in range(0, k_dim - k_win + 1, k_stride):
-                yield (i, j, k)
+        # Loop over img with the sliding window
+        for i in range(0, i_dim - i_win + 1, i_stride):
+            for j in range(0, j_dim - j_win + 1, j_stride):
+                for k in range(0, k_dim - k_win + 1, k_stride):
+                    yield (i, j, k)
 
+    def get_spec(self, img_path):
+        """
+        Creates a TensorStore specification for opening the image at the
+        given path.
 
-def get_start_end(voxel, shape, is_center=True):
-    """
-    Gets the start and end indices of the image patch to be read.
+        Parameters
+        ----------
+        img_path : str
+            Path to image to be opened.
 
-    Parameters
-    ----------
-    voxel : Tuple[int]
-        Voxel coordinate that specifies either the center or front-top-left
-        corner of the patch to be read.
-    shape : Tuple[int]
-        Shape of the image patch to be read.
-    is_center : bool, optional
-        Indication of whether the provided coordinates represent the center of
-        the patch or the front-top-left corner. The default is True.
+        Returns
+        -------
+        spec : dict
+            TensorStore specification for opening the image at the given path.
+        """
+        bucket_name, relative_path = util.parse_cloud_path(img_path)
+        spec = {
+            "driver": get_driver(img_path),
+            "kvstore": {
+                "driver": get_storage_driver(img_path),
+                "bucket": bucket_name,
+                "path": relative_path,
+            },
+            "context": {
+                "cache_pool": {"total_bytes_limit": 1000000000},
+                "cache_pool#remote": {"total_bytes_limit": 1000000000},
+                "data_copy_concurrency": {"limit": 8},
+            },
+        }
+        return spec
 
-    Return
-    ------
-    Tuple[List[int]]
-        Start and end indices of the image patch to be read.
-    """
-    if is_center:
-        start = [voxel[i] - shape[i] // 2 for i in range(3)]
-        end = [voxel[i] + shape[i] // 2 for i in range(3)]
-    else:
-        start = voxel
-        end = [voxel[i] + shape[i] for i in range(3)]
-    return start, end
+    def shape(self):
+        """
+        Gets the shape of the image.
+
+        Returns
+        -------
+        Tuple[int]
+            Shape of image.
+        """
+        return self.img.shape
 
 
 # --- Coordinate Conversions ---
@@ -196,35 +205,41 @@ def local_to_physical(local_voxel, offset, multiscale):
     numpy.ndarray
         Physical coordinate.
     """
-    global_voxel = np.array([v + o for v, o in zip(local_voxel, offset)])
-    return to_physical(global_voxel, multiscale)
+    voxel = np.array([v + o for v, o in zip(local_voxel, offset)])
+    return to_physical(voxel, multiscale)
 
 
 # --- Visualizations ---
-def plot_mips(img, vmax=None):
+def plot_mips(img, output_path=""):
     """
-    Plots the Maximum Intensity Projections (MIPs) of a 3D image along the XY,
-    XZ, and YZ axes.
+    Plots Maximum Intensity Projections (MIPs) of a 3D image along the XY, XZ,
+    and YZ axes.
 
     Parameters
     ----------
     img : numpy.ndarray
         Input 3D image to generate MIPs from.
+    output_path : str, optional
+        Path to save MIPs as a PNG if provided. Default is an empty string.
     """
-    vmax = vmax or np.percentile(img, 99.9)
     fig, axs = plt.subplots(1, 3, figsize=(10, 4))
     axs_names = ["XY", "XZ", "YZ"]
     for i in range(3):
         mip = np.max(img, axis=i)
-        axs[i].imshow(mip, vmax=vmax)
+        axs[i].imshow(mip)
         axs[i].set_title(axs_names[i], fontsize=16)
         axs[i].set_xticks([])
         axs[i].set_yticks([])
     plt.tight_layout()
-    plt.show()
+
+    if output_path:
+        plt.savefig(output_path, dpi=200)
+    else:
+        plt.show()
+    plt.close(fig)
 
 
-def plot_slices(img, output_path=None, vmax=None):
+def plot_slices(img, output_path=""):
     """
     Plots the middle slice of a 3D image along the XY, XZ, and YZ axes.
 
@@ -232,27 +247,23 @@ def plot_slices(img, output_path=None, vmax=None):
     ----------
     img : numpy.ndarray
         Image to generate MIPs from.
-    output_path : None or str, optional
-        Path that plot is saved to if provided. Default is None.
-    vmax : None or float, optional
-        Brightness intensity used as upper limit of the colormap. Default is
-        None.
+    output_path : str, optional
+        Path that plot is saved to if provided. Default is an empty string.
     """
     # Get middle slice
     shape = img.shape[2:] if len(img.shape) == 5 else img.shape
     zc, yc, xc = (s // 2 for s in shape)
     slices = [
-        img[zc, :, :],   # XY plane
-        img[:, yc, :],   # XZ plane
-        img[:, :, xc]    # YZ plane
+        img[zc, :, :],  # XY plane
+        img[:, yc, :],  # XZ plane
+        img[:, :, xc],  # YZ plane
     ]
 
     # Plot
-    vmax = vmax or np.percentile(img, 99.9)
     fig, axs = plt.subplots(1, 3, figsize=(10, 4))
     axs_names = ["XY", "XZ", "YZ"]
     for i in range(3):
-        axs[i].imshow(slices[i], vmax=vmax)
+        axs[i].imshow(slices[i])
         axs[i].set_title(axs_names[i], fontsize=16)
         axs[i].set_xticks([])
         axs[i].set_yticks([])
@@ -281,21 +292,20 @@ def get_detections_img(shape, voxels):
     numpy.ndarray
         Binary image where the given voxels are marked.
     """
+    voxels = np.array(voxels, dtype=int)
     detections_img = np.zeros(shape)
-    for voxel in voxels:
-        voxel = tuple([int(v) for v in voxel])
-        detections_img[voxel] = 1
+    detections_img[voxels[:, 0], voxels[:, 1], voxels[:, 2]] = 1
     return detections_img
 
 
 # --- Fit gaussian to image ---
-def fit_gaussian_3d(img_patch, std=2):
+def fit_gaussian_3d(img, std=2):
     """
     Fits a 3D Gaussian to an image patch.
 
     Parameters
     ----------
-    img_patch : numpy.ndarray
+    img : numpy.ndarray
         A 3D image that Gaussian is to be fitted to.
     std : float, optional
         Estimate of standard devation of Gaussian to be fit. Default is 2.
@@ -305,34 +315,45 @@ def fit_gaussian_3d(img_patch, std=2):
     tuple
         Parameters of the fitted Gaussian and voxel coordinates.
     """
-    center = [s // 2 for s in img_patch.shape]
+    center = [s // 2 for s in img.shape]
     initial_guess = (
-        center[0], center[1], center[2],
-        std, std, std,
-        np.max(img_patch), np.min(img_patch)
+        center[0],
+        center[1],
+        center[2],
+        std,
+        std,
+        std,
+        np.max(img),
+        np.min(img),
     )
-    return fit(img_patch, gaussian_3d, initial_guess)
+    return fit(img, gaussian_3d, initial_guess)
 
 
-def fit_rotated_gaussian_3d(img_patch):
-    center = [s // 2 for s in img_patch.shape]
+def fit_rotated_gaussian_3d(img):
+    center = [s // 2 for s in img.shape]
     initial_guess = (
-        center[0], center[1], center[2],
-        1e-2, 0, 0,
-        1e-2, 0,
+        center[0],
+        center[1],
+        center[2],
         1e-2,
-        np.max(img_patch), np.min(img_patch)
+        0,
+        0,
+        1e-2,
+        0,
+        1e-2,
+        np.max(img),
+        np.min(img),
     )
-    return fit(img_patch, rotated_gaussian_3d, initial_guess)
+    return fit(img, rotated_gaussian_3d, initial_guess)
 
 
-def fit(img_patch, my_func, initial_guess):
+def fit(img, my_func, initial_guess):
     """
     Fits a function (e.g. gaussian) to an image.
 
     Parameters
     ----------
-    img_patch : numpy.ndarray
+    img : numpy.ndarray
         A 3D array representing an image.
     my_func : callable
         Function to be fit to image.
@@ -347,22 +368,22 @@ def fit(img_patch, my_func, initial_guess):
         Flattened arrays of voxel coordinates.
     """
     try:
-        voxels = generate_img_coords(img_patch.shape)
-        img_vals = img_patch.ravel()
+        voxels = generate_img_coords(img.shape)
+        img_vals = img.ravel()
         params, _ = curve_fit(my_func, voxels, img_vals, p0=initial_guess)
     except RuntimeError:
         params = np.zeros(len(initial_guess))
     return params, voxels
 
 
-def compute_fit_score(img_patch, params, voxels):
+def compute_fit_score(img, params, voxels):
     """
     Evaluates the quality of a fitted function by computing the correlation
     coefficient between the image and fitted values.
 
     Parameters
     ----------
-    img_patch : numpy.ndarray
+    img : numpy.ndarray
         A 3D array representing an image.
     params : numpy.ndarray
         Parameters of the fitted Gaussian.
@@ -375,8 +396,8 @@ def compute_fit_score(img_patch, params, voxels):
         Correlation coefficient between the image and fitted values.
     """
     gaussian = gaussian_3d if len(params) == 8 else rotated_gaussian_3d
-    fitted = gaussian(voxels, *params).reshape(img_patch.shape).flatten()
-    actual = img_patch.flatten()
+    fitted = gaussian(voxels, *params).reshape(img.shape).flatten()
+    actual = img.flatten()
     return np.corrcoef(actual, fitted)[0, 1]
 
 
@@ -427,8 +448,12 @@ def rotated_gaussian_3d(
 
     # Construct quadratic form
     quad = (
-        a11*dx**2 + 2*a12*dx*dy + 2*a13*dx*dz +
-        a22*dy**2 + 2*a23*dy*dz + a33*dz**2
+        a11 * dx**2
+        + 2 * a12 * dx * dy
+        + 2 * a13 * dx * dz
+        + a22 * dy**2
+        + 2 * a23 * dy * dz
+        + a33 * dz**2
     )
     return A * np.exp(-0.5 * quad) + B
 
@@ -464,13 +489,17 @@ def rotated_gaussian_3d_mask(
     dy = y - y0
     dz = z - z0
     quad = (
-        a11*dx**2 + 2*a12*dx*dy + 2*a13*dx*dz +
-        a22*dy**2 + 2*a23*dy*dz + a33*dz**2
+        a11 * dx**2
+        + 2 * a12 * dx * dy
+        + 2 * a13 * dx * dz
+        + a22 * dy**2
+        + 2 * a23 * dy * dz
+        + a33 * dz**2
     )
     return (quad <= threshold).reshape(shape)
 
 
-# --- Utils ---
+# --- Helpers ---
 def generate_img_coords(shape):
     """
     Generates all voxel coordinates of an image patch given its shape.
@@ -489,83 +518,135 @@ def generate_img_coords(shape):
         np.arange(shape[0]),
         np.arange(shape[1]),
         np.arange(shape[2]),
-        indexing='ij'
+        indexing="ij",
     )
     return np.stack(grid, axis=-1).reshape(-1, 3)
 
 
-def get_nbs(voxel, shape):
+def get_center_slices(center, shape):
     """
-    Gets the neighbors of a given voxel in a 3D grid with respect to
-    26-connectivity.
+    Gets the start and end indices of image patch to be read.
 
     Parameters
     ----------
-    voxel : Tuple[int]
-        Voxel coordinate for which neighbors are to be found.
+    center : Tuple[int]
+        Center of image patch to be read.
     shape : Tuple[int]
-        Shape of the 3D grid. This is used to ensure that neighbors are
-        within the grid boundaries.
+        Shape of image patch to be read.
+
+    Return
+    ------
+    Tuple[slice]
+        Slice objects used to index into the image.
+    """
+    start = [int(c - d // 2) for c, d in zip(center, shape)]
+    slices = tuple(slice(s, s + d) for s, d in zip(start, shape))
+    return (0, 0, *slices)
+
+
+def get_driver(img_path):
+    """
+    Gets the storage driver needed to read the image.
+
+    Parameters
+    ----------
+    img_path : str
+        Path to image
 
     Returns
     -------
-    List[Tuple[int]]
-        Voxel coordinates of the neighboring voxels.
+    str
+        Storage driver needed to read the image.
     """
-    x, y, z = voxel
-    nbs = []
-    for dx in [-1, 0, 1]:
-        for dy in [-1, 0, 1]:
-            for dz in [-1, 0, 1]:
-                # Skip the given voxel
-                if dx == 0 and dy == 0 and dz == 0:
-                    continue
-
-                # Add neighbor
-                nb = (x + dx, y + dy, z + dz)
-                if is_inbounds(nb, shape):
-                    nbs.append(nb)
-    return nbs
+    if ".zarr" in img_path:
+        return "zarr"
+    elif ".n5" in img_path:
+        return "n5"
+    raise ValueError(f"Unsupported image format: {img_path}")
 
 
-def is_inbounds(voxel, shape):
+def get_slices(voxel, shape):
     """
-    Checks if a given voxel is within the bounds of a 3D grid.
+    Gets the start and end indices of the chunk to be read.
 
     Parameters
     ----------
     voxel : Tuple[int]
-        Voxel coordinate to be checked.
+        Start voxel of the slices.
     shape : Tuple[int]
-        Shape of the 3D grid.
+        Shape of image patch to be read.
+
+    Return
+    ------
+    Tuple[slice]
+        Slice objects used to index into the image.
+    """
+    slices = tuple(slice(v, v + d) for v, d in zip(voxel, shape))
+    return (0, 0, *slices)
+
+
+def get_storage_driver(img_path):
+    """
+    Gets the storage driver needed to read the image.
+
+    Parameters
+    ----------
+    img_path : str
+        Image path to be checked.
+
+    Returns
+    -------
+    str
+        Storage driver needed to read the image.
+    """
+    if util.is_s3_path(img_path):
+        return "s3"
+    elif util.is_gcs_path(img_path):
+        return "gcs"
+    else:
+        raise ValueError(f"Unsupported path type: {img_path}")
+
+
+def is_inbounds(shape, voxel, margin=0):
+    """
+    Check if voxel is contained in 3D image, with a specified margin.
+
+    Parameters
+    ----------
+    shape : ArrayLike
+        Shape of the 3D image.
+    voxel : Tuple[int]
+        Voxel coordinate to be checked.
+    margin : int, optional
+        Margin distance from the edges of the image. Default is 0
 
     Returns
     -------
     bool
-        Indication of whether the given voxel is within the bounds of the
-        grid.
+        True if the voxel is contained in image, and False otherwise.
     """
-    x, y, z = voxel
-    height, width, depth = shape
-    if 0 <= x < height and 0 <= y < width and 0 <= z < depth:
-        return True
-    else:
-        return False
+    voxel = np.array(voxel)
+    shape = np.array(shape)
+    return bool(np.all(voxel >= margin) and np.all(voxel <= shape - margin))
 
 
-def normalize(img):
+def normalize(img, percentiles=(1, 99.5)):
     """
-    Rescales the input image to a [0, 1] intensity range.
+    Normalizes an image using a percentile-based scheme and clips values to
+    [0, 1].
 
     Parameters
     ----------
     img : numpy.ndarray
         Image to be normalized.
+    percentiles : Tuple[float], optional
+        Upper and lower percentiles used to normalize the given image. Default
+        is (1, 99.5).
 
     Returns
     -------
-    numpy.ndarray
+    img : numpy.ndarray
         Normalized image.
     """
-    img -= np.min(img)
-    return img / np.max(img)
+    mn, mx = np.percentile(img, percentiles)
+    return np.clip((img - mn) / (mx - mn + 1e-5), 0, 1)

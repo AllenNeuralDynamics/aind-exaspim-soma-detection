@@ -32,7 +32,7 @@ def run_pipeline(
     output_dir,
     proposal_params,
     classify_params,
-    filter_params=None
+    filter_params=None,
 ):
     """
     Runs the soma proposal generation and classification pipeline for a
@@ -85,9 +85,9 @@ def generate_proposals(
     multiscale=4,
     patch_shape=(64, 64, 64),
     patch_overlap=(32, 32, 32),
-    bright_threshold=0,
+    min_brightness=0,
     output_dir=None,
-    save_swcs=False
+    save_swcs=False,
 ):
     """
     Generates soma proposals and saves the each proposal coordinate as an SWC
@@ -105,7 +105,7 @@ def generate_proposals(
     patch_overlap : int, optional
         Overlap between adjacent image patches in each dimension. Default is
         (32, 32, 32).
-    bright_threshold : int, optional
+    min_brightness : int, optional
         Brightness threshold used to filter proposals and image patches.
         Default is 0.
     output_dir : str, optional
@@ -128,7 +128,7 @@ def generate_proposals(
         multiscale,
         patch_shape,
         patch_overlap,
-        bright_threshold=bright_threshold,
+        min_brightness=min_brightness,
     )
     t, unit = util.time_writer(time() - t0)
 
@@ -151,8 +151,8 @@ def classify_proposals(
     proposals,
     accept_threshold=0.4,
     model_path=None,
-    multiscale=1,
-    patch_shape=(102, 102, 102),
+    multiscale=2,
+    patch_shape=(84, 84, 84),
     output_dir=None,
     save_swcs=False,
 ):
@@ -173,10 +173,10 @@ def classify_proposals(
         Default is None.
     multiscale : int, optional
         Level in the image pyramid that the voxel coordinate must index into.
-        Default is 1.
+        Default is 2.
     patch_shape : Tuple[int], optional
         Shape of image patches to be used for inference. Default is
-        (102, 102, 102).
+        (84, 84, 84).
     output_dir : str, optional
         Path to directory that results are written to. Default is None.
     save_swcs : bool, optional
@@ -200,6 +200,7 @@ def classify_proposals(
         multiscale,
         patch_shape,
         accept_threshold,
+        output_dir=output_dir,
     )
     t, unit = util.time_writer(time() - t0)
 
@@ -266,10 +267,7 @@ def quantify_accepts(
     print(filtered_accepts_df.head())
     brightness = float(np.percentile(filtered_accepts_df["Brightness"], 80))
     volume = float(np.percentile(filtered_accepts_df["Volume (µm³)"], 80))
-    soma_metric_defaults = {
-        "Brightness": brightness,
-        "Volume": volume
-    }
+    soma_metric_defaults = {"Brightness": brightness, "Volume": volume}
     path = os.path.join(output_dir, "soma_metric_defaults.json")
     util.write_json(path, soma_metric_defaults)
 
@@ -300,7 +298,7 @@ def update_log(output_dir, log_info):
     print(log_info)
     if output_dir is not None:
         path = os.path.join(output_dir, "soma_detection_log.txt")
-        with open(path, 'a') as file:
+        with open(path, "a") as file:
             file.write(log_info + "\n")
 
 
@@ -318,15 +316,15 @@ if __name__ == "__main__":
     proposal_params = {
         "multiscale": 4,
         "patch_shape": (64, 64, 64),
-        "bright_threshold": 150,
+        "min_brightness": 30,
         "patch_overlap": (28, 28, 28),
         "output_dir": output_dir,
         "save_swcs": False,
     }
     classify_params = {
         "multiscale": 1,
-        "patch_shape": (102, 102, 102),
-        "accept_threshold": 0.4,
+        "patch_shape": (84, 84, 84),
+        "accept_threshold": 0.5,
         "model_path": model_path,
         "output_dir": output_dir,
         "save_swcs": False,
@@ -345,5 +343,5 @@ if __name__ == "__main__":
         output_dir,
         proposal_params,
         classify_params,
-        filter_params
+        filter_params,
     )

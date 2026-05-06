@@ -1,0 +1,468 @@
+"""
+Created on Wed July 25 16:00:00 2025
+
+@author: Anna Grim
+@email: anna.grim@alleninstitute.org
+
+Code for a custom class for training neural networks to perform neuron
+proofreading classification tasks.
+
+"""
+
+from datetime import datetime
+from sklearn.metrics import precision_score, recall_score, accuracy_score
+from torch.nn.utils import clip_grad_norm_
+from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
+
+import numpy as np
+import os
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+from aind_exaspim_soma_detection.utils import img_util, util
+
+
+class Trainer:
+    """
+    Trainer class for training a model to perform binary classifcation.
+
+    Attributes
+    ----------
+    best_f1 : float
+        Best F1 score achieved so far on valiation dataset.
+    criterion : torch.nn.BCEWithLogitsLoss
+        Loss function used during training.
+    device : str, optional
+        Device that model is run on.
+    log_dir : str
+        Path to directory that tensorboard and checkpoints are saved to.
+    max_epochs : int
+        Maximum number of training epochs.
+    min_recall : float, optional
+        Minimum recall required for model checkpoints to be saved.
+    model : torch.nn.Module
+        Model that is trained to perform binary classification.
+    model_name : str
+        Name of model used for logging and checkpointing.
+    optimizer : torch.optim.AdamW
+        Optimizer that is used during training.
+    save_mistake_mips : bool, optional
+        Indication of whether to save MIPs of mistakes.
+    scheduler : torch.optim.lr_scheduler.CosineAnnealingLR
+        Scheduler used to the adjust learning rate.
+    writer : torch.utils.tensorboard.SummaryWriter
+        Writer object that writes to a tensorboard.
+    """
+
+    def __init__(
+        self,
+        model,
+        model_name,
+        output_dir,
+        device="cuda",
+        lr=1e-3,
+        max_epochs=200,
+        min_recall=0,
+        save_mistake_mips=False,
+    ):
+        """
+        Instantiates a Trainer object.
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+            Model that is trained to perform binary classification.
+        model_name : str
+            Name of model used for logging and checkpointing.
+        output_dir : str
+            Directory that tensorboard and model checkpoints are written to.
+        lr : float, optional
+            Learning rate. Default is 1e-3.
+        max_epochs : int, optional
+            Maximum number of training epochs. Default is 200.
+        min_recall : float, optional
+            Minimum recall required for model checkpoints to be saved. Default
+            is 0.
+        save_mistake_mips : bool, optional
+            Indication of whether to save MIPs of mistakes. Default is False.
+        """
+        # Set experiment name
+        exp_name = "session-" + datetime.today().strftime("%Y%m%d_%H%M")
+        log_dir = os.path.join(output_dir, exp_name)
+        util.mkdir(log_dir)
+
+        # Instance attributes
+        self.best_f1 = 0
+        self.device = device
+        self.log_dir = log_dir
+        self.max_epochs = max_epochs
+        self.min_recall = min_recall
+        self.mistakes_dir = os.path.join(log_dir, "mistakes")
+        self.model_name = model_name
+        self.save_mistake_mips = save_mistake_mips
+
+        self.criterion = nn.BCEWithLogitsLoss()
+        self.model = model.to(device)
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=lr)
+        self.scaler = torch.cuda.amp.GradScaler(enabled=True)
+        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=20)
+        self.writer = SummaryWriter(log_dir=log_dir)
+
+    # --- Core Routines ---
+    def run(self, train_dataloader, val_dataloader):
+        """
+        Runs the full training and validation loop.
+
+        Parameters
+        ----------
+        train_dataloader : torch.utils.data.Dataset
+            Dataloader used for training.
+        val_dataloader : torch.utils.data.Dataset
+            Dataloader used for validation.
+        """
+        exp_name = os.path.basename(os.path.normpath(self.log_dir))
+        print("\nExperiment:", exp_name)
+        for epoch in range(self.max_epochs):
+            # Train-Validate
+            train_stats = self.train_step(train_dataloader, epoch)
+            val_stats = self.validate_step(val_dataloader, epoch)
+            new_best = self.check_model_performance(val_stats, epoch)
+
+            # Report reuslts
+            print(f"\nEpoch {epoch}: " + ("New Best!" if new_best else " "))
+            self.report_stats(train_stats, is_train=True)
+            self.report_stats(val_stats, is_train=False)
+
+            # Step scheduler
+            self.scheduler.step()
+
+    def train_step(self, dataloader, epoch):
+        """
+        Performs a single training epoch over the provided DataLoader.
+
+        Parameters
+        ----------
+        dataloader : torch.utils.data.DataLoader
+            DataLoader for the training dataset.
+        epoch : int
+            Current training epoch.
+
+        Returns
+        -------
+        stats : Dict[str, float]
+            Dictionary of aggregated training metrics.
+        """
+        pbar = tqdm(total=len(dataloader), desc="Train")
+        self.model.train()
+        loss, y, hat_y = list(), list(), list()
+        for _, x_i, y_i in dataloader:
+            # Forward pass
+            self.optimizer.zero_grad()
+            hat_y_i, loss_i = self.forward_pass(x_i, y_i)
+
+            # Backward pass
+            self.scaler.scale(loss_i).backward()
+
+            # Step optimizer
+            self.scaler.unscale_(self.optimizer)
+            clip_grad_norm_(self.model.parameters(), max_norm=5.0)
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+
+            # Store results
+            y.extend(to_cpu(y_i, True).flatten().tolist())
+            hat_y.extend(to_cpu(hat_y_i, True).flatten().tolist())
+            loss.append(float(loss_i.detach().cpu()))
+            pbar.update(len(y_i))
+
+        # Write stats to tensorboard
+        stats = self.compute_stats(y, hat_y)
+        stats["loss"] = np.mean(loss)
+        self.update_tensorboard(stats, epoch, "train_")
+        return stats
+
+    def validate_step(self, dataloader, epoch):
+        """
+        Performs a full validation loop over the given dataloader.
+
+        Parameters
+        ----------
+        dataloader : torch.utils.data.DataLoader
+            DataLoader for the validation dataset.
+        epoch : int
+            Current training epoch.
+
+        Returns
+        -------
+        stats : Dict[str, float]
+            Dictionary of aggregated validation metrics.
+        is_best : bool
+            True if the current F1 score is the best so far.
+        """
+        # Initializations
+        idx_offset = 0
+        loss_accum = 0
+        y_accum = list()
+        hat_y_accum = list()
+        if self.save_mistake_mips:
+            util.mkdir(self.mistakes_dir, True)
+
+        # Iterate over dataset
+        self.model.eval()
+        with torch.no_grad():
+            for _, x, y in dataloader:
+                # Run model
+                hat_y, loss = self.forward_pass(x, y)
+
+                # Move to CPU
+                y = tensor_to_list(y)
+                hat_y = tensor_to_list(hat_y)
+
+                # Store predictions
+                y_accum.extend(y)
+                hat_y_accum.extend(hat_y)
+                loss_accum += float(to_cpu(loss))
+
+                # Save MIPs of mistakes
+                self._save_mistake_mips(x, y, hat_y, idx_offset)
+                idx_offset += len(y)
+
+        # Write stats to tensorboard
+        stats = self.compute_stats(y_accum, hat_y_accum)
+        stats["loss"] = loss_accum / len(y_accum)
+        self.update_tensorboard(stats, epoch, "val_")
+        return stats
+
+    def forward_pass(self, x, y):
+        """
+        Performs a forward pass through the model and computes loss.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor with shape (B, 2, D, H, W).
+        y : torch.Tensor
+            Ground truth labels with shape (B, 1).
+
+        Returns
+        -------
+        hat_y : torch.Tensor
+            Model predictions.
+        loss : torch.Tensor
+            Computed loss value.
+        """
+        with torch.autocast(device_type="cuda", dtype=torch.float16):
+            x = x.to(self.device)
+            y = y.to(self.device)
+            hat_y = self.model(x)
+            loss = self.criterion(hat_y, y)
+            return hat_y, loss
+
+    # --- Helpers ---
+    @staticmethod
+    def compute_stats(y, hat_y):
+        """
+        Computes F1 score, precision, and recall for each sample in a batch.
+
+        Parameters
+        ----------
+        y : torch.Tensor
+            Ground truth labels with shape (B, 1).
+        hat_y : torch.Tensor
+            Predicted labels with shape (B, 1).
+
+        Returns
+        -------
+        stats : Dict[str, float]
+            Dictionary of metric names to values.
+        """
+        # Reformat predictions
+        hat_y = (np.array(hat_y) > 0).astype(int)
+        y = np.array(y, dtype=int)
+
+        # Compute stats
+        avg_prec = precision_score(y, hat_y, zero_division=np.nan)
+        avg_recall = recall_score(y, hat_y, zero_division=np.nan)
+        avg_f1 = 2 * avg_prec * avg_recall / max((avg_prec + avg_recall), 1)
+        avg_acc = accuracy_score(y, hat_y)
+        stats = {
+            "f1": avg_f1,
+            "precision": avg_prec,
+            "recall": avg_recall,
+            "accuracy": avg_acc,
+        }
+        return stats
+
+    @staticmethod
+    def report_stats(stats, is_train=True):
+        """
+        Prints a summary of training or validation statistics.
+
+        Parameters
+        ----------
+        stats : Dict[str, float]
+            Dictionary of metric names to values.
+        is_train : bool, optional
+            Indication of whether stats were computed during training.
+        """
+        summary = "   Train: " if is_train else "   Val: "
+        for key, value in stats.items():
+            summary += f"{key}={value:.4f}, "
+        print(summary)
+
+    def check_model_performance(self, stats, epoch):
+        """
+        Checks whether the current model's performance (based on F1 score)
+        surpasses the previous best, and saves the model if it does.
+
+        Parameters
+        ----------
+        stats : Dict[str, float]
+            Dictionary of evaluation metrics from the current epoch.
+            Must contain the key "f1" representing the F1 score.
+        epoch : int
+            Current training epoch.
+
+        Returns
+        -------
+        bool
+            True if the model achieved a new best F1 score and was saved.
+            False otherwise.
+        """
+        if stats["f1"] > self.best_f1 and stats["recall"] > self.min_recall:
+            self.best_f1 = stats["f1"]
+            self.save_model(epoch)
+            return True
+        else:
+            return False
+
+    def load_pretrained_weights(self, model_path):
+        """
+        Loads a pretrained model weights from a checkpoint file.
+
+        Parameters
+        ----------
+        model_path : str
+            Path to the checkpoint file containing the saved weights.
+        """
+        self.model.load_state_dict(
+            torch.load(model_path, map_location=self.device)
+        )
+
+    def _save_mistake_mips(self, x, y, hat_y, idx_offset):
+        """
+        Saves MIPs of each false negative and false positive.
+
+        Parameters
+        ----------
+        x : numpy.ndarray
+            Input tensor with shape (B, 2, D, H, W).
+        y : numpy.ndarray
+            Ground truth labels with shape (B, 1).
+        hat_y : numpy.ndarray
+            Predicted labels with shape (B, 1).
+        """
+        if self.save_mistake_mips:
+            x = to_cpu(x, True)
+            for i, (y_i, hat_y_i) in enumerate(zip(y, hat_y)):
+                mistake_type = classify_mistake(y_i, hat_y_i)
+                if mistake_type:
+                    filename = f"{mistake_type}{i + idx_offset}.png"
+                    output_path = os.path.join(self.mistakes_dir, filename)
+                    img_util.plot_mips(x[i, 0], output_path)
+
+    def save_model(self, epoch):
+        """
+        Saves the current model state to a file.
+
+        Parameters
+        ----------
+        epoch : int
+            Current training epoch.
+        """
+        date = datetime.today().strftime("%Y%m%d")
+        filename = f"{self.model_name}-{date}-{epoch}-{self.best_f1:.4f}.pth"
+        path = os.path.join(self.log_dir, filename)
+        torch.save(self.model.state_dict(), path)
+
+    def update_tensorboard(self, stats, epoch, prefix):
+        """
+        Logs scalar statistics to TensorBoard.
+
+        Parameters
+        ----------
+        stats : Dict[str, float]
+            Dictionary of metric names to lists of values.
+        epoch : int
+            Current training epoch.
+        prefix : str
+            Prefix to prepend to each metric name when logging.
+        """
+        for key, value in stats.items():
+            self.writer.add_scalar(prefix + key, stats[key], epoch)
+
+
+# --- Helpers ---
+def classify_mistake(y_i, hat_y_i):
+    """
+    Classify a prediction mistake for a single example.
+
+    Parameters
+    ----------
+    y_i : int
+        Ground truth label.
+    hat_y_i : float
+        Predicted label.
+
+    Returns
+    -------
+    str or None
+        Name of mistake or None if prediction is correct.
+    """
+    if y_i == 1 and hat_y_i < 0:
+        return "false_negative"
+    if y_i == 0 and hat_y_i > 0:
+        return "false_positive"
+    return None
+
+
+def tensor_to_list(tensor):
+    """
+    Converts the given tensor to a list.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        Tensor with shape Nx1 to be converted.
+
+    Returns
+    -------
+    tensor : List[float]
+         Tensor converted to a list.
+    """
+    return to_cpu(tensor).flatten().tolist()
+
+
+def to_cpu(tensor, to_numpy=False):
+    """
+    Moves PyTorch tensor to CPU and optionally converts it to a NumPy array.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        Tensor to be moved to CPU.
+    to_numpy : bool, optional
+        If True, converts the tensor to a NumPy array. Default is False.
+
+    Returns
+    -------
+    torch.Tensor or np.ndarray
+        Tensor or array on CPU.
+    """
+    if to_numpy:
+        return np.array(tensor.detach().cpu())
+    else:
+        return tensor.detach().cpu()
