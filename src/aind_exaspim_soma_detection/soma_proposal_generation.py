@@ -10,8 +10,7 @@ Code that generates soma proposals.
         1. Generate Initial Proposals - detect_blobs()
             a. Smooth image with Gaussian filter to reduce false positives.
             b. Laplacian of Gaussian (LoG) with multiple sigmas to enhance
-               regions where the gradient changes rapidly, then apply non-
-               linear maximum filter.
+               regions where the gradient changes rapidly.
             c. Generate initial set of proposals by detecting local maximas.
             d. Shift each proposal to the brightest voxel in its neighborhood
                and reject it if the brightness is below a threshold.
@@ -27,7 +26,6 @@ Code that generates soma proposals.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from random import sample
 from scipy.ndimage import gaussian_filter, gaussian_laplace
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
@@ -44,7 +42,7 @@ def generate_proposals(
     multiscale,
     patch_shape,
     patch_overlap,
-    bright_threshold=0,
+    min_brightness=0,
 ):
     """
     Generates somas proposals across a whole brain 3D image by dividing the
@@ -61,7 +59,7 @@ def generate_proposals(
         Shape of each image patch.
     patch_overlap : int
         Overlap between adjacent image patches in each dimension.
-    bright_threshold : int, optional
+    min_brightness : int, optional
         Brightness threshold used to filter proposals and image patches.
         Default is 0.
 
@@ -84,7 +82,7 @@ def generate_proposals(
                     margin,
                     patch_shape,
                     multiscale,
-                    bright_threshold,
+                    min_brightness,
                 )
             )
 
@@ -103,159 +101,136 @@ def generate_proposals_patch(
     margin,
     patch_shape,
     multiscale,
-    bright_threshold=0,
+    min_brightness=0,
 ):
     """
-    Generates soma proposals by detecting blobs, filtering them, and
-    converting the proposal coordinates from image to physical space.
+    Generates soma proposals by detecting blobs and filters them by
+    brightness and gaussian-like appearance.
 
     Parameters
     ----------
-    img : zarr.core.Array
-        Array representing a 3D image of a whole brain.
+    img : TensorStoreImage
+        3D image of a whole-brain.
     offset : Tuple[int]
-        The offset of the image patch to be extracted from "img". Note that
-        proposals will be generated within this image patch.
+        Offset of the image patch to extract from "img". Note that proposals
+        will be generated within this patch.
     margin : int
-        Margin distance from the edges of the image that is used to filter
-        blobs.
-    patch_shape : List[int]
-        Shape of the image patch to be extracted from "img".
+        Margin distance from the edges of the image used to filter blobs.
+    patch_shape : Tuple[int]
+        Shape of the patch to be extracted.
     multiscale : int
-        Level in the image pyramid that image patches are read from.
-    bright_threshold : int, optional
+        Level in the image pyramid that patches are read from.
+    min_brightness : int, optional
         Minimum brightness required for image patch. Default is 0.
 
     Returns
     -------
-    filtered_proposals : List[Tuple[float]]
+    proposals : List[Tuple[float]]
         Physical coordinates of proposals.
     """
     # Get image patch
     img_patch = img.read(offset, patch_shape, is_center=False)
-    if np.max(img_patch) < bright_threshold:
+    if img_patch.max() < min_brightness:
         return list()
 
-    # Generate initial proposals
     img_patch = gaussian_filter(img_patch, sigma=1)
-    proposals_1 = detect_blobs(img_patch, bright_threshold, 8, margin)
-    proposals_2 = detect_blobs(img_patch, bright_threshold, 5, margin)
-    proposals_3 = detect_blobs(img_patch, bright_threshold, 3, margin)
-    proposals = proposals_1 + proposals_2 + proposals_3
+
+    # Generate initial proposals
+    initial_proposals = list()
+    for stdev in [3, 5, 8]:
+        initial_proposals.extend(
+            detect_blobs(img_patch, min_brightness, stdev, margin)
+        )
 
     # Filter initial proposals + convert coordinates
-    filtered_proposals = list()
-    for voxel in filter_proposals(img_patch, proposals):
-        filtered_proposals.append(
+    proposals = list()
+    for voxel in filter_proposals(img_patch, initial_proposals):
+        proposals.append(
             img_util.local_to_physical(voxel, offset, multiscale)
         )
-    return filtered_proposals
+    return proposals
 
 
 # -- Step 1: Generate Initial Proposals ---
-def detect_blobs(img_patch, bright_threshold, sigma_LoG, margin):
+def detect_blobs(img, min_brightness, stdev, margin):
     """
     Detects blob-like structures in a given image patch using Laplacian of
-    Gaussian (LoG) method and filters them based on brightness and location.
+    Gaussian (LoG) method and removes proposals in image margin.
 
     Parameters
     ----------
-    img_patch : numpy.ndarray
-        A 3D image patch that blobs are to be detected in.
-    bright_threshold : float
+    img : numpy.ndarray
+        A 3D image patch that proposals are to be detected in.
+    min_brightness : float
         Minimum brightness required for detected blobs.
-    sigma_LoG : float
+    stdev : float
         Standard deviation of the Gaussian kernel for the LoG operation.
     margin : int
         Margin distance from the edges of the image used to filter blobs.
 
     Returns
     -------
-    List[Tuple[int]]
+    peaks : numpy.ndarray
         Voxel coordinates of detected blobs.
     """
-    blobs = list()
-    LoG = gaussian_laplace(img_patch, sigma_LoG)
-    for peak in peak_local_max(LoG, min_distance=5):
-        peak = tuple([int(x) for x in peak])
-        if LoG[peak] > 0 and is_inbounds(img_patch.shape, peak, margin):
-            blobs.append(peak)
-    return shift_to_brightest(img_patch, blobs, bright_threshold)
+    # Find blob-like objects
+    LoG = gaussian_laplace(img, stdev)
+    peaks = peak_local_max(LoG, min_distance=5)
+    peaks = peaks[LoG[peaks[:, 0], peaks[:, 1], peaks[:, 2]] > 0]
+
+    # Remove blob-like objects in image margin
+    peaks = [p for p in peaks if img_util.is_inbounds(img.shape, p, margin)]
+    peaks = shift_to_brightest(img, peaks, min_brightness)
+    return peaks
 
 
-def shift_to_brightest(img_patch, proposals, bright_threshold, d=5):
+def shift_to_brightest(img, proposals, min_brightness, d=5):
     """
-    Shifts each proposal to the brightest voxel in neighborhood.
+    Shifts each proposal to the brightest voxel in its neighborhood.
 
     Parameters
     ----------
-    img_patch : numpy.ndarray
+    img : numpy.ndarray
         A 3D image patch.
-    proposals : List[Tuple[int]]
+    proposals : numpy.ndarray
         Voxel coordinates of proposals.
-    bright_threshold : int
+    min_brightness : int
         Minimum brightness required for each proposal.
     d : int, optional
         Size of neighborhood in each dimension. Default is 5.
 
     Returns
     -------
-    List[Tuple[int]]
+    numpy.ndarray
         Shifted proposals.
     """
-    shifted_proposals = set()
-    for proposal in proposals:
-        proposal = tuple([int(p) for p in proposal])
-        voxel = find_argmax_in_nbhd(img_patch, proposal, d)
-        if img_patch[voxel] > bright_threshold:
-            shifted_proposals.add(voxel)
-    return list(shifted_proposals)
-
-
-def find_argmax_in_nbhd(img_patch, voxel, d):
-    """
-    Finds the brightest voxel in a d x d x d neighborhood centered at the
-    given voxel coordinate.
-
-    Parameters
-    ----------
-    img_patch : numpy.ndarray
-        A 3D image patch containing the given proposals.
-    voxel : Tuple[int]
-        Center coordinate of the neighborhood.
-    d : int
-        Size of neighborhood in each dimension.
-
-    Returns
-    -------
-    Tuple[int]
-        Coordinate of bright voxel in neighborhood.
-    """
-    # Initializations
-    i, j, k = voxel
     r = d // 2
+    shifted = []
+    for i, j, k in proposals:
+        # Extract nbhd
+        i_min, i_max = max(i - r, 0), min(i + r + 1, img.shape[0])
+        j_min, j_max = max(j - r, 0), min(j + r + 1, img.shape[1])
+        k_min, k_max = max(k - r, 0), min(k + r + 1, img.shape[2])
+        nbhd = img[i_min:i_max, j_min:j_max, k_min:k_max]
 
-    # Neighborhood bounds
-    i_min, i_max = max(i - r, 0), min(i + r + 1, img_patch.shape[0])
-    j_min, j_max = max(j - r, 0), min(j + r + 1, img_patch.shape[1])
-    k_min, k_max = max(k - r, 0), min(k + r + 1, img_patch.shape[2])
-
-    # Find the argmax
-    nbhd = img_patch[i_min:i_max, j_min:j_max, k_min:k_max]
-    argmax = np.unravel_index(np.argmax(nbhd), nbhd.shape)
-    return (argmax[0] + i_min, argmax[1] + j_min, argmax[2] + k_min)
+        # Find brightest voxel and check threshold
+        argmax = np.unravel_index(np.argmax(nbhd), nbhd.shape)
+        voxel = (argmax[0] + i_min, argmax[1] + j_min, argmax[2] + k_min)
+        if img[voxel] > min_brightness:
+            shifted.append(voxel)
+    return np.array(shifted) if shifted else np.empty((0, 3))
 
 
 # --- Step 2: Filter Initial Proposals ---
-def filter_proposals(img_patch, proposals, max_proposals=10, radius=5):
+def filter_proposals(img, proposals, max_proposals=10, radius=5):
     """
-    Filters a list of proposals based on multiple criteria including distance,
+    Filters proposals by proximity to other proposals, distance,
     brightness, and Gaussian fitness.
 
     Parameters
     ----------
-    img_patch : np.ndarray
-        A 3D image patch containing the given proposals.
+    img : numpy.ndarray
+        A 3D image patch containing the proposals.
     proposals : List[Tuple[int]]
         Voxel coordinates of proposals.
     max_proposals : int, optional
@@ -271,10 +246,12 @@ def filter_proposals(img_patch, proposals, max_proposals=10, radius=5):
     # Filter by distance and brightness
     proposals = spatial_filtering(proposals, radius)
     if len(proposals) > max_proposals:
-        proposals = brightness_filtering(img_patch, proposals, max_proposals)
+        brightness = img[proposals[:, 0], proposals[:, 1], proposals[:, 2]]
+        idxs = np.argsort(brightness)[::-1]
+        proposals = proposals[idxs[:max_proposals]]
 
     # Filter by Gaussian fitness
-    proposals = gaussian_fit_filtering(img_patch, proposals)
+    proposals = gaussian_fit_filtering(img, proposals)
     return proposals
 
 
@@ -292,64 +269,43 @@ def spatial_filtering(proposals, radius):
 
     Returns
     -------
-    filtered_proposals : List[Tuple[float]]
+    filtered_proposals : numpy.ndarray
         Filtered list of proposals.
     """
-    filtered_proposals = list()
-    if len(proposals) > 0:
-        kdtree = KDTree(proposals)
-        visited = set()
-        for query in map(tuple, proposals):
-            if query not in visited:
-                # Search nbhd
-                nbs = list()
-                idxs = kdtree.query_ball_point(query, radius)
-                for coord in map(tuple, kdtree.data[idxs]):
-                    nbs.append(coord)
-                    visited.add(coord)
+    # Check for proposals
+    if not proposals:
+        return np.empty((0, 3), dtype=int)
 
-                # Generate coordinate to add
-                nbs = np.vstack(nbs)
-                filtered_proposals.append(tuple(np.mean(nbs, axis=0)))
-    return filtered_proposals
+    # Build KD-Tree of proposals
+    proposals = np.array(proposals)
+    kdtree = KDTree(proposals)
+
+    # Search for duplicates
+    filtered_proposals = []
+    unvisited = set(range(len(proposals)))
+    for i, query in enumerate(proposals):
+        # Check if visited
+        if i not in unvisited:
+            continue
+
+        # Search nbhd
+        idxs = kdtree.query_ball_point(query, radius)
+        unvisited -= set(idxs)
+        centroid = proposals[idxs].mean(axis=0).round()
+        filtered_proposals.append(centroid)
+    return np.array(filtered_proposals, dtype=int)
 
 
-def brightness_filtering(img_patch, proposals, k):
+def gaussian_fit_filtering(img, proposals, r=4, min_score=0.7):
     """
-    Filters a list of proposals by keeping the top "k" brightest.
+    Filters proposals by fitting a gaussian to neighborhood of each proposal
+    and checks the closeness of the fit.
 
     Parameters
     ----------
-    img_patch : np.ndarray
+    img : numpy.ndarray
         A 3D image patch containing the given proposals.
-    proposals : List[Tuple[int]]
-        Voxel coordinates of proposals.
-    k : int
-        Maximum number of proposals to return.
-
-    Returns
-    -------
-    List[Tuple[float]]
-        Filtered list of proposals.
-    """
-    brightness = list()
-    for proposal in proposals:
-        proposal = tuple(map(int, proposal))
-        brightness.append(img_patch[proposal])
-    brightest_idxs = np.argsort(brightness)[::-1]
-    return [proposals[idx] for idx in brightest_idxs[:k]]
-
-
-def gaussian_fit_filtering(img_patch, proposals, r=4, min_score=0.7):
-    """
-    Filters a list of proposals by fitting a gaussian to neighborhood of each
-    proposal and then checking the closeness of the fit.
-
-    Parameters
-    ----------
-    img_patch : numpy.ndarray
-        A 3D image patch containing the given proposals.
-    proposals : List[Tuple[int]]
+    proposals : numpy.ndarray
         Voxel coordinates of proposals.
     r : int, optional
         Shape of neighborhood centered at each proposal that Gaussian is
@@ -360,17 +316,16 @@ def gaussian_fit_filtering(img_patch, proposals, r=4, min_score=0.7):
 
     Returns
     -------
-    filtered_proposals : List[Tuple[int]]
+    final_proposals : List[Tuple[int]]
         Filtered and adjusted list of proposals.
     """
-    filtered_proposals = list()
-    for proposal in proposals:
+    final_proposals = list()
+    for x0, y0, z0 in proposals:
         # Extract neighborhood
-        x0, y0, z0 = tuple(map(int, proposal))
-        x_min, x_max = max(0, x0 - r), min(img_patch.shape[0], x0 + r + 1)
-        y_min, y_max = max(0, y0 - r), min(img_patch.shape[1], y0 + r + 1)
-        z_min, z_max = max(0, z0 - r), min(img_patch.shape[2], z0 + r + 1)
-        subpatch = img_patch[x_min:x_max, y_min:y_max, z_min:z_max]
+        x_min, x_max = max(0, x0 - r), min(img.shape[0], x0 + r + 1)
+        y_min, y_max = max(0, y0 - r), min(img.shape[1], y0 + r + 1)
+        z_min, z_max = max(0, z0 - r), min(img.shape[2], z0 + r + 1)
+        subpatch = img[x_min:x_max, y_min:y_max, z_min:z_max]
 
         # Fit Gaussian
         params, voxels = img_util.fit_gaussian_3d(subpatch)
@@ -380,32 +335,7 @@ def gaussian_fit_filtering(img_patch, proposals, r=4, min_score=0.7):
         # Check whether to keep proposal
         feasible_range = all(std > 0.4) and all(std < 10)
         if score > min_score and (feasible_range and np.mean(std) > 0.75):
-            proposal = [proposal[i] + mean[i] - r for i in range(3)]
-            if is_inbounds(img_patch.shape, proposal, 1):
-                filtered_proposals.append(proposal)
-    return filtered_proposals
-
-
-# --- Helpers ---
-def is_inbounds(shape, voxel, margin):
-    """
-    Check if voxel is within bounds of a 3D image, with a specified margin.
-
-    Parameters
-    ----------
-    shape : ArrayLike
-        Shape of the 3D image.
-    voxel : Tuple[int]
-        Voxel coordinate to be checked.
-    margin : int
-        Margin distance from the edges of the image.
-
-    Returns
-    -------
-    bool
-        True if the voxel is outside of margins, and False otherwise.
-    """
-    for i in range(3):
-        if voxel[i] < margin or voxel[i] > shape[i] - margin:
-            return False
-    return True
+            proposal = np.array([x0, y0, z0]) + mean - r
+            if img_util.is_inbounds(img.shape, proposal, margin=1):
+                final_proposals.append(tuple(proposal.round()))
+    return final_proposals

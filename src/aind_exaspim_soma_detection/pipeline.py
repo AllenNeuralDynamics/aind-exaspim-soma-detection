@@ -85,7 +85,7 @@ def generate_proposals(
     multiscale=4,
     patch_shape=(64, 64, 64),
     patch_overlap=(32, 32, 32),
-    bright_threshold=0,
+    min_brightness=0,
     output_dir=None,
     save_swcs=False,
 ):
@@ -105,7 +105,7 @@ def generate_proposals(
     patch_overlap : int, optional
         Overlap between adjacent image patches in each dimension. Default is
         (32, 32, 32).
-    bright_threshold : int, optional
+    min_brightness : int, optional
         Brightness threshold used to filter proposals and image patches.
         Default is 0.
     output_dir : str, optional
@@ -128,7 +128,7 @@ def generate_proposals(
         multiscale,
         patch_shape,
         patch_overlap,
-        bright_threshold=bright_threshold,
+        min_brightness=min_brightness,
     )
     t, unit = util.time_writer(time() - t0)
 
@@ -316,7 +316,7 @@ if __name__ == "__main__":
     proposal_params = {
         "multiscale": 4,
         "patch_shape": (64, 64, 64),
-        "bright_threshold": 30,
+        "min_brightness": 30,
         "patch_overlap": (28, 28, 28),
         "output_dir": output_dir,
         "save_swcs": False,

@@ -613,29 +613,27 @@ def get_storage_driver(img_path):
         raise ValueError(f"Unsupported path type: {img_path}")
 
 
-def is_inbounds(voxel, shape):
+def is_inbounds(shape, voxel, margin=0):
     """
-    Checks if a given voxel is within the bounds of a 3D grid.
+    Check if voxel is contained in 3D image, with a specified margin.
 
     Parameters
     ----------
+    shape : ArrayLike
+        Shape of the 3D image.
     voxel : Tuple[int]
         Voxel coordinate to be checked.
-    shape : Tuple[int]
-        Shape of the 3D grid.
+    margin : int, optional
+        Margin distance from the edges of the image. Default is 0
 
     Returns
     -------
     bool
-        Indication of whether the given voxel is within the bounds of the
-        grid.
+        True if the voxel is contained in image, and False otherwise.
     """
-    x, y, z = voxel
-    height, width, depth = shape
-    if 0 <= x < height and 0 <= y < width and 0 <= z < depth:
-        return True
-    else:
-        return False
+    voxel = np.array(voxel)
+    shape = np.array(shape)
+    return bool(np.all(voxel >= margin) and np.all(voxel <= shape - margin))
 
 
 def normalize(img, percentiles=(1, 99.5)):
