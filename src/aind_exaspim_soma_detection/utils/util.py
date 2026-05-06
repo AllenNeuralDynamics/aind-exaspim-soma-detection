@@ -54,30 +54,6 @@ def rmdir(path):
         shutil.rmtree(path)
 
 
-def list_paths(directory, extension=""):
-    """
-    Lists all paths within "directory" ending with "extension" if provided.
-
-    Parameters
-    ----------
-    directory : str
-        Directory to be searched.
-    extension : str, optional
-        If provided, only paths of files with the extension are returned.
-        Default is an empty string.
-
-    Returns
-    -------
-    paths : List[str]
-        Paths within "directory".
-    """
-    paths = list()
-    for f in os.listdir(directory):
-        if f.endswith(extension):
-            paths.append(os.path.join(directory, f))
-    return paths
-
-
 # --- IO utils ---
 def read_txt(path):
     """
@@ -94,9 +70,9 @@ def read_txt(path):
         Lines from the txt file.
     """
     if is_s3_path(path):
-        return read_txt_from_s3(path)
+        return read_s3_txt(path)
     elif is_gcs_path(path):
-        return read_txt_from_gcs(path)
+        return read_gcs_txt(path)
     else:
         with open(path, "r") as f:
             return f.read()
@@ -253,7 +229,7 @@ def list_gcs_subdirs(bucket_name, prefix):
     return sorted(subdirs)
 
 
-def read_txt_from_gcs(path):
+def read_gcs_txt(path):
     """
     Reads a txt file stored in a GCS bucket.
 
@@ -290,7 +266,7 @@ def is_s3_path(path):
     return path.startswith("s3://")
 
 
-def read_txt_from_s3(path):
+def read_s3_txt(path):
     """
     Reads a txt file stored in an S3 bucket.
 
@@ -310,7 +286,7 @@ def read_txt_from_s3(path):
     return obj["Body"].read().decode("utf-8")
 
 
-def upload_dir_to_s3(bucket_name, prefix, source_dir):
+def upload_dir_to_s3(bucket_name, prefix, src_dir):
     """
     Uploads the contents of a directory to S3.
 
@@ -320,21 +296,21 @@ def upload_dir_to_s3(bucket_name, prefix, source_dir):
         Name of S3 bucket.
     prefix : str
         Name of S3 prefix to be written to.
-    source_dir : str
+    src_dir : str
         Path to local directory to be written to S3.
     """
-    for name in os.listdir(source_dir):
-        source_path = os.path.join(source_dir, name)
-        if os.path.isdir(source_path):
+    for name in os.listdir(src_dir):
+        src_path = os.path.join(src_dir, name)
+        if os.path.isdir(src_path):
             subprefix = os.path.join(prefix, name)
-            upload_dir_to_s3(bucket_name, subprefix, source_path)
+            upload_dir_to_s3(bucket_name, subprefix, src_path)
         else:
-            destination_path = os.path.join(prefix, name)
-            upload_file_to_s3(bucket_name, source_path, destination_path)
+            dst_path = os.path.join(prefix, name)
+            upload_file_to_s3(bucket_name, src_path, dst_path)
     print("Results uploaded to", f"s3://{bucket_name}/{prefix}")
 
 
-def upload_file_to_s3(bucket_name, source_path, destination_path):
+def upload_file_to_s3(bucket_name, src_path, dst_path):
     """
     Uploads single file on local machine to S3.
 
@@ -342,13 +318,13 @@ def upload_file_to_s3(bucket_name, source_path, destination_path):
     ----------
     bucket_name : str
         Name of S3 bucket.
-    source_path : str
+    src_path : str
         Path to local file to be written to S3.
-    destination_path : str
+    dst_path : str
         Path within S3 bucket that file is to be written to.
     """
     s3 = boto3.client("s3")
-    s3.upload_file(source_path, bucket_name, destination_path)
+    s3.upload_file(src_path, bucket_name, dst_path)
 
 
 # --- Miscellaneous ---
@@ -441,10 +417,7 @@ def get_subdict(my_dict, keys):
     dict
         A dictionary containing only the specified keys from "my_dict".
     """
-    subdict = dict()
-    for key in keys:
-        subdict[key] = my_dict[key]
-    return subdict
+    return {k: my_dict[k] for k in keys}
 
 
 def parse_cloud_path(path):

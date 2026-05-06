@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 
 
+# --- Model Architectures ---
 class CNN3D(nn.Module):
     """
     Class that implements a convolutional neural network for 3D images.
@@ -124,7 +125,85 @@ class CNN3D(nn.Module):
         return x
 
 
-# --- Build Simple Neural Networks ---
+class FeedForwardNet(nn.Module):
+    """
+    A class that implements a feed forward neural network.
+    """
+
+    def __init__(self, input_dim, output_dim, n_layers):
+        """
+        Instantiates a FeedFowardNet object.
+
+        Parameters
+        ----------
+        input_dim : int
+            Dimension of the input.
+        output_dim : int
+            Dimension of the output of the network.
+        n_layers : int
+            Number of layers in the network.
+        """
+        # Call parent class
+        super().__init__()
+
+        # Instance attributes
+        assert n_layers > 1
+        self.net = self.build_network(input_dim, output_dim, n_layers)
+
+    def build_network(self, input_dim, output_dim, n_layers):
+        # Set input/output dimensions
+        input_dim_i = input_dim
+        output_dim_i = max(input_dim // 2, 4)
+
+        # Build architecture
+        layers = []
+        for i in range(n_layers):
+            mlp = init_mlp(input_dim_i, input_dim_i * 2, output_dim_i)
+            layers.append(mlp)
+
+            input_dim_i = output_dim_i
+            output_dim_i = (
+                max(output_dim_i // 2, 4) if i < n_layers - 2 else output_dim
+            )
+
+        # Initialize weights
+        net = nn.Sequential(*layers)
+        net.apply(self._init_weights)
+        return net
+
+    @staticmethod
+    def _init_weights(m):
+        """
+        Initializes weights for linear layers using Kaiming initialization.
+
+        Parameters
+        ----------
+        m : torch.nn.Module
+            Module to initialize.
+        """
+        if isinstance(m, nn.Linear):
+            nn.init.kaiming_normal_(m.weight, nonlinearity="leaky_relu")
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+
+    def forward(self, x):
+        """
+        Passes the given input through this neural network.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input vector of features.
+
+        Returns
+        -------
+        x : torch.Tensor
+            Output of the neural network.
+        """
+        return self.net(x)
+
+
+# --- Helpers ---
 def init_cnn3d(in_channels, n_feat_channels, n_layers, use_double_conv=True):
     """
     Initializes a convolutional neural network.
@@ -204,84 +283,6 @@ def init_conv_layer(in_channels, out_channels, kernel_size, use_double_conv):
     return nn.Sequential(*layers)
 
 
-class FeedForwardNet(nn.Module):
-    """
-    A class that implements a feed forward neural network.
-    """
-
-    def __init__(self, input_dim, output_dim, n_layers):
-        """
-        Instantiates a FeedFowardNet object.
-
-        Parameters
-        ----------
-        input_dim : int
-            Dimension of the input.
-        output_dim : int
-            Dimension of the output of the network.
-        n_layers : int
-            Number of layers in the network.
-        """
-        # Call parent class
-        super().__init__()
-
-        # Instance attributes
-        assert n_layers > 1
-        self.net = self.build_network(input_dim, output_dim, n_layers)
-
-    def build_network(self, input_dim, output_dim, n_layers):
-        # Set input/output dimensions
-        input_dim_i = input_dim
-        output_dim_i = max(input_dim // 2, 4)
-
-        # Build architecture
-        layers = []
-        for i in range(n_layers):
-            mlp = init_mlp(input_dim_i, input_dim_i * 2, output_dim_i)
-            layers.append(mlp)
-
-            input_dim_i = output_dim_i
-            output_dim_i = (
-                max(output_dim_i // 2, 4) if i < n_layers - 2 else output_dim
-            )
-
-        # Initialize weights
-        net = nn.Sequential(*layers)
-        net.apply(self._init_weights)
-        return net
-
-    @staticmethod
-    def _init_weights(m):
-        """
-        Initializes weights for linear layers using Kaiming initialization.
-
-        Parameters
-        ----------
-        m : torch.nn.Module
-            Module to initialize.
-        """
-        if isinstance(m, nn.Linear):
-            nn.init.kaiming_normal_(m.weight, nonlinearity="leaky_relu")
-            if m.bias is not None:
-                nn.init.zeros_(m.bias)
-
-    def forward(self, x):
-        """
-        Passes the given input through this neural network.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input vector of features.
-
-        Returns
-        -------
-        x : torch.Tensor
-            Output of the neural network.
-        """
-        return self.net(x)
-
-
 def init_mlp(input_dim, hidden_dim, output_dim, dropout=0.1):
     """
     Initializes a multi-layer perceptron (MLP).
@@ -309,3 +310,29 @@ def init_mlp(input_dim, hidden_dim, output_dim, dropout=0.1):
         nn.Linear(hidden_dim, output_dim),
     )
     return mlp
+
+
+def load_model(path, patch_shape, device="cuda"):
+    """
+    Loads a pre-trained model from the given, then transfers the model to the
+    specified device (i.e. CPU or GPU).
+
+    Parameters
+    ----------
+    path : str
+        Path to the saved model weights.
+    patch_shape : Tuple[int]
+        Shape of the input patches expected by the model expects.
+    device : str, optional
+        Name of device where model should be loaded and run. The default is
+        "cuda".
+
+    Returns
+    -------
+    FastConvNet3d
+        Model instance with the loaded weights.
+    """
+    model = CNN3D(patch_shape)
+    model.load_state_dict(torch.load(path, map_location=device))
+    model = model.to(device)
+    return model

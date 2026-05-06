@@ -18,11 +18,12 @@ import os
 import pandas as pd
 import torch
 
-from aind_exaspim_soma_detection.utils import img_util, ml_util
+from aind_exaspim_soma_detection.utils import img_util
 from aind_exaspim_soma_detection.machine_learning.data_handling import (
     DataLoader,
     ProposalDataset,
 )
+from aind_exaspim_soma_detection.machine_learning.models import load_model
 
 
 def classify_proposals(
@@ -75,7 +76,7 @@ def classify_proposals(
 
     # Generate predictions
     dataloader = DataLoader(dataset, batch_size)
-    model = ml_util.load_model(model_path, patch_shape, device)
+    model = load_model(model_path, patch_shape, device)
     id_voxel, hat_y = run_inference(dataloader, model, device)
 
     # Extract predicted somas
@@ -131,7 +132,7 @@ def run_inference(dataloader, model, device="cuda", verbose=True):
 
             # Store result
             id_voxel.extend(id_voxel_i)
-            hat_y.append(ml_util.toCPU(hat_y_i))
+            hat_y.append(np.array(hat_y_i.detach().cpu()))
             pbar.update(len(id_voxel_i))
 
     # Reformat predictions

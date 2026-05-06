@@ -319,7 +319,7 @@ def gaussian_fit_filtering(img, proposals, r=4, min_score=0.7):
     final_proposals : List[Tuple[int]]
         Filtered and adjusted list of proposals.
     """
-    final_proposals = list()
+    filtered_proposals = list()
     for x0, y0, z0 in proposals:
         # Extract neighborhood
         x_min, x_max = max(0, x0 - r), min(img.shape[0], x0 + r + 1)
@@ -337,5 +337,5 @@ def gaussian_fit_filtering(img, proposals, r=4, min_score=0.7):
         if score > min_score and (feasible_range and np.mean(std) > 0.75):
             proposal = np.array([x0, y0, z0]) + mean - r
             if img_util.is_inbounds(img.shape, proposal, margin=1):
-                final_proposals.append(tuple(proposal.round()))
-    return final_proposals
+                filtered_proposals.append(tuple(proposal.round()))
+    return filtered_proposals
