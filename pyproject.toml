@@ -22,15 +22,12 @@ dependencies = [
     'pandas',
     's3fs',
     'scikit-image',
-    'scikit-learn',
     'scipy',
-    'smartsheet-python-sdk',
     'tensorstore',
     'torch',
     'torchvision',
     'tqdm',
     'urllib3==1.26.15',
-    'zarr',
     'aind-exaspim-dataset-utils @ git+https://github.com/AllenNeuralDynamics/aind-exaspim-dataset-utils.git@main'
 ]
 

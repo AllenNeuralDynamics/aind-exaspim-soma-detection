@@ -145,9 +145,7 @@ def generate_proposals_patch(
     # Filter initial proposals + convert coordinates
     proposals = list()
     for voxel in filter_proposals(img_patch, initial_proposals):
-        proposals.append(
-            img_util.local_to_physical(voxel, offset, multiscale)
-        )
+        proposals.append(img_util.local_to_physical(voxel, offset, multiscale))
     return proposals
 
 

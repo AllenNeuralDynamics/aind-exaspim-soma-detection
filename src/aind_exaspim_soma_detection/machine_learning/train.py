@@ -66,7 +66,7 @@ class Trainer:
         lr=1e-3,
         max_epochs=200,
         min_recall=0,
-        save_mistake_mips=False
+        save_mistake_mips=False,
     ):
         """
         Instantiates a Trainer object.
@@ -292,7 +292,7 @@ class Trainer:
             "f1": avg_f1,
             "precision": avg_prec,
             "recall": avg_recall,
-            "accuracy": avg_acc
+            "accuracy": avg_acc,
         }
         return stats
 

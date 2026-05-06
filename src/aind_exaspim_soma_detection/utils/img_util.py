@@ -69,18 +69,17 @@ class TensorStoreImage:
         return patch
 
     # --- Helpers ---
-    def generate_offsets(self, window_shape, overlap):
+    def generate_offsets(self, patch_shape, overlap):
         """
-        Generates a list of 3D coordinates representing the front-top-left corner
-        by sliding a window over a 3D image, given a specified window size and
-        overlap between adjacent windows.
+        Slides a window over the image and yields the top-left-front corner
+        offset of each patch.
 
         Parameters
         ----------
-        window_shape : Tuple[int]
+        patch_shape : Tuple[int]
             Shape of the sliding window.
         overlap : Tuple[int]
-            Overlap between adjacent windows.
+            Overlap shape between adjacent patches.
 
         Returns
         -------
@@ -88,12 +87,12 @@ class TensorStoreImage:
             Voxel coordinates representing the front-top-left corner.
         """
         # Calculate stride based on the overlap and window size
-        stride = tuple(w - o for w, o in zip(window_shape, overlap))
+        stride = tuple(w - o for w, o in zip(patch_shape, overlap))
         i_stride, j_stride, k_stride = stride
 
         # Get dimensions of the window
         _, _, i_dim, j_dim, k_dim = self.shape()
-        i_win, j_win, k_win = window_shape
+        i_win, j_win, k_win = patch_shape
 
         # Loop over img with the sliding window
         for i in range(0, i_dim - i_win + 1, i_stride):
@@ -211,17 +210,17 @@ def local_to_physical(local_voxel, offset, multiscale):
 
 
 # --- Visualizations ---
-def plot_mips(img, output_path=None):
+def plot_mips(img, output_path=""):
     """
-    Plots the Maximum Intensity Projections (MIPs) of a 3D image along the XY,
-    XZ, and YZ axes.
+    Plots Maximum Intensity Projections (MIPs) of a 3D image along the XY, XZ,
+    and YZ axes.
 
     Parameters
     ----------
     img : numpy.ndarray
         Input 3D image to generate MIPs from.
-    output_path : None or str, optional
-        Path to save MIPs as a PNG if provided. Default is None.
+    output_path : str, optional
+        Path to save MIPs as a PNG if provided. Default is an empty string.
     """
     fig, axs = plt.subplots(1, 3, figsize=(10, 4))
     axs_names = ["XY", "XZ", "YZ"]
@@ -240,7 +239,7 @@ def plot_mips(img, output_path=None):
     plt.close(fig)
 
 
-def plot_slices(img, output_path=None, vmax=None):
+def plot_slices(img, output_path=""):
     """
     Plots the middle slice of a 3D image along the XY, XZ, and YZ axes.
 
@@ -248,11 +247,8 @@ def plot_slices(img, output_path=None, vmax=None):
     ----------
     img : numpy.ndarray
         Image to generate MIPs from.
-    output_path : None or str, optional
-        Path that plot is saved to if provided. Default is None.
-    vmax : None or float, optional
-        Brightness intensity used as upper limit of the colormap. Default is
-        None.
+    output_path : str, optional
+        Path that plot is saved to if provided. Default is an empty string.
     """
     # Get middle slice
     shape = img.shape[2:] if len(img.shape) == 5 else img.shape
@@ -264,11 +260,10 @@ def plot_slices(img, output_path=None, vmax=None):
     ]
 
     # Plot
-    vmax = vmax or np.percentile(img, 99.9)
     fig, axs = plt.subplots(1, 3, figsize=(10, 4))
     axs_names = ["XY", "XZ", "YZ"]
     for i in range(3):
-        axs[i].imshow(slices[i], vmax=vmax)
+        axs[i].imshow(slices[i])
         axs[i].set_title(axs_names[i], fontsize=16)
         axs[i].set_xticks([])
         axs[i].set_yticks([])
@@ -297,21 +292,20 @@ def get_detections_img(shape, voxels):
     numpy.ndarray
         Binary image where the given voxels are marked.
     """
+    voxels = np.array(voxels, dtype=int)
     detections_img = np.zeros(shape)
-    for voxel in voxels:
-        voxel = tuple([int(v) for v in voxel])
-        detections_img[voxel] = 1
+    detections_img[voxels[:, 0], voxels[:, 1], voxels[:, 2]] = 1
     return detections_img
 
 
 # --- Fit gaussian to image ---
-def fit_gaussian_3d(img_patch, std=2):
+def fit_gaussian_3d(img, std=2):
     """
     Fits a 3D Gaussian to an image patch.
 
     Parameters
     ----------
-    img_patch : numpy.ndarray
+    img : numpy.ndarray
         A 3D image that Gaussian is to be fitted to.
     std : float, optional
         Estimate of standard devation of Gaussian to be fit. Default is 2.
@@ -321,7 +315,7 @@ def fit_gaussian_3d(img_patch, std=2):
     tuple
         Parameters of the fitted Gaussian and voxel coordinates.
     """
-    center = [s // 2 for s in img_patch.shape]
+    center = [s // 2 for s in img.shape]
     initial_guess = (
         center[0],
         center[1],
@@ -329,14 +323,14 @@ def fit_gaussian_3d(img_patch, std=2):
         std,
         std,
         std,
-        np.max(img_patch),
-        np.min(img_patch),
+        np.max(img),
+        np.min(img),
     )
-    return fit(img_patch, gaussian_3d, initial_guess)
+    return fit(img, gaussian_3d, initial_guess)
 
 
-def fit_rotated_gaussian_3d(img_patch):
-    center = [s // 2 for s in img_patch.shape]
+def fit_rotated_gaussian_3d(img):
+    center = [s // 2 for s in img.shape]
     initial_guess = (
         center[0],
         center[1],
@@ -347,19 +341,19 @@ def fit_rotated_gaussian_3d(img_patch):
         1e-2,
         0,
         1e-2,
-        np.max(img_patch),
-        np.min(img_patch),
+        np.max(img),
+        np.min(img),
     )
-    return fit(img_patch, rotated_gaussian_3d, initial_guess)
+    return fit(img, rotated_gaussian_3d, initial_guess)
 
 
-def fit(img_patch, my_func, initial_guess):
+def fit(img, my_func, initial_guess):
     """
     Fits a function (e.g. gaussian) to an image.
 
     Parameters
     ----------
-    img_patch : numpy.ndarray
+    img : numpy.ndarray
         A 3D array representing an image.
     my_func : callable
         Function to be fit to image.
@@ -374,22 +368,22 @@ def fit(img_patch, my_func, initial_guess):
         Flattened arrays of voxel coordinates.
     """
     try:
-        voxels = generate_img_coords(img_patch.shape)
-        img_vals = img_patch.ravel()
+        voxels = generate_img_coords(img.shape)
+        img_vals = img.ravel()
         params, _ = curve_fit(my_func, voxels, img_vals, p0=initial_guess)
     except RuntimeError:
         params = np.zeros(len(initial_guess))
     return params, voxels
 
 
-def compute_fit_score(img_patch, params, voxels):
+def compute_fit_score(img, params, voxels):
     """
     Evaluates the quality of a fitted function by computing the correlation
     coefficient between the image and fitted values.
 
     Parameters
     ----------
-    img_patch : numpy.ndarray
+    img : numpy.ndarray
         A 3D array representing an image.
     params : numpy.ndarray
         Parameters of the fitted Gaussian.
@@ -402,8 +396,8 @@ def compute_fit_score(img_patch, params, voxels):
         Correlation coefficient between the image and fitted values.
     """
     gaussian = gaussian_3d if len(params) == 8 else rotated_gaussian_3d
-    fitted = gaussian(voxels, *params).reshape(img_patch.shape).flatten()
-    actual = img_patch.flatten()
+    fitted = gaussian(voxels, *params).reshape(img.shape).flatten()
+    actual = img.flatten()
     return np.corrcoef(actual, fitted)[0, 1]
 
 

@@ -24,9 +24,7 @@ def load_dataset_examples(bucket_name, prefix):
     brain_ids = util.list_gcs_subdirs(bucket_name, prefix)
     for brain_id in tqdm(brain_ids, desc="Load Data"):
         if brain_id not in ["719654", "789202", "802450"]:
-            examples.extend(
-                load_brain_examples(bucket_name, prefix, brain_id)
-            )
+            examples.extend(load_brain_examples(bucket_name, prefix, brain_id))
     return pd.DataFrame(examples)
 
 
@@ -47,7 +45,9 @@ def load_brain_examples(bucket_name, prefix, brain_id):
                 if filename.endswith(".swc"):
                     gcs_path = f"gs://{bucket_name}/{subprefix}/{filename}"
                     threads.append(
-                        executor.submit(_load_example, gcs_path, brain_id, label)
+                        executor.submit(
+                            _load_example, gcs_path, brain_id, label
+                        )
                     )
 
             # Compile results
@@ -91,20 +91,35 @@ def parse_swc_point(content, source=""):
 
 
 def _load_example(gcs_path, brain_id, label):
-    try:
-        content = util.read_txt(gcs_path)
-        filename = gcs_path.split("/")[-1]
-        xyz = parse_swc_point(content, source=gcs_path)
-        example = {
-            "brain_id": brain_id,
-            "label": label,
-            "swc_filename": filename,
-            "xyz": xyz,
-        }
-        return example
-    except ValueError as e:
-        print(f"  WARNING: {e} — skipping")
-        return None
+    """
+    Loads a single training example from an SWC file stored in GCS.
+
+    Parameters
+    ----------
+    gcs_path : str
+        GCS path to the SWC file.
+    brain_id : str
+        Identifier of the brain the example belongs to.
+    label : int
+        Label for the example, where 1 indicates an accepted proposal and 0
+        a rejected proposal.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys "brain_id", "label", "swc_filename", and "xyz",
+        or None if the file could not be parsed.
+    """
+    content = util.read_txt(gcs_path)
+    filename = gcs_path.split("/")[-1]
+    xyz = parse_swc_point(content, source=gcs_path)
+    example = {
+        "brain_id": brain_id,
+        "label": label,
+        "swc_filename": filename,
+        "xyz": xyz,
+    }
+    return example
 
 
 # --- Helpers ---
@@ -115,11 +130,16 @@ def partition_dataset(df, train_frac=0.6):
     Parameters
     ----------
     df : pd.DataFrame
-    train_frac : float
+        DataFrame containing dataset examples.
+    train_frac : float, optional
+        Fraction of examples to be assigned to the training dataset. Default
+        is 0.6.
 
     Returns
     -------
-    dict with keys "train", "val", "test" mapping to lists of df indices.
+    Dict[str, List[int]]
+        Dictionary with keys "train", "val", "test" mapping to lists of df
+        indices.
     """
     assert train_frac > 0 and train_frac < 1
     idx = df.index.tolist()
@@ -170,14 +190,23 @@ def split_swc_into_points(input_swc_path, output_dir):
 
 
 def summarize_dataset(df):
-    summary = (
-        df.groupby(["brain_id", "label"])
-        .size()
-        .unstack(fill_value=0)
-    )
-    summary.columns = [("accepts" if c else "rejects") for c in summary.columns]
-    for col in ["accepts", "rejects"]:
-        if col not in summary.columns:
-            summary[col] = 0
+    """
+    Summarizes dataset by counting accepted and rejected proposals per brain.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame with columns "brain_id" and "label", where label is 1 for
+        accepted proposals and 0 for rejected.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame indexed by "brain_id" with columns "accepts", "rejects",
+        and "total".
+    """
+    summary = df.groupby(["brain_id", "label"]).size().unstack(fill_value=0)
+    summary = summary.rename(columns={0: "rejects", 1: "accepts"})
+    summary[["accepts", "rejects"]] = summary.get(["accepts", "rejects"], 0)
     summary["total"] = summary["accepts"] + summary["rejects"]
     return summary

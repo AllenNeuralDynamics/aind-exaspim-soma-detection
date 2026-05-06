@@ -139,7 +139,10 @@ class ProposalDataset(Dataset):
         """
         for brain_id, group in df.groupby("brain_id"):
             img_path = os.path.join(img_pathes[brain_id], str(self.multiscale))
-            voxels = [img_util.to_voxels(xyz, self.multiscale) for xyz in group["xyz"]]
+            voxels = [
+                img_util.to_voxels(xyz, self.multiscale)
+                for xyz in group["xyz"]
+            ]
             labels = group["label"].tolist()
             paths = group["swc_filename"].tolist()
 
@@ -265,7 +268,7 @@ class DataLoader:
     # --- Helpers ---
     def __len__(self):
         """
-        Counts number of examples in the dataset.
+        Counts the number of examples in the dataset.
 
         Returns
         -------
