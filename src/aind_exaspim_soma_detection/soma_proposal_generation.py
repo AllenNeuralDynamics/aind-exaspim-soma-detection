@@ -227,7 +227,7 @@ def shift_to_brightest(img, proposals, min_brightness, d=5):
 
 
 # --- Step 2: Filter Initial Proposals ---
-def filter_proposals(img, proposals, max_proposals=640, radius=5):
+def filter_proposals(img, proposals, max_proposals=500, radius=5):
     """
     Filters proposals by proximity to other proposals, distance,
     brightness, and Gaussian fitness.
