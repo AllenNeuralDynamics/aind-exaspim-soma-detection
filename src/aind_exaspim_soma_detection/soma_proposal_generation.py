@@ -45,9 +45,8 @@ def generate_proposals(
     min_brightness=0,
 ):
     """
-    Generates somas proposals across a whole brain 3D image by dividing the
-    image into patches. The coordinate of each image patch is assigned to a
-    thread in order to optimize the runtime of this process.
+    Generates somas proposals across a whole brain 3D image by parallelizing
+    over patches.
 
     Parameters
     ----------
