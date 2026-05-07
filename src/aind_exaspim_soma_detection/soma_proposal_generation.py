@@ -70,7 +70,7 @@ def generate_proposals(
     """
     img = img_util.TensorStoreImage(img_path)
     margin = np.min(patch_overlap) // 4
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=64) as executor:
         # Assign threads
         threads = list()
         for offset in img.generate_offsets(patch_shape, patch_overlap):
@@ -90,7 +90,10 @@ def generate_proposals(
         proposals = list()
         pbar = tqdm(total=len(threads), dynamic_ncols=True)
         for thread in as_completed(threads):
-            proposals.extend(thread.result())
+            try:
+                proposals.extend(thread.result())
+            except Exception as e:
+                print(e)
             pbar.update(1)
     return spatial_filtering(proposals, 50)
 
@@ -132,20 +135,25 @@ def generate_proposals_patch(
     img_patch = img.read(offset, patch_shape, is_center=False)
     if img_patch.max() < min_brightness:
         return list()
+    else:
+        img_patch = gaussian_filter(img_patch, sigma=1)
 
-    img_patch = gaussian_filter(img_patch, sigma=1)
-
-    # Generate initial proposals
-    initial_proposals = list()
+    # Detect blob-like obejcts
+    proposals = list()
     for stdev in [3, 5, 8]:
-        initial_proposals.extend(
+        proposals.extend(
             detect_blobs(img_patch, min_brightness, stdev, margin)
         )
 
-    # Filter initial proposals + convert coordinates
-    proposals = list()
-    for voxel in filter_proposals(img_patch, initial_proposals):
-        proposals.append(img_util.local_to_physical(voxel, offset, multiscale))
+    # Filter proposals
+    proposals = filter_proposals(img_patch, proposals)
+
+    # Convert coordinates
+    if len(proposals) > 0:
+        proposals += np.array(offset)
+        proposals = [
+            img_util.to_physical(voxel, multiscale) for voxel in proposals
+        ]
     return proposals
 
 
@@ -220,7 +228,7 @@ def shift_to_brightest(img, proposals, min_brightness, d=5):
 
 
 # --- Step 2: Filter Initial Proposals ---
-def filter_proposals(img, proposals, max_proposals=10, radius=5):
+def filter_proposals(img, proposals, max_proposals=640, radius=5):
     """
     Filters proposals by proximity to other proposals, distance,
     brightness, and Gaussian fitness.
@@ -232,7 +240,7 @@ def filter_proposals(img, proposals, max_proposals=10, radius=5):
     proposals : List[Tuple[int]]
         Voxel coordinates of proposals.
     max_proposals : int, optional
-        Maximum number of proposals to return. Default is 10.
+        Maximum number of proposals to return. Default is 640.
     radius : int, optional
         Radius (in voxels) to use for spatial filtering. Default is 5.
 
@@ -336,4 +344,4 @@ def gaussian_fit_filtering(img, proposals, r=4, min_score=0.7):
             proposal = np.array([x0, y0, z0]) + mean - r
             if img_util.is_inbounds(img.shape, proposal, margin=1):
                 filtered_proposals.append(tuple(proposal.round()))
-    return filtered_proposals
+    return np.array(filtered_proposals)
