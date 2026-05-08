@@ -45,22 +45,50 @@ def generate_proposals(
     multiscale,
     patch_shape,
     patch_overlap,
-    min_brightness=0,
-    n_loaders=16,
     max_queue_size=32,
     max_worker_processes=16,
+    min_brightness=0,
+    n_loaders=16,
 ):
+    """
+    Generates soma proposals by detecting blobs and filters them by
+    brightness and gaussian-like appearance.
+
+    Parameters
+    ----------
+    img_ : TensorStoreImage
+        Path to image to be read from.
+    multiscale : int
+        Level in the image pyramid that patches are read from.
+    patch_shape : Tuple[int]
+        Shape of image patches to be extracted.
+    patch_overlap : Tuple[int]
+        Shape of overlap between adjacent patches.
+    max_queue_size : int, optional
+        Maximum number of image patches in the queue. Default is 32.
+    max_worker_processes : int, optional
+        Maximum number of workers processing image patches. Default is 16.
+    min_brightness : int, optional
+        Minimum brightness required for image patch. Default is 0.
+    n_loaders : int, otpional
+        Number of image loaders reading patches.
+
+    Returns
+    -------
+    proposals : List[Tuple[float]]
+        Physical coordinates of proposals.
+    """
     # Start loader threads
     margin = np.min(patch_overlap) // 4
     batches = create_batches(img_path, patch_shape, patch_overlap, n_loaders)
     patch_queue = queue.Queue(maxsize=max_queue_size)
     start_loaders(img_path, batches, patch_shape, min_brightness, patch_queue)
+    pbar = tqdm(total=np.sum([len(b) for b in batches]))
 
     # Drain queue → submit to bounded process pool
-    all_proposals = []
+    pending = list()
+    proposals = list()
     stops_seen = 0
-    pending = []
-    pbar = tqdm(total=np.sum([len(b) for b in batches]))
     with ProcessPoolExecutor(max_workers=max_worker_processes) as executor:
         while stops_seen < n_loaders:
             # Pop queue
@@ -74,7 +102,7 @@ def generate_proposals(
             # Pop completed process
             if len(pending) >= max_worker_processes * 2:
                 done_future = pending.pop(0)
-                all_proposals.extend(done_future.result())
+                proposals.extend(done_future.result())
                 pbar.update(1)
 
             # Submit new process
@@ -91,46 +119,10 @@ def generate_proposals(
 
         # Drain remaining futures
         for future in pending:
-            all_proposals.extend(future.result())
+            proposals.extend(future.result())
             pbar.update(1)
 
-    return spatial_filtering(all_proposals, 50)
-
-
-def generate_proposals_patch(
-    img,
-    offset,
-    margin,
-    patch_shape,
-    multiscale,
-    min_brightness=0,
-):
-    """
-    Generates soma proposals by detecting blobs and filters them by
-    brightness and gaussian-like appearance.
-
-    Parameters
-    ----------
-    img : TensorStoreImage
-        3D image of a whole-brain.
-    offset : Tuple[int]
-        Offset of the image patch to extract from "img". Note that proposals
-        will be generated within this patch.
-    margin : int
-        Margin distance from the edges of the image used to filter blobs.
-    patch_shape : Tuple[int]
-        Shape of the patch to be extracted.
-    multiscale : int
-        Level in the image pyramid that patches are read from.
-    min_brightness : int, optional
-        Minimum brightness required for image patch. Default is 0.
-
-    Returns
-    -------
-    proposals : List[Tuple[float]]
-        Physical coordinates of proposals.
-    """
-    pass
+    return spatial_filtering(proposals, 50)
 
 
 def start_loaders(
@@ -164,9 +156,11 @@ def start_loaders(
     return threads
 
 
-def _patch_loader(img_path, offsets, shape, min_brightness, patch_queue):
+def _patch_loader(
+    img_path, offsets, patch_shape, min_brightness, patch_queue
+):
     """
-    Reads image patches and places (offset, img_patch) onto a bounded queue.
+    Reads image patches and puts (offset, img_patch) onto a bounded queue.
 
     Parameters
     ----------
@@ -174,7 +168,7 @@ def _patch_loader(img_path, offsets, shape, min_brightness, patch_queue):
         Path to image to be read from.
     offsets : List[Tuple[int]]
         Offsets of image patches to be read.
-    shape : Tuple[int]
+    patch_shape : Tuple[int]
         Shape of image patches to be read.
     min_brightness : int
         Minimum brightness required for patch to be processed.
@@ -184,9 +178,9 @@ def _patch_loader(img_path, offsets, shape, min_brightness, patch_queue):
     img = img_util.TensorStoreImage(img_path)
     for offset in offsets:
         # Read patch
-        img_patch = img.read(offset, shape, is_center=False)
+        img_patch = img.read(offset, patch_shape, is_center=False)
 
-        # Check whether to place on queue
+        # Check whether to put in queue
         if img_patch.max() > min_brightness:
             img_patch = gaussian_filter(img_patch, sigma=1)
             patch_queue.put((offset, img_patch))
@@ -195,8 +189,21 @@ def _patch_loader(img_path, offsets, shape, min_brightness, patch_queue):
 
 def _process_patch(offset, img_patch, margin, multiscale, min_brightness):
     """
-    Pure function suitable for ProcessPoolExecutor.
-    Receives an already-loaded, already-filtered patch.
+    Generates proposals by detecting blob-like objects, then filters them by
+    brightness and gaussian-like appearance.
+
+    Parameters
+    ----------
+    offset : Tuple[int]
+        Offset of image patch.
+    img_patch : numpy.ndarray
+        Image patch to generate proposals for.
+    margin : int
+        Margin distance from image boundary used to filter blobs.
+    multiscale : int
+        Level in the image pyramid that patches are read from.
+    min_brightness : int
+        Minimum brightness required for patch to be processed.
     """
     # Detect blob-like objects
     proposals = []
@@ -228,7 +235,7 @@ def detect_blobs(img, min_brightness, stdev, margin):
     stdev : float
         Standard deviation of the Gaussian kernel for the LoG operation.
     margin : int
-        Margin distance from the edges of the image used to filter blobs.
+        Margin distance from image boundary used to filter blobs.
 
     Returns
     -------
