@@ -100,6 +100,9 @@ class TensorStoreImage:
                 for k in range(0, k_dim - k_win + 1, k_stride):
                     yield (i, j, k)
 
+    def count_offsets(self, patch_shape, overlap):
+        return len(list(self.generate_offsets(patch_shape, overlap)))
+
     def get_spec(self, img_path):
         """
         Creates a TensorStore specification for opening the image at the

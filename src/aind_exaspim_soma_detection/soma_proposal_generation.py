@@ -25,76 +25,76 @@ Code that generates soma proposals.
                or (2) estimated standard deviation is out of range.
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 from scipy.ndimage import gaussian_filter, gaussian_laplace
 from scipy.spatial import KDTree
 from skimage.feature import peak_local_max
+from threading import Thread
 from tqdm import tqdm
 
 import numpy as np
+import queue
 
 from aind_exaspim_soma_detection.utils import img_util
 
+_STOP = object()
 
-# --- Wrappers ---
+
 def generate_proposals(
     img_path,
     multiscale,
     patch_shape,
     patch_overlap,
     min_brightness=0,
+    n_loaders=16,
+    max_queue_size=32,
+    max_worker_processes=16,
 ):
-    """
-    Generates somas proposals across a whole brain 3D image by parallelizing
-    over patches.
-
-    Parameters
-    ----------
-    img_path : str
-        Path to image.
-    multiscale : int
-        Level in the image pyramid that image patches are read from.
-    patch_shape : Tuple[int]
-        Shape of each image patch.
-    patch_overlap : int
-        Overlap between adjacent image patches in each dimension.
-    min_brightness : int, optional
-        Brightness threshold used to filter proposals and image patches.
-        Default is 0.
-
-    Returns
-    -------
-    List[Tuple[float]]
-        Physical coordinates of proposals.
-    """
-    img = img_util.TensorStoreImage(img_path)
+    # Start loader threads
     margin = np.min(patch_overlap) // 4
-    with ThreadPoolExecutor(max_workers=64) as executor:
-        # Assign threads
-        threads = list()
-        for offset in img.generate_offsets(patch_shape, patch_overlap):
-            threads.append(
+    batches = create_batches(img_path, patch_shape, patch_overlap, n_loaders)
+    patch_queue = queue.Queue(maxsize=max_queue_size)
+    start_loaders(img_path, batches, patch_shape, min_brightness, patch_queue)
+
+    # Drain queue → submit to bounded process pool
+    all_proposals = []
+    stops_seen = 0
+    pending = []
+    pbar = tqdm(total=np.sum([len(b) for b in batches]))
+    with ProcessPoolExecutor(max_workers=max_worker_processes) as executor:
+        while stops_seen < n_loaders:
+            # Pop queue
+            item = patch_queue.get()
+            if item is _STOP:
+                stops_seen += 1
+                continue
+
+            offset, img_patch = item
+
+            # Pop completed process
+            if len(pending) >= max_worker_processes * 2:
+                done_future = pending.pop(0)
+                all_proposals.extend(done_future.result())
+                pbar.update(1)
+
+            # Submit new process
+            pending.append(
                 executor.submit(
-                    generate_proposals_patch,
-                    img,
+                    _process_patch,
                     offset,
+                    img_patch,
                     margin,
-                    patch_shape,
                     multiscale,
                     min_brightness,
                 )
             )
 
-        # Process thread
-        proposals = list()
-        pbar = tqdm(total=len(threads), dynamic_ncols=True)
-        for thread in as_completed(threads):
-            try:
-                proposals.extend(thread.result())
-            except Exception as e:
-                print(e)
+        # Drain remaining futures
+        for future in pending:
+            all_proposals.extend(future.result())
             pbar.update(1)
-    return spatial_filtering(proposals, 50)
+
+    return spatial_filtering(all_proposals, 50)
 
 
 def generate_proposals_patch(
@@ -130,15 +130,76 @@ def generate_proposals_patch(
     proposals : List[Tuple[float]]
         Physical coordinates of proposals.
     """
-    # Get image patch
-    img_patch = img.read(offset, patch_shape, is_center=False)
-    if img_patch.max() < min_brightness:
-        return list()
-    else:
-        img_patch = gaussian_filter(img_patch, sigma=1)
+    pass
 
-    # Detect blob-like obejcts
-    proposals = list()
+
+def start_loaders(
+    img_path, offset_batches, shape, min_brightness, patch_queue
+):
+    """
+    Spawns one loader thread per partition of offsets.
+
+    Parameters
+    ----------
+    img_path : str
+        Path to image to be read from.
+    offset_batches : List[List[Tuple[int]]]
+        Offset batches to be assigned to an image loader.
+    shape : Tuple[int]
+        Shape of image patches to be read.
+    min_brightness : int
+        Minimum brightness required for patch to be processed.
+    patch_queue : Queue.queue
+        Queue containing patches to be processed.
+    """
+    threads = []
+    for offsets in offset_batches:
+        t = Thread(
+            target=_patch_loader,
+            args=(img_path, offsets, shape, min_brightness, patch_queue),
+            daemon=True,
+        )
+        t.start()
+        threads.append(t)
+    return threads
+
+
+def _patch_loader(img_path, offsets, shape, min_brightness, patch_queue):
+    """
+    Reads image patches and places (offset, img_patch) onto a bounded queue.
+
+    Parameters
+    ----------
+    img_path : str
+        Path to image to be read from.
+    offsets : List[Tuple[int]]
+        Offsets of image patches to be read.
+    shape : Tuple[int]
+        Shape of image patches to be read.
+    min_brightness : int
+        Minimum brightness required for patch to be processed.
+    patch_queue : Queue.queue
+        Queue containing patches to be processed.
+    """
+    img = img_util.TensorStoreImage(img_path)
+    for offset in offsets:
+        # Read patch
+        img_patch = img.read(offset, shape, is_center=False)
+
+        # Check whether to place on queue
+        if img_patch.max() > min_brightness:
+            img_patch = gaussian_filter(img_patch, sigma=1)
+            patch_queue.put((offset, img_patch))
+    patch_queue.put(_STOP)
+
+
+def _process_patch(offset, img_patch, margin, multiscale, min_brightness):
+    """
+    Pure function suitable for ProcessPoolExecutor.
+    Receives an already-loaded, already-filtered patch.
+    """
+    # Detect blob-like objects
+    proposals = []
     for stdev in [3, 5, 8]:
         proposals.extend(
             detect_blobs(img_patch, min_brightness, stdev, margin)
@@ -146,13 +207,9 @@ def generate_proposals_patch(
 
     # Filter proposals
     proposals = filter_proposals(img_patch, proposals)
-
-    # Convert coordinates
     if len(proposals) > 0:
         proposals += np.array(offset)
-        proposals = [
-            img_util.to_physical(voxel, multiscale) for voxel in proposals
-        ]
+        proposals = [img_util.to_physical(v, multiscale) for v in proposals]
     return proposals
 
 
@@ -227,7 +284,7 @@ def shift_to_brightest(img, proposals, min_brightness, d=5):
 
 
 # --- Step 2: Filter Initial Proposals ---
-def filter_proposals(img, proposals, max_proposals=640, radius=5):
+def filter_proposals(img, proposals, max_proposals=600, radius=5):
     """
     Filters proposals by proximity to other proposals, distance,
     brightness, and Gaussian fitness.
@@ -344,3 +401,30 @@ def gaussian_fit_filtering(img, proposals, r=4, min_score=0.7):
             if img_util.is_inbounds(img.shape, proposal, margin=1):
                 filtered_proposals.append(tuple(proposal.round()))
     return np.array(filtered_proposals)
+
+
+# --- Helpers ---
+def create_batches(img_path, patch_shape, patch_overlap, n_loaders):
+    """
+    Creates offset batches to assign to image loaders.
+
+    Parameters
+    ---------
+    img_path : str
+        Path to image to be read from.
+    patch_shape : Tuple[int]
+        Shape of the patch to be extracted.
+    patch_overlap : Tuple[int]
+        Shape of overlap between adjacent patches.
+    n_loaders : int
+        Number of image loaders.
+
+    Returns
+    -------
+    List[List[Tuple[int]]
+        Offset batches to assign to image loaders.
+    """
+    img = img_util.TensorStoreImage(img_path)
+    offsets = list(img.generate_offsets(patch_shape, patch_overlap))
+    sz = max(1, len(offsets) // n_loaders)
+    return [offsets[i: i + sz] for i in range(0, len(offsets), sz)]
