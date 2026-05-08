@@ -151,6 +151,24 @@ class FeedForwardNet(nn.Module):
         self.net = self.build_network(input_dim, output_dim, n_layers)
 
     def build_network(self, input_dim, output_dim, n_layers):
+        """
+        Builds an MLP network with a progressively halving hidden dimension,
+        ending at the specified output dimension.
+
+        Parameters
+        ----------
+        input_dim : int
+            Dimensionality of the network input.
+        output_dim : int
+            Dimensionality of the final layer's output.
+        n_layers : int
+            Total number of MLP blocks in the network.
+
+        Returns
+        -------
+        net : nn.Sequential
+            Weight-initialised sequential network.
+        """
         # Set input/output dimensions
         input_dim_i = input_dim
         output_dim_i = max(input_dim // 2, 4)
