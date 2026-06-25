@@ -207,7 +207,7 @@ def _process_patch(offset, img_patch, margin, multiscale, min_brightness):
     """
     # Detect blob-like objects
     proposals = []
-    for stdev in [3, 5, 8]:
+    for stdev in [2, 5, 8]:
         proposals.extend(
             detect_blobs(img_patch, min_brightness, stdev, margin)
         )
