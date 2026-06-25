@@ -294,7 +294,8 @@ def get_detections_img(shape, voxels):
     """
     voxels = np.array(voxels, dtype=int)
     detections_img = np.zeros(shape)
-    detections_img[voxels[:, 0], voxels[:, 1], voxels[:, 2]] = 1
+    if len(voxels) > 0:
+        detections_img[voxels[:, 0], voxels[:, 1], voxels[:, 2]] = 1
     return detections_img
 
 
