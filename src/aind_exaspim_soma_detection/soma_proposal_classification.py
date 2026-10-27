@@ -254,5 +254,5 @@ def generate_batches(iterable, batch_size):
     Yield successive batches from iterable.
     """
     for i in range(0, len(iterable), batch_size):
-        n = min(i + batch_size, len(iterable) - 1)
+        n = min(i + batch_size, len(iterable))
         yield iterable[i:n]
