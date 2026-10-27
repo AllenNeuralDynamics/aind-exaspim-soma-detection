@@ -228,8 +228,30 @@ def process_patch(voxel_patch, multiscale=2):
 
 
 def compute_radii(params, multiscale, anisotropy=(0.748, 0.748, 1.0)):
-    # Compute precision matrix
-    scaled_anisotropy = [a * 2**multiscale for a in anisotropy]
+    """
+    Computes the radii of a fitted rotated Gaussian in physical units.
+
+    Parameters
+    ----------
+    params : numpy.ndarray
+        Parameters returned by "img_util.fit_rotated_gaussian_3d". The fit is
+        done in the image patch's voxel coordinates, whose axes are ordered
+        z, y, x.
+    multiscale : int
+        Level in the image pyramid that the image patch was read from.
+    anisotropy : Tuple[float], optional
+        Physical size of a voxel at level 0, ordered x, y, z (the same order
+        as "img_util.to_physical"). Default is (0.748, 0.748, 1.0).
+
+    Returns
+    -------
+    numpy.ndarray
+        Radii (2 standard deviations) along the principal axes, sorted in
+        ascending order.
+    """
+    # Compute precision matrix. The voxel size is reversed to z, y, x so each
+    # scale factor applies to the patch axis it belongs to.
+    scaled_anisotropy = [a * 2**multiscale for a in anisotropy[::-1]]
     _, _, _, a11, a12, a13, a22, a23, a33, _, _ = params
     P_voxel = np.array([[a11, a12, a13], [a12, a22, a23], [a13, a23, a33]])
 
