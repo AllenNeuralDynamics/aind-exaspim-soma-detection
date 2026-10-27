@@ -212,7 +212,7 @@ def process_patch(voxel_patch, multiscale=2):
     score = img_util.compute_fit_score(img_patch, params, voxels)
 
     # Compile results
-    feasible_radii = (radii > 6).any() or (radii < 140).any()
+    feasible_radii = has_feasible_radii(radii)
     if feasible_radii and score > 0.6:
         xyz = img_util.to_physical(voxel, multiscale=multiscale)
         result = {
@@ -256,3 +256,30 @@ def generate_batches(iterable, batch_size):
     for i in range(0, len(iterable), batch_size):
         n = min(i + batch_size, len(iterable) - 1)
         yield iterable[i:n]
+
+
+def has_feasible_radii(radii, min_radius=6, max_radius=140):
+    """
+    Checks whether every radius of a fitted soma is plausible.
+
+    Parameters
+    ----------
+    radii : numpy.ndarray
+        Radii returned by "compute_radii". Empty if the fit could not be
+        converted to physical units.
+    min_radius : float, optional
+        Smallest plausible radius in microns. Default is 6.
+    max_radius : float, optional
+        Largest plausible radius in microns. Default is 140.
+
+    Returns
+    -------
+    bool
+        True if there are three radii, each strictly between "min_radius"
+        and "max_radius".
+    """
+    radii = np.asarray(radii)
+    return bool(
+        radii.size == 3
+        and np.all((radii > min_radius) & (radii < max_radius))
+    )
