@@ -545,6 +545,33 @@ def get_center_slices(center, shape):
     return (0, 0, *slices)
 
 
+def fitted_center(voxel, patch_shape, params):
+    """
+    Gets the center of a fitted Gaussian as a voxel coordinate in the image.
+
+    Parameters
+    ----------
+    voxel : Tuple[int]
+        Voxel coordinate that the image patch is centered on, ordered z, y, x.
+    patch_shape : Tuple[int]
+        Shape of the image patch, read as in "get_center_slices".
+    params : numpy.ndarray
+        Parameters returned by "img_util.fit_rotated_gaussian_3d", whose
+        first three entries are the center in patch voxel coordinates.
+
+    Returns
+    -------
+    numpy.ndarray
+        Fitted center (z, y, x, not rounded). "voxel" itself if the fit
+        failed or its center lies outside the patch.
+    """
+    shape = np.asarray(patch_shape)
+    local = np.asarray(params[:3], dtype=float)
+    if not np.any(params) or np.any((local < 0) | (local > shape - 1)):
+        return np.asarray(voxel, dtype=float)
+    return np.asarray(voxel) - shape // 2 + local
+
+
 def get_driver(img_path):
     """
     Gets the storage driver needed to read the image.

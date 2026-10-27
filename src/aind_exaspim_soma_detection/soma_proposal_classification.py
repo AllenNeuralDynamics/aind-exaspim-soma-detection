@@ -214,7 +214,8 @@ def process_patch(voxel_patch, multiscale=2):
     # Compile results
     feasible_radii = (radii > 6).any() or (radii < 140).any()
     if feasible_radii and score > 0.6:
-        xyz = img_util.to_physical(voxel, multiscale=multiscale)
+        center = img_util.fitted_center(voxel, img_patch.shape, params)
+        xyz = img_util.to_physical(center, multiscale=multiscale)
         result = {
             "xyz": tuple(round(float(t), 2) for t in xyz),
             "voxel": tuple(int(t) for t in voxel),
